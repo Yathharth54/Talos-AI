@@ -73,33 +73,40 @@
 
 ---
 
-## Phase 3 — Skill Vault
-- [ ] `vault/manager.py` — `SkillManager` class with `search`, `register`, `load`
-- [ ] `vault/manifest.json` seeded
-- [ ] 1–2 hand-written sample tools in `vault/tools/`
-- [ ] `tests/test_vault_manager.py` — search by keyword, register writes file+manifest, load returns working callable
+## Phase 3 — Skill Vault ✅
+- [x] `vault/manager.py` — `SkillManager` class with `search`, `register`, `load`, `record_usage`, `all`
+- [x] `SkillEntry` TypedDict matching CLAUDE.md manifest schema
+- [x] Atomic manifest writes (tmp + rename)
+- [x] `tests/test_vault_manager.py` — 12 tests covering manifest lifecycle, search ranking, load+reload-on-overwrite, usage tracking
 
-**Test gate**: vault tests pass; manifest schema validates.
+**Test gate**: ✅ 12/12 vault tests + full 29/29 suite green.
 
 **Notes**:
-_(add after work)_
+- **Big design choice**: `load()` does NOT use `importlib.import_module`. It reads the `.py` source as text and runs `exec(compile(...), namespace)`. Reason: Python's `.pyc` bytecode cache uses second-resolution mtimes — two `register()` calls within the same second otherwise serve stale bytecode. The Forger's retry loop will absolutely hit this. `exec()` is cache-free and predictable. The reload test (`test_reload_picks_up_overwritten_code`) caught this exact bug during this phase — both `import_module` and `spec_from_file_location` failed it.
+- This also means the vault dir does not need to be on `sys.path` or be a Python package — tests can use `tmp_path`. Cleaner.
+- Manifest is a plain JSON list (not dict-keyed-by-name) so it stays human-readable and stable-ordered for git diffs (when un-gitignored later).
+- Did NOT seed sample tools into the real vault — keeping vault empty for clean Phase 4 forging.
 
 ---
 
-## Phase 4 — Forger + Tester (core loop)
-- [ ] `prompts/forger.py` — code generation system prompt
-- [ ] `prompts/tester.py` — test generation system prompt
-- [ ] `agents/forger.py` — emits {code, test_code, name, description}
-- [ ] `agents/tester.py` — runs test in subprocess, structured pass/fail with stdout/stderr
-- [ ] Forge→test→retry (max 3) sub-graph
-- [ ] Unit tests with mocked LLM (forger returns valid Python, tester handles good+bad code)
-- [ ] Live integration test gated by `RUN_LIVE=1`: "reverse a string" forges + passes
-- [ ] Failure path test: 3 retries → graceful failure
+## Phase 4 — Forger + Tester (core loop) ✅
+- [x] `prompts/forger.py` — system prompt + `build_retry_context()` helper
+- [x] `agents/forger.py` — `ForgedTool` Pydantic schema + `forger_node` using `ChatOpenAI.with_structured_output`
+- [x] `agents/tester.py` — `run_tests()` utility + `tester_node`. Custom subprocess test runner using `TALOS_TEST` markers (no pytest dep at runtime)
+- [x] `agents/forge_subgraph.py` — compiled forge ↔ test ↔ retry sub-graph (`forge_app`)
+- [x] `tests/test_tester.py` — 8 tests (happy path, assertion fail, syntax error, runtime error, timeout, partial failure)
+- [x] `tests/test_forger.py` — 5 mocked tests (first attempt, retry context, sub-graph succeed first/second try, retry exhaustion) + 1 live test gated by `RUN_LIVE=1` (skipped by default)
 
-**Test gate**: mock unit tests pass; live test produces a working forged tool.
+**Test gate**: ✅ 13/13 mocked tests; full suite 42 passed, 1 skipped (live).
 
 **Notes**:
-_(add after work)_
+- **Did not create `prompts/tester.py`** — Tester has no LLM in Phase 4. PROGRESS.md previously listed it; reserved for later if test generation moves out of the Forger.
+- **Structured output**: `ChatOpenAI.with_structured_output(ForgedTool)` returns a runnable that yields a typed Pydantic instance. Field descriptions on `ForgedTool` reach the LLM as JSON schema descriptions. (PydanticAI analogue: `result_type=ForgedTool`.)
+- **Sub-graph as modularity primitive**: `build_forge_subgraph()` returns its own `StateGraph` reusing `TalosState` fields. Compiled to `forge_app`. The outer graph (Phase 7) will call this as a single node — gives a clean LangSmith trace boundary.
+- **Test runner design**: instead of subprocess-invoking pytest, we append a tiny `_RUNNER` script that emits `TALOS_TEST PASS/FAIL` markers and a `TALOS_TEST SUMMARY` line. Parsed by `_parse_runner_output`. Fast, dep-free, and gives us structured per-test failures without exit-code guessing.
+- **pytest collection gotcha**: pytest's default `python_functions = test` matched `tester_node` as a test. Tightened to `test_*` in `pyproject.toml`. Lesson: never name non-test helpers starting with "test".
+- **LLM mocking pattern**: tests monkeypatch `forger._make_llm` (the factory) with a `_FakeLLM` returning canned `ForgedTool` objects. Cheap, deterministic, no network.
+- **Live test caught a real prompt bug**: original prompt said "import the function under test from the same module," but the runner *concatenates* code + test_code into one file, so the import had nothing to resolve. Updated prompt rule #5 to forbid imports of the tool itself. Live test now passes (~5s, ~$0.005). Lesson: mocked tests can't catch prompt-vs-runtime contract mismatches — always run the live gate at least once per phase.
 
 ---
 
@@ -188,3 +195,5 @@ A short bullet per session — what we did, what's next. Append-only.
 - **2026-04-28** — Phase 0 complete. Venv (py3.12.12), all deps installed, `.env`/`.env.example`/`.gitignore`/`pyproject.toml`/`README.md` in place, `settings.py` loads cleanly, pytest collects 0 tests. Next: Phase 1 (state + graph skeleton).
 - **2026-04-28** — Phase 1 complete. State + graph skeleton with 8 stub nodes and 4 routers. 5/5 tests pass. OpenAI key now in `.env`. Next: Phase 2 (primitives — Tavily, Jina, file/python/shell exec, human_input).
 - **2026-04-28** — Phase 2 complete. All 6 primitives + 12/12 tests pass including live Tavily/Jina calls and an interrupt-pauses-graph test using `MemorySaver`. Next: Phase 3 (Skill Vault — SkillManager class with search/register/load).
+- **2026-04-28** — Phase 3 complete. SkillManager done; 12/12 vault tests, 29/29 total. Caught and fixed a real bug: `.pyc` cache served stale code on rapid re-register. Switched `load()` from `import_module` to direct `exec()` of source. Next: Phase 4 (Forger + Tester — first real LLM agents).
+- **2026-04-28** — Phase 4 complete. Forger (LLM, structured output via ChatOpenAI.with_structured_output) + Tester (custom subprocess runner) + forge sub-graph. 13 new tests; suite at 42 passed + 1 skipped. Live OpenAI test authored but not run this session. Next: Phase 5 (Planner agent — task decomposition with vault-aware needs labelling).

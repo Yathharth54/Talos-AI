@@ -39,3 +39,6 @@ select = ["E", "F", "I", "W", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+# Default `python_functions = test` matches anything prefixed "test", which
+# accidentally collects helpers like `tester_node`. Require an underscore.
+python_functions = ["test_*"]
