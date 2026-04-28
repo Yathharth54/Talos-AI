@@ -38,32 +38,38 @@
 
 ---
 
-## Phase 1 — State + graph skeleton
-- [ ] `talos/state.py` — `TalosState` TypedDict
-- [ ] `talos/graph.py` — all nodes as no-op stubs, wired with conditional edges using dummy routing
-- [ ] `talos/main.py` — REPL that compiles graph and invokes
-- [ ] `tests/test_graph_flow.py` — graph compiles, runs end-to-end on fake state
+## Phase 1 — State + graph skeleton ✅
+- [x] `talos/state.py` — `TalosState` TypedDict with `add_messages` reducer + `visited` debug field
+- [x] `talos/graph.py` — 8 stub nodes wired (orchestrate, plan, search_vault, forge, test, execute, learn, respond) + 4 routers
+- [x] `talos/main.py` — REPL that invokes the graph and prints traversal/state
+- [x] `tests/test_graph_flow.py` — 5 tests: compiles, runs, traversal order, message reducer, partial-state merge
 
-**Test gate**: graph compiles; mock-driven test asserts node traversal order.
+**Test gate**: ✅ 5/5 pass.
 
 **Notes**:
-_(add after work)_
+- Phase 1 stub routing path: `orchestrate → plan → search_vault → forge → test → execute → learn → respond`. Real Phase 6 wiring will route `learn → plan` (sub-task loop); kept it `learn → respond` for now to avoid infinite stub loops.
+- `visited: list[str]` is a Phase-1-only debug field on TalosState. Removed once real nodes land.
+- `add_messages` reducer demonstrated and tested — node returns `{"messages": [m]}` appends rather than replaces (default reducer is "replace").
+- `app = build_graph().compile()` exposed at module level for both `main.py` and tests; tests can also rebuild fresh via `build_graph()`.
 
 ---
 
-## Phase 2 — Primitives
-- [ ] `primitives/web_search.py` (Tavily)
-- [ ] `primitives/web_read.py` (Jina r.jina.ai)
-- [ ] `primitives/file_ops.py` (file_read + file_write)
-- [ ] `primitives/python_exec.py` (subprocess + 10s timeout)
-- [ ] `primitives/shell_exec.py` (subprocess + 10s timeout)
-- [ ] `primitives/human_input.py` (LangGraph interrupt wrapper)
-- [ ] `tests/test_primitives.py` — one test per primitive, including timeout-fires assertion for python_exec
+## Phase 2 — Primitives ✅
+- [x] `primitives/web_search.py` (Tavily, raw SDK — not LangChain Tool wrapper)
+- [x] `primitives/web_read.py` (Jina r.jina.ai with optional Bearer auth)
+- [x] `primitives/file_ops.py` (file_read + file_write, UTF-8, auto-mkdir on write)
+- [x] `primitives/python_exec.py` (subprocess, configurable timeout, structured result dict)
+- [x] `primitives/shell_exec.py` (same shape as python_exec, shell=True for pipes)
+- [x] `primitives/human_input.py` (LangGraph `interrupt()` wrapper)
+- [x] `tests/test_primitives.py` — 12 tests including live Tavily/Jina, timeout-fires assertions, and a checkpointer-backed interrupt test
 
-**Test gate**: all primitive tests pass; live Tavily + Jina calls succeed.
+**Test gate**: ✅ 12/12 pass (~4s).
 
 **Notes**:
-_(add after work)_
+- **Design contract**: exec primitives (python/shell) return errors as data (`{"ok": False, ...}`) — they never raise. Network primitives (Tavily/Jina) raise on auth/network failure so misconfig fails loud at first call.
+- Did NOT wrap primitives as LangChain `Tool` objects. They're called directly by nodes, not picked by an LLM tool-calling loop. Same goes for forged tools later.
+- `human_input` test uses an inline tiny graph + `MemorySaver` checkpointer to prove `interrupt()` pauses correctly. Real HITL resume flow lands in Phase 9.
+- Result dict shape (used by Tester in Phase 4): `{ok, returncode, stdout, stderr, timed_out}`.
 
 ---
 
@@ -180,3 +186,5 @@ A short bullet per session — what we did, what's next. Append-only.
 
 - **2026-04-28** — CLAUDE.md authored. Stack and API audit completed. Build plan agreed (10 phases). PROGRESS.md created. Next: start Phase 0.
 - **2026-04-28** — Phase 0 complete. Venv (py3.12.12), all deps installed, `.env`/`.env.example`/`.gitignore`/`pyproject.toml`/`README.md` in place, `settings.py` loads cleanly, pytest collects 0 tests. Next: Phase 1 (state + graph skeleton).
+- **2026-04-28** — Phase 1 complete. State + graph skeleton with 8 stub nodes and 4 routers. 5/5 tests pass. OpenAI key now in `.env`. Next: Phase 2 (primitives — Tavily, Jina, file/python/shell exec, human_input).
+- **2026-04-28** — Phase 2 complete. All 6 primitives + 12/12 tests pass including live Tavily/Jina calls and an interrupt-pauses-graph test using `MemorySaver`. Next: Phase 3 (Skill Vault — SkillManager class with search/register/load).
