@@ -1,0 +1,157 @@
+============================================================
+TALOS AI — BENCHMARK QUERIES
+============================================================
+
+How to use:
+1.  Wipe the vault for a clean slate (optional but recommended for benchmarking):
+      rm -rf talos/vault/tools/* talos/vault/__pycache__ talos/vault/manifest.json
+2.  Start the REPL:
+      uv run python -m talos.main
+3.  Paste a query at the `>` prompt. Note success/failure, time, and whether a
+    new tool was forged. Inspect the vault between runs with:
+      uv run python -c "from talos.vault.manager import SkillManager; \
+        [print(f'{e[\"name\"]:35} usage={e.get(\"usage_count\",0)} fails={e.get(\"failure_count\",0)} streak={e.get(\"consecutive_failures\",0)}') for e in SkillManager().all()]"
+4.  If something fails, check the LangSmith trace:
+      uv run python -m examples.show_trace --list 5
+      uv run python -m examples.show_trace <run_id>
+
+The queries are grouped by what they exercise. Easy → hard.
+
+------------------------------------------------------------
+TIER 1 — should "just work" out of the box
+------------------------------------------------------------
+What's tested: the basic loop. Plan → primitive or simple forge → execute → respond.
+
+01. Convert the string 'Hello World 2026' to a slug.
+    [pure-python forge; no network; should take ~5s]
+
+02. Read https://example.com and save the body to /tmp/example.txt
+    [primitives only; planner picks web_read + file_write; vault stays empty]
+
+03. What can you do?
+    [conversational; empty plan; orchestrator answers directly]
+
+04. Reverse the string 'self-evolving' and tell me the result.
+    [pure-python forge; vault grows by 1]
+
+05. Compute the factorial of 15.
+    [pure-python forge; tests must use literal expected value]
+
+------------------------------------------------------------
+TIER 2 — Researcher + free, keyless APIs
+------------------------------------------------------------
+What's tested: the should_research heuristic, the Researcher's ability to find
+free APIs, and the Forger's ability to write env-var-free fetchers.
+
+06. Get the current temperature in Mumbai using a free weather API.
+    [should pick open-meteo or wttr.in; needs_env_vars=[]]
+
+07. Use a free API to look up where the IP address 8.8.8.8 is located.
+    [ip-api.com is keyless]
+
+08. Convert 100 USD to INR using a free currency API.
+    [open.er-api.com or exchangerate-api.com keyless tier]
+
+09. Get the current price of Bitcoin in USD using a free crypto API.
+    [api.coingecko.com is keyless]
+
+10. Look up the population of Japan from a free public data source.
+    [restcountries.com or wikipedia API]
+
+------------------------------------------------------------
+TIER 3 — multi-step composition (chaining matters)
+------------------------------------------------------------
+What's tested: the __SUBTASK_OUTPUT_N__ placeholder substitution, accessor
+syntax, and the Forger's "respect upstream input" rule.
+
+11. Get the current weather in Mumbai and save it as a JSON file at /tmp/mumbai.json.
+    [1 forge + 1 file_write primitive; output passes via placeholder]
+
+12. Get the past week of weather data for Mumbai and create a markdown report
+    with a temperature trend table at /tmp/mumbai_week.md.
+    [1 forge for fetch + 1 forge for formatting; sub-task 2 must accept upstream dict]
+
+13. Get the current weather in Mumbai, Bangalore, and Delhi, and save them all
+    as a markdown table to /tmp/india_weather.md.
+    [tests how the planner handles "for each X" — single forge with list arg, or 3 separate calls?]
+
+14. Look up the population of Japan, Germany, and India, then tell me which is largest.
+    [forge a country-info fetcher; aggregation logic could be primitive python or another forge]
+
+------------------------------------------------------------
+TIER 4 — vault reuse + multi-turn statefulness
+------------------------------------------------------------
+What's tested: SkillManager search, history threading into prompts, the
+checkpointer keeping state across turns within one REPL session.
+
+15. (Run query 06 first, then in the SAME session)
+    Now do the same for London.
+    [should hit cached weather tool, NOT re-forge; "do the same" must resolve via history]
+
+16. (Run query 11 first, then in the SAME session)
+    Save the result to a different file at /tmp/mumbai_v2.json.
+    [must resolve "the result" via history; reuse the forged fetcher]
+
+17. (Run query 06, then)
+    Is that high or low for this time of year in Mumbai?
+    [pure conversational follow-up; should NOT re-fetch; should reason from history]
+
+------------------------------------------------------------
+TIER 5 — adversarial / regression catchers
+------------------------------------------------------------
+What's tested: HITL, graceful failures, big outputs, ambiguous inputs.
+
+18. Get my Spotify currently playing track.
+    [should declare needs_env_vars=["SPOTIFY_TOKEN"]; HITL pauses — type "skip" to abort]
+
+19. Write a function that solves the halting problem.
+    [Forger should retry 3× and fail; graph terminates cleanly with honest "couldn't do it"]
+
+20. Read https://en.wikipedia.org/wiki/LangGraph and save the full content as a
+    markdown file to /tmp/langgraph.md.
+    [tests truncation fix; output should be the full page, not 500 chars]
+
+21. Write the contents of /etc/hostname to /tmp/hostname_copy.txt.
+    [exercises file_read + file_write composition; should succeed cleanly]
+
+22. (Run twice in a row, expect different timestamps)
+    What time is it right now in UTC?
+    [tests that simple "deterministic" queries don't get cached at the wrong layer]
+
+------------------------------------------------------------
+TIER 6 — stretch (will probably surface bugs first time around)
+------------------------------------------------------------
+What's tested: complex aggregation, formatting choices, dependent forges.
+
+23. Fetch the GitHub trending repos for Python today and save the top 5
+    as a markdown list to /tmp/trending.md.
+    [GitHub trending has no public API — Forger must use scraping; risky]
+
+24. Get the past 30 days of bitcoin daily prices and create a markdown table
+    showing the average, min, and max.
+    [coingecko historical endpoint; formatting forge]
+
+25. Look up the latitude and longitude of Pune, then get the current weather there.
+    [tests forge-then-forge chain where the second forge takes a coordinate dict
+     produced by the first; common real-world shape]
+
+26. Tell me the 5 most populous countries, then for each one fetch the
+    current weather in its capital.
+    [aggregation + per-item forge invocation; very ambitious]
+
+------------------------------------------------------------
+EXPECTED FAILURE MODES TO WATCH FOR
+------------------------------------------------------------
+- Forger uses pytest fixtures (monkeypatch, tmp_path) → tests crash with
+  "missing 1 required positional argument"
+- Forger picks a paid API when a free one exists → 401/403 errors
+- Forger takes api_key as a function parameter (instead of os.environ) →
+  ArgResolver passes garbage; HITL doesn't fire
+- Planner emits two adjacent forges where the second can't define its
+  contract until the first's runtime output is known
+- Tests hit real APIs and write files → check repo root for stray files
+  (gitignored now, but still annoying)
+- Vault tool succeeds first time but is structurally broken → use the
+  auto-prune; 2 consecutive failures will remove it from the manifest
+
+When any of these happen, paste the LangSmith trace ID into chat for diagnosis.

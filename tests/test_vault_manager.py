@@ -158,3 +158,87 @@ def test_record_usage_bumps_counter_and_timestamp(manager: SkillManager):
 
 def test_record_usage_unknown_is_silent(manager: SkillManager):
     manager.record_usage("nope")  # should not raise
+
+
+# --- failure tracking + auto-prune --------------------------------------------
+
+def test_record_failure_increments_counters(manager: SkillManager):
+    manager.register(
+        {"name": "x", "function": "x", "keywords": ["k"]},
+        "def x(): pass\n",
+    )
+    pruned = manager.record_failure("x", reason="boom")
+    assert pruned is False
+    entry = manager.all()[0]
+    assert entry["failure_count"] == 1
+    assert entry["consecutive_failures"] == 1
+    assert entry["last_failed_at"]
+    assert entry["last_failure_reason"] == "boom"
+
+
+def test_record_usage_resets_consecutive_failures(manager: SkillManager):
+    manager.register(
+        {"name": "x", "function": "x", "keywords": ["k"]},
+        "def x(): pass\n",
+    )
+    manager.record_failure("x", "f1")
+    manager.record_usage("x")
+    entry = manager.all()[0]
+    assert entry["consecutive_failures"] == 0
+    assert entry["failure_count"] == 1  # lifetime counter not reset
+
+
+def test_two_consecutive_failures_prune_entry(manager: SkillManager):
+    """The whole point: 2 consecutive failures → manifest entry removed."""
+    manager.register(
+        {"name": "broken", "function": "broken", "keywords": ["k"]},
+        "def broken(): raise ValueError('always')\n",
+    )
+    assert manager.record_failure("broken", "f1") is False
+    assert manager.record_failure("broken", "f2") is True  # pruned
+
+    # Manifest entry is gone; search/load can't find it.
+    assert manager.all() == []
+    with pytest.raises(KeyError):
+        manager.load("broken")
+    # But the .py file is still on disk for forensics.
+    assert (manager.tools_dir / "broken.py").exists()
+
+
+def test_pruned_tool_can_be_re_registered(manager: SkillManager):
+    """If a forge produces a fresh implementation of a previously-pruned
+    tool, register() works as normal — the leftover .py gets overwritten."""
+    manager.register(
+        {"name": "thing", "function": "thing", "keywords": ["k"]},
+        "def thing(): raise ValueError('v1')\n",
+    )
+    manager.record_failure("thing", "f1")
+    manager.record_failure("thing", "f2")  # pruned
+    assert manager.all() == []
+
+    manager.register(
+        {"name": "thing", "function": "thing", "keywords": ["k"]},
+        "def thing(): return 'v2'\n",
+    )
+    assert len(manager.all()) == 1
+    assert manager.load("thing")() == "v2"
+
+
+def test_intermittent_failures_do_not_prune(manager: SkillManager):
+    """A tool that fails, succeeds, fails should NOT be pruned."""
+    manager.register(
+        {"name": "flaky", "function": "flaky", "keywords": ["k"]},
+        "def flaky(): pass\n",
+    )
+    manager.record_failure("flaky", "f1")
+    manager.record_usage("flaky")  # resets streak
+    manager.record_failure("flaky", "f2")
+    assert len(manager.all()) == 1  # not pruned
+    entry = manager.all()[0]
+    assert entry["consecutive_failures"] == 1
+    assert entry["failure_count"] == 2
+
+
+def test_record_failure_unknown_is_silent(manager: SkillManager):
+    pruned = manager.record_failure("nope", "irrelevant")
+    assert pruned is False

@@ -21,6 +21,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from talos.agents.researcher import research, should_research
 from talos.config import settings
 from talos.prompts.forger import FORGER_SYSTEM_PROMPT, build_retry_context
 from talos.state import TalosState
@@ -39,6 +40,14 @@ class ForgedTool(BaseModel):
     signature: str = Field(description="human-readable function signature")
     code: str = Field(description="full source of the .py file")
     test_code: str = Field(description="full source of the pytest-style test functions")
+    needs_env_vars: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Names of environment variables this tool reads via os.environ. "
+            "List each one (e.g. 'OPENWEATHER_API_KEY'). The system uses "
+            "this to ask the user for missing keys before running the tool."
+        ),
+    )
 
 
 def _make_llm() -> Any:
@@ -80,8 +89,15 @@ def forger_node(state: TalosState) -> dict:
     previous = state.get("forged_tool")
     previous_test = state.get("test_result") or {}
 
+    # On the FIRST attempt only, optionally call the Researcher to gather
+    # concrete API/site context. We don't research on retries — by then we
+    # already have research from the first attempt and can rely on the
+    # error trace to fix the bug.
+    research_block = ""
+    if retry_count == 0 and should_research(task_description):
+        research_block = research(task_description) or ""
+
     if retry_count > 0 and previous:
-        # Retry: include previous attempt + error trace in the user message.
         error_summary = _summarise_failure(previous_test)
         retry_msg = build_retry_context(
             previous_code=previous.get("code", ""),
@@ -91,7 +107,10 @@ def forger_node(state: TalosState) -> dict:
         )
         messages.append(HumanMessage(content=f"Task: {task_description}\n\n{retry_msg}"))
     else:
-        messages.append(HumanMessage(content=f"Task: {task_description}"))
+        body = f"Task: {task_description}"
+        if research_block:
+            body += f"\n\n--- Research notes from the Researcher ---\n{research_block}"
+        messages.append(HumanMessage(content=body))
 
     llm = _make_llm()
     forged: ForgedTool = llm.invoke(messages)  # type: ignore[assignment]

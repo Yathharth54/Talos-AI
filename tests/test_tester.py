@@ -63,6 +63,23 @@ def test_run_tests_times_out_on_infinite_loop():
     assert "timed out" in (r["error"] or "").lower()
 
 
+def test_run_tests_does_not_leak_files_to_cwd(tmp_path, monkeypatch):
+    """Even if a test writes to a relative path, it must NOT land in cwd —
+    the test subprocess runs in an isolated temp dir."""
+    import os
+    monkeypatch.chdir(tmp_path)
+    code = "def stash(p: str, c: str) -> None:\n    open(p, 'w').write(c)\n"
+    test_code = (
+        "def test_a():\n    stash('leaked_evil_file.txt', 'haha')\n    assert True\n"
+    )
+    r = run_tests(code, test_code)
+    assert r["passed"] is True
+    # Most importantly — the file is NOT in the test's cwd.
+    assert not (tmp_path / "leaked_evil_file.txt").exists()
+    # And it's not in the project root either (sanity).
+    assert not os.path.exists(os.path.join(os.getcwd(), "leaked_evil_file.txt"))
+
+
 def test_run_tests_partial_failure_summary():
     code = "def f(x: int) -> int:\n    return x * 2\n"
     test_code = (

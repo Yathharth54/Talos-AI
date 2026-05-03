@@ -42,6 +42,15 @@ class SkillEntry(TypedDict, total=False):
     created_at: str          # ISO 8601
     usage_count: int
     last_used: str | None    # ISO 8601 or None
+    failure_count: int       # lifetime failures
+    consecutive_failures: int  # failures since last success — reset by record_usage
+    last_failed_at: str | None
+    last_failure_reason: str | None  # short error string from most recent failure
+
+
+# A tool with this many consecutive failures (no successes in between) is
+# considered broken and removed from the manifest by `record_failure`.
+_AUTO_PRUNE_THRESHOLD = 2
 
 
 def _now_iso() -> str:
@@ -162,16 +171,53 @@ class SkillManager:
         return fn
 
     def record_usage(self, name: str) -> None:
-        """Bump usage_count and stamp last_used. Silently no-ops if missing."""
+        """Bump usage_count, stamp last_used, and reset consecutive_failures.
+
+        Resetting on success is what makes the auto-prune fair: a tool that
+        works most of the time keeps its place in the vault even if it
+        occasionally fails.
+        """
         manifest = self._read_manifest()
         for entry in manifest:
             if entry.get("name") == name:
                 entry["usage_count"] = int(entry.get("usage_count", 0)) + 1
                 entry["last_used"] = _now_iso()
+                entry["consecutive_failures"] = 0
                 break
         else:
             return
         self._write_manifest(manifest)
+
+    def record_failure(self, name: str, reason: str = "") -> bool:
+        """Bump failure counters; auto-prune if `_AUTO_PRUNE_THRESHOLD`
+        consecutive failures with no successes in between are reached.
+
+        Returns True iff the entry was pruned. The .py file is intentionally
+        left on disk for forensics — only the manifest entry is removed, so
+        future searches/loads can't find it.
+
+        No-op if the tool isn't in the manifest.
+        """
+        manifest = self._read_manifest()
+        idx = next(
+            (i for i, e in enumerate(manifest) if e.get("name") == name),
+            None,
+        )
+        if idx is None:
+            return False
+
+        entry = manifest[idx]
+        entry["failure_count"] = int(entry.get("failure_count", 0)) + 1
+        entry["consecutive_failures"] = int(entry.get("consecutive_failures", 0)) + 1
+        entry["last_failed_at"] = _now_iso()
+        if reason:
+            entry["last_failure_reason"] = reason[:300]
+
+        pruned = entry["consecutive_failures"] >= _AUTO_PRUNE_THRESHOLD
+        if pruned:
+            manifest.pop(idx)
+        self._write_manifest(manifest)
+        return pruned
 
     # ---- internal helpers ---------------------------------------------------
 

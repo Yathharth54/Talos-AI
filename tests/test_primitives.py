@@ -56,6 +56,29 @@ def test_file_read_missing_raises(tmp_path):
         file_read(tmp_path / "nope.txt")
 
 
+def test_relative_paths_anchor_to_workspace(tmp_path, monkeypatch):
+    """Bare filenames (no leading /) land in WORKSPACE_DIR, not cwd."""
+    from talos.config import settings as s
+    monkeypatch.setattr(s, "WORKSPACE_DIR", tmp_path)
+    monkeypatch.chdir(tmp_path / "..")  # confirm cwd doesn't get the file
+
+    file_write("report.md", "hello")
+    assert (tmp_path / "report.md").read_text() == "hello"
+    assert file_read("report.md") == "hello"
+
+
+def test_absolute_paths_respected_verbatim(tmp_path, monkeypatch):
+    """Explicit absolute paths win — workspace is bypassed."""
+    from talos.config import settings as s
+    bogus_workspace = tmp_path / "wrong"
+    monkeypatch.setattr(s, "WORKSPACE_DIR", bogus_workspace)
+
+    target = tmp_path / "explicit.txt"
+    file_write(target, "yo")
+    assert target.read_text() == "yo"
+    assert not bogus_workspace.exists()  # workspace not touched
+
+
 # --- python_exec --------------------------------------------------------------
 
 def test_python_exec_happy_path():

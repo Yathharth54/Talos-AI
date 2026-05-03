@@ -27,6 +27,10 @@ VAULT_DIR = PROJECT_ROOT / "talos" / "vault"
 VAULT_TOOLS_DIR = VAULT_DIR / "tools"
 VAULT_MANIFEST_PATH = VAULT_DIR / "manifest.json"
 
+# Where Talos writes files when the user doesn't specify an absolute path.
+# All relative paths in file_read/file_write get anchored here. Gitignored.
+WORKSPACE_DIR = PROJECT_ROOT / "workspace"
+
 
 def key_status() -> dict[str, bool]:
     """Return which keys are present (True) vs missing (False). For smoke tests."""

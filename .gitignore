@@ -31,3 +31,19 @@ htmlcov/
 talos/vault/manifest.json
 talos/vault/tools/*.py
 !talos/vault/tools/.gitkeep
+
+# Talos's workspace — every relative path written by file_write lands here.
+# All contents gitignored except the .gitkeep so the dir survives clones.
+workspace/*
+!workspace/.gitkeep
+
+# Stray outputs from REPL queries (in case anything escapes the workspace).
+/output.txt
+/output.md
+/*_weather*.md
+/*_weather*.txt
+/*_report*.md
+/*_report*.txt
+/test_*.md
+/test_*.txt
+/https:/

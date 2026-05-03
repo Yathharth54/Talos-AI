@@ -55,7 +55,3 @@ class TalosState(TypedDict, total=False):
 
     # --- Discovered API integrations ---
     available_integrations: dict         # name → env var
-
-    # --- Phase 1 only: traversal trace, used by tests to assert node order ---
-    # Real code won't read this; tests do. Will be removed once real nodes land.
-    visited: list[str]

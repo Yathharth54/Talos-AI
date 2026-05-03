@@ -12,7 +12,11 @@ direct control over what each test reports.
 
 from __future__ import annotations
 
-from talos.primitives.python_exec import python_exec
+import subprocess
+import sys
+import tempfile
+
+from talos.config import settings
 from talos.state import TalosState
 
 # A small runner appended to the forged code. It discovers test_* functions,
@@ -47,28 +51,42 @@ if _failures:
 
 
 def run_tests(code: str, test_code: str, timeout: int | None = None) -> dict:
-    """Execute forged code + test code in a subprocess. Pure utility — no state.
+    """Execute forged code + test code in a subprocess inside a tmp cwd.
 
-    Args:
-        code: the forged tool's source.
-        test_code: the forged tests' source.
-        timeout: subprocess timeout (seconds). Defaults via python_exec.
+    Why our own subprocess instead of python_exec: we need to control `cwd`
+    so that ill-behaved tests (which sometimes write files despite the
+    prompt forbidding it) leak into a tmp dir, not the project root.
 
-    Returns:
-        {
-          passed:    bool,
-          n_passed:  int,
-          n_failed:  int,
-          n_total:   int,
-          failures:  list[{name, trace}],
-          stdout:    str,
-          stderr:    str,
-          timed_out: bool,
-          error:     str | None,   # high-level summary for retry context
-        }
+    Args / Returns: same shape as before.
     """
     full_source = code + "\n\n" + test_code + _RUNNER
-    result = python_exec(full_source, timeout=timeout)
+    t = timeout if timeout is not None else settings.SUBPROCESS_TIMEOUT
+    # Sandbox cwd so any rogue file writes happen in a tmp dir we discard.
+    # tempfile.TemporaryDirectory cleans itself up on context exit.
+    with tempfile.TemporaryDirectory(prefix="talos_test_") as tmp_cwd:
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-c", full_source],
+                capture_output=True,
+                text=True,
+                timeout=t,
+                cwd=tmp_cwd,
+            )
+            result = {
+                "ok": proc.returncode == 0,
+                "returncode": proc.returncode,
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+                "timed_out": False,
+            }
+        except subprocess.TimeoutExpired as e:
+            result = {
+                "ok": False,
+                "returncode": None,
+                "stdout": _coerce_io(e.stdout),
+                "stderr": _coerce_io(e.stderr),
+                "timed_out": True,
+            }
 
     if result["timed_out"]:
         return {
@@ -171,6 +189,15 @@ def _parse_runner_output(stdout: str) -> dict:
         "n_total": n_total,
         "failures": failures,
     }
+
+
+def _coerce_io(x: object) -> str:
+    """Subprocess io can be bytes, None, or str depending on platform/timeout."""
+    if x is None:
+        return ""
+    if isinstance(x, bytes):
+        return x.decode("utf-8", errors="replace")
+    return str(x)
 
 
 def _summarise_failures(failures: list[dict]) -> str:
