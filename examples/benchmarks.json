@@ -1,0 +1,261 @@
+{
+  "_doc": "Curated benchmark queries for Talos. Each entry has structured metadata so the harness can assert behavioural expectations, not just pass/fail. Tiers: 1=trivial, 2=research+free-API, 3=multi-step composition, 4=multi-turn, 5=stretch.",
+  "queries": [
+    {
+      "id": "T1-01-slug",
+      "tier": 1,
+      "query": "Convert the string 'Hello World 2026 Edition' to a URL slug.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 1,
+        "vault_growth_min": 0,
+        "needs_env_vars": false
+      },
+      "notes": "Pure-python forge, no network. Result should look like 'hello-world-2026-edition'.",
+      "timeout_seconds": 90
+    },
+    {
+      "id": "T1-02-reverse",
+      "tier": 1,
+      "query": "Reverse the string 'self-evolving' and tell me the result.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 1,
+        "needs_env_vars": false,
+        "answer_contains": ["gnivlove-fles"]
+      },
+      "timeout_seconds": 60
+    },
+    {
+      "id": "T1-03-factorial",
+      "tier": 1,
+      "query": "Compute the factorial of 12.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 1,
+        "needs_env_vars": false,
+        "answer_contains": ["479001600"]
+      },
+      "timeout_seconds": 60
+    },
+    {
+      "id": "T1-04-conversational",
+      "tier": 1,
+      "query": "What can you do?",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 0,
+        "vault_growth_min": 0
+      },
+      "notes": "Empty plan → orchestrator answers directly. No forge.",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "T1-05-primitive-fileio",
+      "tier": 1,
+      "query": "Write the text 'hello from talos' to a file called greeting.txt and then read it back to me.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 0,
+        "answer_contains": ["hello from talos"]
+      },
+      "notes": "Should land in workspace/greeting.txt via path-anchor convention. No forge.",
+      "timeout_seconds": 45
+    },
+    {
+      "id": "T1-06-web-read",
+      "tier": 1,
+      "query": "Read https://example.com and save the body to example_dump.md",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 0,
+        "file_should_exist": "workspace/example_dump.md",
+        "file_contains": "Example Domain"
+      },
+      "timeout_seconds": 60
+    },
+    {
+      "id": "T2-01-weather-mumbai",
+      "tier": 2,
+      "query": "Use a free weather API to get the current temperature in Mumbai.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 1,
+        "needs_env_vars": false,
+        "answer_contains": ["°C", "Mumbai"]
+      },
+      "notes": "Should pick open-meteo or wttr.in. needs_env_vars must be empty.",
+      "timeout_seconds": 120
+    },
+    {
+      "id": "T2-02-ip-geo",
+      "tier": 2,
+      "query": "Use a free API to look up where the IP address 8.8.8.8 is located. Tell me city and country.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 1,
+        "needs_env_vars": false,
+        "answer_contains_any": ["United States", "Mountain View", "California"]
+      },
+      "timeout_seconds": 90
+    },
+    {
+      "id": "T2-03-currency",
+      "tier": 2,
+      "query": "Convert 100 USD to INR using a free currency API.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 1,
+        "needs_env_vars": false,
+        "answer_contains": ["INR"]
+      },
+      "timeout_seconds": 90
+    },
+    {
+      "id": "T2-04-bitcoin",
+      "tier": 2,
+      "query": "Get the current price of Bitcoin in USD using a free crypto API.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 1,
+        "needs_env_vars": false,
+        "answer_contains": ["BTC"],
+        "answer_matches_regex": "[0-9]{4,}"
+      },
+      "notes": "coingecko.com is keyless.",
+      "timeout_seconds": 90
+    },
+    {
+      "id": "T2-05-country-info",
+      "tier": 2,
+      "query": "Look up the population of Japan from a free public data source.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 1,
+        "needs_env_vars": false,
+        "answer_matches_regex": "1[12][0-9],?[0-9]{3},?[0-9]{3}"
+      },
+      "notes": "Population around 123M. restcountries.com or wikipedia.",
+      "timeout_seconds": 90
+    },
+    {
+      "id": "T3-01-fetch-and-save-json",
+      "tier": 3,
+      "query": "Get the current weather in Mumbai and save it as a JSON file named mumbai.json.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 2,
+        "needs_env_vars": false,
+        "file_should_exist": "workspace/mumbai.json"
+      },
+      "notes": "Tests forge → file_write composition + placeholder substitution.",
+      "timeout_seconds": 150
+    },
+    {
+      "id": "T3-02-weather-md-table",
+      "tier": 3,
+      "query": "Get the past week of weather data for Mumbai (or next week's forecast — whatever the free API gives) and create a markdown report with a temperature trend table at mumbai_week.md.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 2,
+        "needs_env_vars": false,
+        "file_should_exist": "workspace/mumbai_week.md",
+        "file_contains_any": ["|", "Temperature"]
+      },
+      "notes": "Two-forge chain: fetch data, format markdown. Sub-task 2 must accept upstream dict, not refetch.",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "T3-03-multi-city",
+      "tier": 3,
+      "query": "Get the current temperature in Mumbai, Bangalore, and Delhi, and save them all as a markdown table at india_weather.md.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 2,
+        "needs_env_vars": false,
+        "file_should_exist": "workspace/india_weather.md",
+        "file_contains_all": ["Mumbai", "Bangalore", "Delhi"]
+      },
+      "notes": "Tests how Planner handles 'for each X' — single forge with list arg, or 3 calls?",
+      "timeout_seconds": 240
+    },
+    {
+      "id": "T3-04-aggregate-population",
+      "tier": 3,
+      "query": "Look up the population of Japan, Germany, and India, then tell me which is largest.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 2,
+        "needs_env_vars": false,
+        "answer_contains": ["India"]
+      },
+      "notes": "India is the largest of the three (~1.4B). Tests fetch + aggregate.",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "T4-01-vault-reuse-different-city",
+      "tier": 4,
+      "query_sequence": [
+        "Use a free weather API to get the current temperature in Mumbai.",
+        "Now do the same for London."
+      ],
+      "expects": {
+        "should_succeed": true,
+        "vault_growth_after_turn_2": 0,
+        "answer_contains_after_turn_2": ["°C"]
+      },
+      "notes": "Turn 2 must REUSE the cached weather tool, not re-forge. Tests vault search + history.",
+      "timeout_seconds": 240
+    },
+    {
+      "id": "T4-02-multi-turn-reference",
+      "tier": 4,
+      "query_sequence": [
+        "What's the population of Tokyo?",
+        "Now compare that to Mumbai's population."
+      ],
+      "expects": {
+        "should_succeed_after_turn_2": true,
+        "answer_contains_after_turn_2_any": ["Mumbai", "Tokyo"]
+      },
+      "notes": "Turn 2 must understand 'that' = Tokyo's population from turn 1. Tests history threading.",
+      "timeout_seconds": 240
+    },
+    {
+      "id": "T5-01-graceful-failure-impossible",
+      "tier": 5,
+      "query": "Write a function that solves the halting problem and prove it works.",
+      "expects": {
+        "should_succeed": true,
+        "answer_contains_any": ["cannot", "impossible", "undecidable", "unable"]
+      },
+      "notes": "Forger should retry 3× and fail. Graph terminates cleanly with honest 'couldn't do it'.",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "T5-02-large-output",
+      "tier": 5,
+      "query": "Read https://en.wikipedia.org/wiki/LangGraph and save the full content to a file called langgraph_wiki.md",
+      "expects": {
+        "should_succeed": true,
+        "file_should_exist": "workspace/langgraph_wiki.md",
+        "file_size_min_bytes": 5000
+      },
+      "notes": "Truncation regression test. Output should be the full page, not 500 chars.",
+      "timeout_seconds": 90
+    },
+    {
+      "id": "T5-03-coordinate-chain",
+      "tier": 5,
+      "query": "Look up the latitude and longitude of Pune, India, then get the current weather there.",
+      "expects": {
+        "should_succeed": true,
+        "forge_count_max": 2,
+        "needs_env_vars": false,
+        "answer_contains": ["Pune"]
+      },
+      "notes": "Tests forge-then-forge chain where the second forge takes a coordinate dict from the first.",
+      "timeout_seconds": 240
+    }
+  ]
+}

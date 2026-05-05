@@ -184,6 +184,65 @@ def _substitute_placeholders(value: Any, results_by_id: dict) -> Any:
     return value
 
 
+def _build_kwargs_from_bindings(
+    param_bindings: dict[str, Any],
+    results_by_id: dict,
+) -> dict[str, Any]:
+    """Resolve each binding to a concrete value.
+
+    A binding value is either a literal (kept as-is) OR a string of the form
+    `__SUBTASK_OUTPUT_<N>__[...]` which is resolved against prior results
+    using the same accessor walker as the legacy placeholder substitution.
+    Missing upstream sub-tasks raise ValueError so the failure is loud and
+    targeted, not silently degraded into a wrong call.
+    """
+    kwargs: dict[str, Any] = {}
+    for name, raw in param_bindings.items():
+        if isinstance(raw, str):
+            m = _PLACEHOLDER_RE.fullmatch(raw.strip())
+            if m:
+                sid = int(m.group(1))
+                rec = results_by_id.get(sid)
+                if rec is None:
+                    raise ValueError(
+                        f"param '{name}' references sub-task {sid}, which has not run"
+                    )
+                kwargs[name] = _walk_accessors(rec.get("output"), m.group(2))
+                continue
+            # Strings without the marker are literal strings.
+            kwargs[name] = raw
+        else:
+            kwargs[name] = raw
+    return kwargs
+
+
+def _validate_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
+    """Cheap pre-flight check: every kwarg must be a real param of fn, and
+    every required param must be present. Raises TypeError with a clear
+    message on mismatch, before the function runs.
+    """
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return  # built-ins / partials we can't introspect — skip cleanly
+    params = sig.parameters
+    accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+    if not accepts_kwargs:
+        unexpected = [k for k in kwargs if k not in params]
+        if unexpected:
+            raise TypeError(
+                f"unexpected kwargs {unexpected} for {fn.__name__}{sig}"
+            )
+    required = [
+        n for n, p in params.items()
+        if p.default is inspect.Parameter.empty
+        and p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+    ]
+    missing = [n for n in required if n not in kwargs]
+    if missing:
+        raise TypeError(f"missing required args {missing} for {fn.__name__}{sig}")
+
+
 def _signature_of(fn: Callable[..., Any]) -> str:
     try:
         return f"{fn.__name__}{inspect.signature(fn)}"
@@ -238,18 +297,27 @@ def executor_node(state: TalosState) -> dict:
     prior_results = state.get("sub_task_results") or []
     signature = _signature_of(fn)
     history = format_recent_history(state.get("messages") or [])
-
-    try:
-        resolved = _resolve_args(signature, sub_task, user_query, prior_results, history)
-    except Exception as e:  # noqa: BLE001 — resolver failure is recoverable
-        return _record_failure(state, sub_task, f"arg resolution failed: {e}")
-
-    # Substitute __SUBTASK_OUTPUT_N__ placeholders with full prior outputs.
-    # Without this, large prior outputs would arrive truncated (the resolver
-    # only sees a 500-char snippet of each in its prompt).
     results_by_id = {r.get("sub_task_id"): r for r in prior_results}
-    final_args = _substitute_placeholders(resolved.args, results_by_id)
-    final_kwargs = _substitute_placeholders(resolved.kwargs, results_by_id)
+
+    # Typed-contract path: if the Planner emitted input_schema + param_bindings
+    # for this sub-task, build kwargs deterministically (no LLM, no drift) and
+    # validate against the function signature before invocation.
+    if sub_task.get("needs") == "forge" and sub_task.get("input_schema"):
+        try:
+            final_args, final_kwargs = [], _build_kwargs_from_bindings(
+                sub_task.get("param_bindings") or {}, results_by_id,
+            )
+            _validate_kwargs(fn, final_kwargs)
+        except (ValueError, TypeError) as e:
+            return _record_failure(state, sub_task, f"contract violation: {e}")
+    else:
+        # Legacy path: LLM-driven arg resolver (used for primitive + vault).
+        try:
+            resolved = _resolve_args(signature, sub_task, user_query, prior_results, history)
+        except Exception as e:  # noqa: BLE001 — resolver failure is recoverable
+            return _record_failure(state, sub_task, f"arg resolution failed: {e}")
+        final_args = _substitute_placeholders(resolved.args, results_by_id)
+        final_kwargs = _substitute_placeholders(resolved.kwargs, results_by_id)
 
     try:
         output = fn(*final_args, **final_kwargs)

@@ -32,29 +32,47 @@ from __future__ import annotations
 from langgraph.graph import END, START, StateGraph
 
 from talos.agents.forger import forger_node
+from talos.agents.smoke import smoke_node
 from talos.agents.tester import tester_node
 from talos.config import settings
 from talos.state import TalosState
 
 
 def _route_after_test(state: TalosState) -> str:
+    """Unit tests: passed → smoke; failed → retry or exit."""
     test = state.get("test_result") or {}
     if test.get("passed"):
-        return "done"
+        return "smoke"
     if state.get("retry_count", 0) < settings.FORGE_MAX_RETRIES:
         return "retry"
     return "done"  # exhausted retries — exit loop with passed=False
+
+
+def _route_after_smoke(state: TalosState) -> str:
+    """Real-call gate: passed/skipped → done; failed → retry or exit."""
+    smoke = state.get("smoke_result") or {}
+    if smoke.get("passed"):
+        return "done"
+    if state.get("retry_count", 0) < settings.FORGE_MAX_RETRIES:
+        return "retry"
+    return "done"  # exhausted retries — exit loop with smoke passed=False
 
 
 def build_forge_subgraph() -> StateGraph:
     g: StateGraph = StateGraph(TalosState)
     g.add_node("forge", forger_node)
     g.add_node("test", tester_node)
+    g.add_node("smoke", smoke_node)
     g.add_edge(START, "forge")
     g.add_edge("forge", "test")
     g.add_conditional_edges(
         "test",
         _route_after_test,
+        {"retry": "forge", "smoke": "smoke", "done": END},
+    )
+    g.add_conditional_edges(
+        "smoke",
+        _route_after_smoke,
         {"retry": "forge", "done": END},
     )
     return g

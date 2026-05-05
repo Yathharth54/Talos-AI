@@ -39,7 +39,8 @@ class TalosState(TypedDict, total=False):
 
     # --- Forging ---
     forged_tool: dict | None             # {name, code, test_code, description}
-    test_result: dict | None             # {passed, stdout, stderr}
+    test_result: dict | None             # {passed, stdout, stderr} — unit tests (mocked)
+    smoke_result: dict | None            # {passed, error, output, skipped} — real-call gate
     retry_count: int                     # forge→test retry counter (cap at FORGE_MAX_RETRIES)
 
     # --- Execution ---

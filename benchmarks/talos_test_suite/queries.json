@@ -1,0 +1,615 @@
+{
+  "_doc": "Talos end-to-end test suite — 65 queries derived from SUITE.md. Run in order; later queries may rely on vault entries forged by earlier ones (e.g. Q12 reuses Q06's Fibonacci tool).",
+  "_schema": {
+    "id":             "QXX",
+    "category":       "1-11 (matches SUITE.md sections)",
+    "title":          "short human label",
+    "query":          "literal user input. Either this or query_repeat must be set.",
+    "query_repeat":   "{prefix, repeat, times} → expands into one long string at runtime",
+    "setup":          "bash commands run before the query, idempotent (creates fixture files etc.)",
+    "expects":        "assertion bag (same schema as examples/benchmarks.json)",
+    "requires_hitl":  "true for queries that need human input; runner skips by default",
+    "timeout_seconds":"per-query soft budget",
+    "depends_on_vault":"informational: list of QIDs whose tools this query expects to find in vault"
+  },
+
+  "queries": [
+    {
+      "id": "Q01", "category": 1, "title": "web_search primitive",
+      "query": "What is the current population of Iceland?",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_matches_regex": "3[0-9]{2}[, ]?[0-9]{3}|3[0-9]{2}k|3[0-9]{2}\\s*thousand|0\\.3[0-9]+\\s*million"
+      },
+      "timeout_seconds": 60
+    },
+    {
+      "id": "Q02", "category": 1, "title": "web_read primitive",
+      "query": "Read the contents of https://httpbin.org/html and tell me what the page says.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_any": ["Melville", "Moby", "whale"]
+      },
+      "timeout_seconds": 60
+    },
+    {
+      "id": "Q03", "category": 1, "title": "python_exec primitive",
+      "query": "Run this Python code and give me the output: print(sum(range(1, 101)))",
+      "expects": {"should_succeed": true, "forge_count_max": 0, "answer_contains": ["5050"]},
+      "timeout_seconds": 30
+    },
+    {
+      "id": "Q04", "category": 1, "title": "shell_exec primitive",
+      "query": "What operating system is this machine running? Use a shell command to find out.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_any": ["Linux", "linux", "Darwin", "darwin", "macOS"]
+      },
+      "timeout_seconds": 45
+    },
+    {
+      "id": "Q05", "category": 1, "title": "file_write + file_read",
+      "query": "Write the text \"Talos test marker\" to a file called /tmp/talos_test.txt, then read it back and confirm the contents.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "file_should_exist": "/tmp/talos_test.txt",
+        "file_contains": "Talos test marker",
+        "answer_contains": ["Talos test marker"]
+      },
+      "timeout_seconds": 60
+    },
+
+    {
+      "id": "Q06", "category": 2, "title": "Forge — Fibonacci",
+      "query": "Build me a tool that returns the Nth Fibonacci number. Then use it to get the 20th Fibonacci number.",
+      "expects": {"should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1, "answer_contains": ["6765"]},
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q07", "category": 2, "title": "Forge — alternating case",
+      "query": "Create a tool that takes a string and returns it in alternating case (e.g., \"hello\" → \"hElLo\"). Test it on \"talos artificial intelligence\".",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_matches_regex": "[tT][aA][lL][oO][sS]"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q08", "category": 2, "title": "Forge — prime factorization",
+      "query": "Forge a tool that returns the prime factorization of any positive integer. Use it on 84942.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_contains_all": ["2", "3", "17", "277"]
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q09", "category": 2, "title": "Forge — frequency counter",
+      "query": "Create a tool that takes a list of strings and returns a dictionary mapping each string to its frequency, sorted by frequency descending. Run it on: [\"apple\", \"banana\", \"apple\", \"cherry\", \"banana\", \"apple\"]",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_contains_all": ["apple", "3", "banana", "2", "cherry", "1"]
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q10", "category": 2, "title": "Forge — Levenshtein",
+      "query": "Forge a tool that computes the Levenshtein edit distance between two strings. What's the distance between \"kitten\" and \"sitting\"?",
+      "expects": {"should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1, "answer_contains": ["3"]},
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q11", "category": 2, "title": "Forge — Caesar cipher",
+      "query": "Build a Caesar cipher tool that can both encrypt and decrypt. Encrypt \"TALOS AGENT\" with a shift of 7.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_contains": ["AHSVZ HNLUA"]
+      },
+      "timeout_seconds": 120
+    },
+
+    {
+      "id": "Q12", "category": 3, "title": "Reuse Fibonacci",
+      "query": "What is the 30th Fibonacci number?",
+      "depends_on_vault": ["Q06"],
+      "expects": {"should_succeed": true, "forge_count_max": 0, "answer_contains": ["832040"]},
+      "timeout_seconds": 60
+    },
+    {
+      "id": "Q13", "category": 3, "title": "Reuse Levenshtein",
+      "query": "How similar are the words \"algorithm\" and \"altruistic\"? Use edit distance.",
+      "depends_on_vault": ["Q10"],
+      "expects": {"should_succeed": true, "forge_count_max": 0, "answer_contains": ["6"]},
+      "timeout_seconds": 60
+    },
+    {
+      "id": "Q14", "category": 3, "title": "Reuse Caesar (decrypt)",
+      "query": "Decrypt this Caesar cipher message with shift 7: \"AHSVZ HNLUA\"",
+      "depends_on_vault": ["Q11"],
+      "expects": {"should_succeed": true, "forge_count_max": 0, "answer_contains": ["TALOS AGENT"]},
+      "timeout_seconds": 60
+    },
+    {
+      "id": "Q15", "category": 3, "title": "Near-miss — forge Hamming",
+      "query": "Build a tool that computes the Hamming distance between two strings of equal length. What's the Hamming distance between \"karolin\" and \"kathrin\"?",
+      "depends_on_vault": ["Q10"],
+      "expects": {"should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1, "answer_contains": ["3"]},
+      "timeout_seconds": 120
+    },
+
+    {
+      "id": "Q16", "category": 4, "title": "Web search + synthesis",
+      "query": "Who won the most recent FIFA World Cup and what was the final score?",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_any": ["Argentina", "France", "Spain", "Brazil", "Germany", "Italy"]
+      },
+      "timeout_seconds": 90
+    },
+    {
+      "id": "Q17", "category": 4, "title": "Web read + summarize",
+      "query": "Read the Python PEP 8 style guide from https://peps.python.org/pep-0008/ and give me the 5 most important rules.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_any": ["indent", "naming", "import", "line", "whitespace", "PEP"]
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q18", "category": 4, "title": "Factual comparison",
+      "query": "Compare the current GitHub star counts of LangChain and LlamaIndex. Which has more?",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_all": ["LangChain", "LlamaIndex"]
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q19", "category": 4, "title": "Multi-hop search→read",
+      "query": "Find the official LangGraph documentation URL and read their quickstart guide. What are the 3 core concepts they introduce first?",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_any": ["StateGraph", "node", "edge", "graph", "state"]
+      },
+      "timeout_seconds": 150
+    },
+    {
+      "id": "Q20", "category": 4, "title": "Time-sensitive query",
+      "query": "What is today's date and what is the top trending repository on GitHub right now?",
+      "expects": {"should_succeed": true, "forge_count_max": 0, "answer_matches_regex": "20[2-9][0-9]"},
+      "timeout_seconds": 90
+    },
+
+    {
+      "id": "Q21", "category": 5, "title": "Forge — HEX→RGB",
+      "query": "Build a tool that converts HEX color codes to RGB tuples. Convert #1A2B3C.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_contains_all": ["26", "43", "60"]
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q22", "category": 5, "title": "Forge — Unix timestamp",
+      "query": "Create a tool that converts a Unix timestamp to a human-readable UTC datetime string. Convert 1700000000.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_contains": ["2023-11-14"]
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q23", "category": 5, "title": "Forge — Haversine",
+      "query": "Forge a tool that calculates the great-circle distance between two lat/long coordinates using the Haversine formula. Distance from Mumbai (19.076, 72.8777) to Tokyo (35.6762, 139.6503)?",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_matches_regex": "6[, ]?[67][0-9]{2}"
+      },
+      "timeout_seconds": 150
+    },
+    {
+      "id": "Q24", "category": 5, "title": "Forge — base64 round-trip",
+      "query": "Build a tool that base64-encodes and decodes strings. Encode \"Talos forges tools at runtime\" and then decode the result to verify.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_contains": ["VGFsb3MgZm9yZ2VzIHRvb2xzIGF0IHJ1bnRpbWU="]
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q25", "category": 5, "title": "Forge — std deviation (no numpy)",
+      "query": "Create a tool that computes the population standard deviation of a list of numbers. No numpy allowed. Compute it for [2, 4, 4, 4, 5, 5, 7, 9].",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
+        "answer_contains": ["2"]
+      },
+      "timeout_seconds": 120
+    },
+
+    {
+      "id": "Q26", "category": 6, "title": "Search → save",
+      "query": "Search the web for the latest Python release version, then write that version number to a file called /tmp/python_version.txt.",
+      "expects": {
+        "should_succeed": true,
+        "file_should_exist": "/tmp/python_version.txt",
+        "file_size_min_bytes": 3
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q27", "category": 6, "title": "Read → transform → write",
+      "query": "Read the file /tmp/talos_test.txt (it should say \"Talos test marker\"), convert the contents to uppercase, and write the result to /tmp/talos_upper.txt.",
+      "setup": "mkdir -p /tmp && printf 'Talos test marker' > /tmp/talos_test.txt",
+      "expects": {
+        "should_succeed": true,
+        "file_should_exist": "/tmp/talos_upper.txt",
+        "file_contains": "TALOS TEST MARKER"
+      },
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q28", "category": 6, "title": "Research → forge → save",
+      "query": "Look up the current Bitcoin price in USD, then forge a tool that converts USD to INR at a rate of 83.5, convert the BTC price, and save the INR amount to /tmp/btc_inr.txt.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "file_should_exist": "/tmp/btc_inr.txt",
+        "file_size_min_bytes": 3
+      },
+      "timeout_seconds": 240
+    },
+    {
+      "id": "Q29", "category": 6, "title": "Two forges in one plan",
+      "query": "Create a tool that generates a random password of a given length (letters, digits, symbols). Then create a separate tool that scores password strength (weak/medium/strong based on length, character diversity). Generate a 16-char password and score it.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 2,
+        "answer_contains_any": ["strong", "Strong", "STRONG", "medium"]
+      },
+      "timeout_seconds": 240
+    },
+    {
+      "id": "Q30", "category": 6, "title": "JSON endpoint parse",
+      "query": "Read the page at https://jsonplaceholder.typicode.com/users and tell me how many users have email addresses ending in .biz.",
+      "expects": {
+        "should_succeed": true,
+        "answer_matches_regex": "\\b[3-7]\\b"
+      },
+      "notes": "JSONPlaceholder returns 10 users; about 5 have .biz emails (varies slightly).",
+      "timeout_seconds": 150
+    },
+
+    {
+      "id": "Q31", "category": 7, "title": "Vault Fib + file_write",
+      "query": "What's the Fibonacci number at position 15, and write that number to /tmp/fib15.txt?",
+      "depends_on_vault": ["Q06"],
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "file_should_exist": "/tmp/fib15.txt",
+        "file_contains": "610"
+      },
+      "timeout_seconds": 90
+    },
+    {
+      "id": "Q32", "category": 7, "title": "Vault Haversine reuse",
+      "query": "Find the distance in km between the Eiffel Tower coordinates (48.8584, 2.2945) and the Statue of Liberty coordinates (40.6892, -74.0445) using the haversine tool.",
+      "depends_on_vault": ["Q23"],
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_matches_regex": "5[, ]?[78][0-9]{2}"
+      },
+      "timeout_seconds": 90
+    },
+    {
+      "id": "Q33", "category": 7, "title": "Research + forge + execute",
+      "query": "Search the web for the top 5 most popular programming languages in 2025, forge a tool that takes a ranked list and formats it as a numbered markdown list, then apply the tool to the results.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_matches_regex": "1\\.\\s+\\w"
+      },
+      "timeout_seconds": 240
+    },
+    {
+      "id": "Q34", "category": 7, "title": "Two vault tools chained",
+      "query": "Take the string \"Hello World\", compute its Caesar cipher with shift 3, then compute the Levenshtein distance between the original and the encrypted version.",
+      "depends_on_vault": ["Q10", "Q11"],
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains": ["KHOOR ZRUOG"]
+      },
+      "timeout_seconds": 120
+    },
+
+    {
+      "id": "Q35", "category": 8, "title": "API key request",
+      "query": "Use the OpenWeatherMap API to get the current temperature in Mumbai.",
+      "requires_hitl": true,
+      "expects": {"should_succeed": true},
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q36", "category": 8, "title": "Clarification interrupt",
+      "query": "Convert the data.",
+      "requires_hitl": true,
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_any": ["clarif", "what", "which", "specify", "?"]
+      },
+      "timeout_seconds": 60
+    },
+    {
+      "id": "Q37", "category": 8, "title": "Preference interrupt",
+      "query": "Generate a color palette for a website. I want 5 colors.",
+      "requires_hitl": true,
+      "expects": {
+        "should_succeed": true,
+        "answer_contains_any": ["mood", "style", "brand", "preference", "?"]
+      },
+      "timeout_seconds": 90
+    },
+
+    {
+      "id": "Q38", "category": 9, "title": "Forge retry — email regex",
+      "query": "Build a tool that validates email addresses using regex. It should handle edge cases like \"user+tag@sub.domain.com\" and reject \"user@@domain\" and \"@domain.com\".",
+      "expects": {"should_succeed": true, "vault_growth_min": 1},
+      "timeout_seconds": 240
+    },
+    {
+      "id": "Q39", "category": 9, "title": "Timeout stress — primes",
+      "query": "Forge a tool that finds all prime numbers up to N. Run it with N = 10000000.",
+      "expects": {
+        "should_succeed": true,
+        "answer_contains_any": ["664579", "664,579", "timeout", "timed out", "smaller"]
+      },
+      "timeout_seconds": 240
+    },
+    {
+      "id": "Q40", "category": 9, "title": "Impossible — graceful refusal",
+      "query": "Forge a tool that accurately predicts stock prices for tomorrow.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_any": ["cannot", "can't", "impossible", "infeasible", "not possible", "unreliable"]
+      },
+      "timeout_seconds": 60
+    },
+    {
+      "id": "Q41", "category": 9, "title": "Missing dependency",
+      "query": "Build a tool that uses the 'obscurelib42' package to transform data.",
+      "expects": {
+        "should_succeed": true,
+        "answer_contains_any": ["not found", "doesn't exist", "ImportError", "no such", "unavailable", "stdlib"]
+      },
+      "timeout_seconds": 240
+    },
+    {
+      "id": "Q42", "category": 9, "title": "Malformed input to vault tool",
+      "query": "Use the prime factorization tool on -17.",
+      "depends_on_vault": ["Q08"],
+      "expects": {
+        "should_succeed": true,
+        "answer_contains_any": ["positive", "non-negative", "invalid", "error", ">"]
+      },
+      "timeout_seconds": 90
+    },
+    {
+      "id": "Q43", "category": 9, "title": "No useful results",
+      "query": "Find the detailed quarterly revenue breakdown for Yathendra's Lemonade Stand Inc. in Q3 2025.",
+      "expects": {
+        "should_succeed": true,
+        "answer_contains_any": ["couldn't find", "could not find", "no information", "unable", "no results"]
+      },
+      "timeout_seconds": 120
+    },
+
+    {
+      "id": "Q44", "category": 10, "title": "Empty input",
+      "query": "",
+      "expects": {"should_succeed": true, "forge_count_max": 0},
+      "timeout_seconds": 30
+    },
+    {
+      "id": "Q45", "category": 10, "title": "Extremely long input",
+      "query_repeat": {
+        "prefix": "Summarize the following: ",
+        "repeat": "The quick brown fox jumps over the lazy dog. ",
+        "times": 500
+      },
+      "expects": {"should_succeed": true, "forge_count_max": 0},
+      "timeout_seconds": 120
+    },
+    {
+      "id": "Q46", "category": 10, "title": "One-liner — primitive route",
+      "query": "Calculate 2 ** 100.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains": ["1267650600228229401496703205376"]
+      },
+      "timeout_seconds": 45
+    },
+    {
+      "id": "Q47", "category": 10, "title": "UUID v4 (either route)",
+      "query": "Generate a UUID v4.",
+      "expects": {
+        "should_succeed": true,
+        "answer_matches_regex": "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}"
+      },
+      "timeout_seconds": 90
+    },
+    {
+      "id": "Q48", "category": 10, "title": "Three vault tools chained",
+      "query": "Encode the string \"Test123\" in base64, then compute the Levenshtein distance between the original and encoded strings, then check if the distance value is a prime number using factorization.",
+      "depends_on_vault": ["Q08", "Q10", "Q24"],
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains": ["VGVzdDEyMw=="]
+      },
+      "timeout_seconds": 150
+    },
+    {
+      "id": "Q49", "category": 10, "title": "Self-referential — list vault",
+      "query": "How many tools are currently in your skill vault? List them all.",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_matches_regex": "\\d+"
+      },
+      "timeout_seconds": 60
+    },
+    {
+      "id": "Q50", "category": 10, "title": "Full showcase — repo comparison",
+      "query": "I want to compare two GitHub repos: langchain-ai/langchain and run-llama/llama_index. Search for their star counts, forge a tool that takes two numbers and computes the percentage difference, apply it to the star counts, then format the result as a one-line summary and save it to /tmp/repo_comparison.txt.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "file_should_exist": "/tmp/repo_comparison.txt",
+        "file_size_min_bytes": 10
+      },
+      "timeout_seconds": 300
+    },
+
+    {
+      "id": "Q51", "category": 11, "title": "Date normalizer",
+      "query": "I have a list of dates in mixed formats: [\"2025-01-15\", \"March 3, 2025\", \"15/06/2025\", \"2025.09.01\", \"Jan 7 2025\"]. Normalize them all to YYYY-MM-DD.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_contains_all": ["2025-01-15", "2025-03-03", "2025-09-01", "2025-01-07"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q52", "category": 11, "title": "CSV column add",
+      "query": "I have a CSV file at /tmp/sales.csv with columns: product, price, quantity. Add a new column called \"revenue\" that's price × quantity, and save the result to /tmp/sales_with_revenue.csv.",
+      "setup": "cp benchmarks/talos_test_suite/fixtures/sales.csv /tmp/sales.csv",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "file_should_exist": "/tmp/sales_with_revenue.csv",
+        "file_contains_all": ["revenue", "1050", "1249.5", "2500"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q53", "category": 11, "title": "Log parser",
+      "query": "Parse this nginx-style log and tell me how many requests per HTTP status code: \"GET /api 200\\nPOST /login 401\\nGET /home 200\\nGET /api 500\\nPOST /login 200\\nGET /api 200\\nGET /home 404\\nPOST /login 401\". Give me the counts sorted by frequency.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_contains_all": ["200", "4", "401", "2"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q54", "category": 11, "title": "JSON flattener",
+      "query": "I have deeply nested JSON and I need it flat. Build something that takes nested JSON like {\"user\": {\"name\": \"Yath\", \"address\": {\"city\": \"Mumbai\", \"zip\": \"400001\"}}, \"active\": true} and flattens it to {\"user.name\": \"Yath\", \"user.address.city\": \"Mumbai\", \"user.address.zip\": \"400001\", \"active\": true}.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_contains_all": ["user.name", "user.address.city", "Mumbai"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q55", "category": 11, "title": "Text file analyzer",
+      "query": "I keep needing to analyze text files. Make me a tool that takes a file path and returns: total words, unique words, average word length, and the top 10 most frequent words with counts. Try it on /tmp/talos_upper.txt.",
+      "setup": "mkdir -p /tmp && printf 'TALOS TEST MARKER' > /tmp/talos_upper.txt",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_contains_any": ["TALOS", "talos", "3", "MARKER"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q56", "category": 11, "title": "JSON↔YAML config",
+      "query": "Convert this JSON config to YAML format: {\"app\": \"talos\", \"version\": \"0.1.0\", \"settings\": {\"llm\": \"gpt-4o\", \"temperature\": 0.7, \"tools\": [\"web_search\", \"web_read\", \"python_exec\"]}, \"debug\": false}. Save both the pretty-printed JSON and the YAML to /tmp/config.json and /tmp/config.yaml.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "file_should_exist": "/tmp/config.yaml",
+        "file_contains_any": ["app: talos", "app:talos", "talos"]
+      },
+      "timeout_seconds": 240
+    },
+    {
+      "id": "Q57", "category": 11, "title": "Slug generator",
+      "query": "I need a URL slug generator. It should take a title like \"My Amazing Blog Post! (Part 2)\" and return \"my-amazing-blog-post-part-2\". Handle special chars, multiple spaces, leading/trailing hyphens. Try it on \"  LangGraph: Build Stateful AI Agents — A Guide! \".",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_contains": ["langgraph-build-stateful-ai-agents-a-guide"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q58", "category": 11, "title": "Batch renamer",
+      "query": "I have files in /tmp/rename_test/ and I want to rename them all by replacing spaces with underscores and converting to lowercase. Build a tool for this and run it.",
+      "setup": "rm -rf /tmp/rename_test && mkdir -p /tmp/rename_test && touch '/tmp/rename_test/My Document.txt' '/tmp/rename_test/Photo From Trip.jpg' '/tmp/rename_test/REPORT Final.pdf'",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_contains_any": ["my_document", "photo_from_trip", "report_final", "renamed"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q59", "category": 11, "title": "Diff detector",
+      "query": "Compare the files /tmp/talos_test.txt and /tmp/talos_upper.txt and tell me what changed between them. Show the differences clearly.",
+      "setup": "mkdir -p /tmp && printf 'Talos test marker' > /tmp/talos_test.txt && printf 'TALOS TEST MARKER' > /tmp/talos_upper.txt",
+      "expects": {
+        "should_succeed": true,
+        "answer_contains_any": ["uppercase", "case", "TALOS", "differ"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q60", "category": 11, "title": "Markdown table",
+      "query": "Take this data and format it as a clean markdown table: headers are [\"Agent\", \"Framework\", \"Key Feature\"], rows are [[\"Talos\", \"LangGraph\", \"Self-evolving tools\"], [\"Voyager\", \"Custom\", \"Minecraft skills\"], [\"GenericAgent\", \"None\", \"Skill crystallization\"]]. Save it to /tmp/comparison.md.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "file_should_exist": "/tmp/comparison.md",
+        "file_contains_all": ["|", "Talos", "Voyager", "GenericAgent"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q61", "category": 11, "title": "Universal unit converter",
+      "query": "Build me a universal unit converter that handles: km↔miles, kg↔pounds, celsius↔fahrenheit, liters↔gallons. Convert 42km to miles, 100°F to celsius, and 75kg to pounds.",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_matches_regex": "26\\.[0-9]"
+      },
+      "timeout_seconds": 240
+    },
+    {
+      "id": "Q62", "category": 11, "title": "Regex helper",
+      "query": "I always mess up regexes. Build me a tool that takes a regex pattern and a test string, and returns: whether it matches, all match groups, and all match positions. Test it with pattern \"(\\\\d{3})-(\\\\d{4})\" on the string \"Call 555-1234 or 800-5678 for help\".",
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "answer_contains_all": ["555", "1234", "800", "5678"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q63", "category": 11, "title": "Reuse date normalizer",
+      "query": "Normalize these dates for me: [\"December 25, 2025\", \"2025/04/01\", \"07-11-2025\"].",
+      "depends_on_vault": ["Q51"],
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "answer_contains_all": ["2025-12-25", "2025-04-01"]
+      },
+      "timeout_seconds": 90
+    },
+    {
+      "id": "Q64", "category": 11, "title": "Compound vault workflow",
+      "query": "Read the file /tmp/config.json, flatten the nested JSON structure, then generate a markdown table showing each key-value pair, and save it to /tmp/config_table.md.",
+      "depends_on_vault": ["Q54", "Q60"],
+      "setup": "mkdir -p /tmp && printf '{\"app\": \"talos\", \"version\": \"0.1.0\", \"settings\": {\"llm\": \"gpt-4o\", \"temperature\": 0.7}, \"debug\": false}' > /tmp/config.json",
+      "expects": {
+        "should_succeed": true, "forge_count_max": 0,
+        "file_should_exist": "/tmp/config_table.md",
+        "file_contains_all": ["|", "app", "talos"]
+      },
+      "timeout_seconds": 180
+    },
+    {
+      "id": "Q65", "category": 11, "title": "Full showcase — ISS mass",
+      "query": "Find the current top mass of the International Space Station, build a tool that converts kg to every common unit (pounds, ounces, grams, metric tons), run the conversion on the ISS mass, format the results as a markdown table, and save it to /tmp/iss_mass.md.",
+      "depends_on_vault": ["Q60"],
+      "expects": {
+        "should_succeed": true, "vault_growth_min": 1,
+        "file_should_exist": "/tmp/iss_mass.md",
+        "file_contains_all": ["|", "kg"]
+      },
+      "timeout_seconds": 300
+    }
+  ]
+}

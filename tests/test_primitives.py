@@ -79,6 +79,34 @@ def test_absolute_paths_respected_verbatim(tmp_path, monkeypatch):
     assert not bogus_workspace.exists()  # workspace not touched
 
 
+def test_file_write_encodes_dict_as_json(tmp_path):
+    p = tmp_path / "data.json"
+    file_write(p, {"city": "Mumbai", "temp": 28.5})
+    import json
+    assert json.loads(p.read_text()) == {"city": "Mumbai", "temp": 28.5}
+
+
+def test_file_write_encodes_list_as_json(tmp_path):
+    p = tmp_path / "list.json"
+    file_write(p, [1, 2, 3])
+    import json
+    assert json.loads(p.read_text()) == [1, 2, 3]
+
+
+def test_file_write_decodes_bytes(tmp_path):
+    p = tmp_path / "b.txt"
+    file_write(p, "héllo".encode("utf-8"))
+    assert p.read_text(encoding="utf-8") == "héllo"
+
+
+def test_file_write_handles_non_serialisable_via_default(tmp_path):
+    """default=str ensures dict with datetime etc. doesn't crash."""
+    from datetime import datetime
+    p = tmp_path / "dt.json"
+    file_write(p, {"t": datetime(2026, 5, 5, 12, 0, 0)})
+    assert "2026-05-05" in p.read_text()
+
+
 # --- python_exec --------------------------------------------------------------
 
 def test_python_exec_happy_path():

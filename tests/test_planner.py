@@ -156,6 +156,35 @@ def test_planner_first_turn_history_says_so(empty_vault, monkeypatch):
     assert "first turn" in user_msg.lower()
 
 
+# ---- refusal verdict (Change 3) ------------------------------------------
+
+def test_planner_emits_infeasible_verdict(empty_vault, monkeypatch):
+    """Planner can label a query infeasible with category + reason; the plan
+    dict carries the verdict through to downstream routers."""
+    plan = Plan(
+        sub_tasks=[],
+        verdict="infeasible",
+        verdict_category="physics-impossible",
+        verdict_reason="cannot predict the future",
+    )
+    monkeypatch.setattr(planner_mod, "_make_llm", lambda: _FakeLLM(plan))
+    out = planner_node(_state("predict tomorrow's lottery numbers"))
+    assert out["plan"]["verdict"] == "infeasible"
+    assert out["plan"]["verdict_category"] == "physics-impossible"
+    assert "cannot predict" in out["plan"]["verdict_reason"]
+    assert out["plan"]["sub_tasks"] == []
+    assert out["current_sub_task"] is None
+
+
+def test_route_after_planner_infeasible_routes_to_respond():
+    """The router treats infeasible verdict as a 'respond' terminal even if
+    sub_tasks is somehow non-empty."""
+    from talos.agents.orchestrator import route_after_planner
+    state = {"plan": {"verdict": "infeasible", "sub_tasks": [],
+                       "verdict_category": "out-of-scope", "verdict_reason": "n/a"}}
+    assert route_after_planner(state) == "respond"
+
+
 # ---- live test (gated) -----------------------------------------------------
 
 @pytest.mark.skipif(

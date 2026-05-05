@@ -27,24 +27,68 @@ Hard rules for the generated code:
    function and raise ValueError with a clear message if missing. Declare every
    such env var in `needs_env_vars`. Function signatures should only contain
    user-facing inputs (locations, IDs, dates, etc.).
-10a. RESPECT sub-task dependencies. If the task description says "output of
-    sub-task N is the input" or similar, your function MUST accept that
-    upstream data as a parameter — DO NOT re-fetch / re-compute it inside
-    the function. Example: if sub-task 1 already fetched weather data and
-    sub-task 2's description is "format and save the weekly forecast",
-    your function should look like
-        def save_weather_md(weather_data: dict, filename: str) -> None
-    NOT
-        def save_weather_md(latitude: float, longitude: float, filename: str)
-    The system will pass sub-task 1's output to your `weather_data` arg via
-    placeholder substitution.
+9b. TYPED CONTRACT (highest priority). If the user message contains a
+    "--- TYPED CONTRACT ---" block, that signature is non-negotiable. Your
+    function's parameter names and types MUST match it exactly. Do not add
+    extra parameters, do not rename, do not change types. The Executor will
+    validate kwargs against this signature before invoking — if it doesn't
+    match, the call fails before your code runs.
 
-10. Strongly prefer FREE / KEYLESS APIs when the Researcher mentions one.
-    Examples of free, keyless APIs: open-meteo.com (weather), wttr.in (weather),
-    ip-api.com (geolocation), open.er-api.com (currency), wikipedia.org/api,
-    api.coingecko.com (crypto), restcountries.com. For keyless APIs,
-    `needs_env_vars` MUST be []. Only fall back to a keyed API if no free
-    equivalent exists.
+10. RESPECT sub-task dependencies. If the task description includes
+    "output of sub-task N", references upstream data, or has a non-empty
+    `depends_on`, the FIRST PARAMETER of your function MUST receive that
+    upstream value. NEVER re-fetch / re-compute what an upstream sub-task
+    already produced. Name the parameter for the data, not the source
+    (`weather_data: dict`, `exchange_rate: float`, `repo_list: list[dict]`).
+    Example — sub-task 1 fetched weather, sub-task 2 formats it:
+        GOOD:  def save_weather_md(weather_data: dict, filename: str) -> None
+        BAD :  def save_weather_md(latitude: float, longitude: float, filename: str)  # re-fetches
+        BAD :  def convert_usd_to_inr() -> float                                       # ignores upstream entirely
+    The runtime substitutes the upstream sub-task's output into your first
+    parameter. A function that takes zero arguments when the planner says
+    `depends_on=[N]` is ALWAYS a bug.
+
+11. PARAMETERISE over the variable parts of the user's query. The vault is
+    for reusable building blocks, not one-off scripts hard-coded to today's
+    inputs. Identify the variable nouns in the task (city, country, IP,
+    currency pair, ticker, coordinates, URL) and make them function
+    parameters. Function names must NOT contain proper nouns from the
+    query.
+        GOOD:  def fetch_temperature(city: str) -> float
+        BAD :  def fetch_mumbai_temperature() -> float
+        GOOD:  def fetch_country_population(country: str) -> int
+        BAD :  def fetch_japan_population() -> int
+        GOOD:  def geocode_city(city: str) -> tuple[float, float]
+        BAD :  def get_pune_coordinates() -> tuple[float, float]
+    Constants the user did not vary (the API endpoint, units, the data
+    field you extract) stay hard-coded inside the function. Only the query
+    variables become parameters. This is what lets the same vault tool
+    serve "weather in Mumbai", "weather in London", and "weather in Tokyo".
+
+12. Strongly prefer FREE / KEYLESS APIs. Allow-list of known-good keyless
+    APIs to use FIRST when the data type matches:
+        - weather (current/forecast): api.open-meteo.com  (lat/lon required;
+          use https://geocoding-api.open-meteo.com/v1/search to resolve city → coords)
+        - geocoding: https://geocoding-api.open-meteo.com/v1/search  or
+          https://nominatim.openstreetmap.org/search (set a User-Agent header)
+        - IP geolocation: http://ip-api.com/json/{ip}  (returns city, regionName,
+          country, lat, lon — use this, NOT country.is which is country-only)
+        - currency: https://open.er-api.com/v6/latest/{base}
+        - crypto: https://api.coingecko.com/api/v3/simple/price?ids={id}&vs_currencies={ccy}
+          (CoinGecko ids: bitcoin, ethereum, etc. NOT freecryptoapi.)
+        - country facts (population, capital, currency, area):
+          https://restcountries.com/v3.1/name/{name}?fields=population,capital,name
+        - encyclopedic facts: https://en.wikipedia.org/api/rest_v1/page/summary/{Title}
+    For keyless APIs, `needs_env_vars` MUST be []. Only fall back to a keyed
+    API if NONE of the above can satisfy the task.
+
+13. NEVER fall back to "web_search → parse search snippets" to extract a
+    structured value (population, price, coordinates). Search snippet text
+    is unstable and extractors are brittle. If no clean API in rule 12
+    fits, use Wikipedia's REST summary endpoint or restcountries — they
+    return structured JSON. If even those don't fit, raise
+    ValueError("no reliable structured source for <thing>") and let the
+    caller surface uncertainty rather than fabricating numbers.
 
 Hard rules for the generated test code:
 1. Each test is a top-level function whose name starts with `test_`.

@@ -348,6 +348,102 @@ def test_arg_resolver_sees_prior_results(vault, monkeypatch):
     assert "sub-task 1" in user_msg_content
 
 
+# ---- typed contract path (Change 2) --------------------------------------
+
+def test_typed_contract_skips_resolver_and_passes_kwargs(vault, monkeypatch):
+    """When the Planner emits input_schema + param_bindings for a forge
+    sub-task, the Executor builds kwargs from bindings (no LLM call) and
+    calls the registered tool directly."""
+    vault.register(
+        {"name": "scale", "description": "scale x by k", "keywords": ["scale"],
+         "function": "scale", "signature": "scale(x: float, k: float) -> float"},
+        "def scale(x, k):\n    return x * k\n",
+    )
+    # If the resolver is touched, blow up loudly — proves we took the new path.
+    monkeypatch.setattr(
+        exec_mod, "_make_resolver_llm",
+        lambda: (_ for _ in ()).throw(AssertionError("resolver should be skipped")),
+    )
+
+    sub_task = {
+        "id": 1, "needs": "forge", "tool_hint": None, "action": "scale by 2.5",
+        "input_schema": {"x": "float", "k": "float"},
+        "output_schema": "float",
+        "param_bindings": {"x": 4, "k": 2.5},
+    }
+    state = _state(
+        "do it",
+        current_sub_task=sub_task,
+        forged_tool={"name": "scale"},
+    )
+    out = executor_node(state)
+    rec = out["sub_task_results"][0]
+    assert rec["ok"] is True
+    assert rec["output"] == 10.0
+
+
+def test_typed_contract_resolves_upstream_placeholder(vault, monkeypatch):
+    """`__SUBTASK_OUTPUT_1__` in a binding pulls the prior result without
+    going through the LLM resolver."""
+    vault.register(
+        {"name": "double", "description": "double x", "keywords": ["double"],
+         "function": "double", "signature": "double(x: float) -> float"},
+        "def double(x):\n    return x * 2\n",
+    )
+    monkeypatch.setattr(
+        exec_mod, "_make_resolver_llm",
+        lambda: (_ for _ in ()).throw(AssertionError("resolver should be skipped")),
+    )
+    sub_task = {
+        "id": 2, "needs": "forge", "tool_hint": None, "action": "double upstream",
+        "input_schema": {"x": "float"},
+        "output_schema": "float",
+        "param_bindings": {"x": "__SUBTASK_OUTPUT_1__"},
+        "depends_on": [1],
+    }
+    state = _state(
+        "double it",
+        current_sub_task=sub_task,
+        forged_tool={"name": "double"},
+        sub_task_results=[{"sub_task_id": 1, "ok": True, "output": 7.0}],
+    )
+    out = executor_node(state)
+    assert out["sub_task_results"][-1]["output"] == 14.0
+
+
+def test_typed_contract_validation_catches_missing_param(vault, monkeypatch):
+    """Required param missing from bindings → recorded as 'contract violation'
+    BEFORE the function is invoked. The function never runs."""
+    invocations = {"n": 0}
+
+    def trace(x, k):
+        invocations["n"] += 1
+        return x * k
+
+    vault.register(
+        {"name": "scale2", "description": "scale", "keywords": ["scale"],
+         "function": "scale2", "signature": "scale2(x: float, k: float) -> float"},
+        "def scale2(x, k):\n    return x * k\n",
+    )
+
+    sub_task = {
+        "id": 1, "needs": "forge", "tool_hint": None, "action": "scale",
+        "input_schema": {"x": "float", "k": "float"},
+        "output_schema": "float",
+        "param_bindings": {"x": 4},  # missing 'k'
+    }
+    state = _state(
+        "do it",
+        current_sub_task=sub_task,
+        forged_tool={"name": "scale2"},
+    )
+    out = executor_node(state)
+    rec = out["sub_task_results"][0]
+    assert rec["ok"] is False
+    assert "contract violation" in (rec["error"] or "")
+    assert "missing required args" in (rec["error"] or "")
+
+
 # ---- live test (gated) ---------------------------------------------------
 
 @pytest.mark.skipif(

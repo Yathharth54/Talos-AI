@@ -54,9 +54,70 @@ class SubTask(BaseModel):
         description="upstream sub-task IDs whose output feeds this one",
     )
 
+    # --- Typed contract (required for needs='forge'; ignored otherwise) ---
+    # When present these define the FUNCTION SIGNATURE the Forger must match,
+    # AND the deterministic kwargs the Executor will pass at invoke time.
+    # No more freeform LLM arg-resolution for forged tools.
+    input_schema: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Forge only: maps parameter NAME to a Python type string "
+            "(e.g. 'str', 'int', 'float', 'list', 'dict', 'list[dict]'). "
+            "The Forger MUST produce a function with exactly these params and types. "
+            "Empty for primitive/vault sub-tasks."
+        ),
+    )
+    output_schema: str = Field(
+        default="",
+        description=(
+            "Forge only: the function's return type as a Python type string "
+            "(e.g. 'dict', 'float', 'list[dict]'). Empty for primitive/vault."
+        ),
+    )
+    param_bindings: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Forge only: maps each parameter NAME to its concrete value. "
+            "Each value is either a literal (str/int/float/bool/list/dict) "
+            "OR the string '__SUBTASK_OUTPUT_<N>__' to receive the full output "
+            "of upstream sub-task N (optionally with [idx]/[\"key\"] accessors, "
+            "e.g. '__SUBTASK_OUTPUT_1__[\"price\"]'). Every key in input_schema "
+            "MUST appear in param_bindings."
+        ),
+    )
+
 
 class Plan(BaseModel):
     sub_tasks: list[SubTask] = Field(description="ordered list of sub-tasks; may be empty")
+    verdict: Literal["feasible", "infeasible"] = Field(
+        default="feasible",
+        description=(
+            "'infeasible' if the query fundamentally cannot be answered with the "
+            "available primitives + reasonable forging. 'feasible' otherwise. "
+            "When 'infeasible', sub_tasks should be empty."
+        ),
+    )
+    verdict_category: Literal[
+        "physics-impossible", "missing-resource", "out-of-scope",
+        "underspecified", "",
+    ] = Field(
+        default="",
+        description=(
+            "When verdict='infeasible', categorise:\n"
+            "  - physics-impossible: predicting the future, solving the halting problem, etc.\n"
+            "  - missing-resource: relies on a tool/library/API that doesn't exist.\n"
+            "  - out-of-scope: outside Talos's capability boundaries.\n"
+            "  - underspecified: needs clarification before any plan is possible.\n"
+            "Empty when verdict='feasible'."
+        ),
+    )
+    verdict_reason: str = Field(
+        default="",
+        description=(
+            "When verdict='infeasible', a short user-facing explanation of why. "
+            "This is what we tell the user. Empty when verdict='feasible'."
+        ),
+    )
 
 
 def _make_llm() -> Any:
@@ -99,7 +160,12 @@ def planner_node(state: TalosState) -> dict:
 
     sub_tasks_dump = [st.model_dump() for st in plan.sub_tasks]
     return {
-        "plan": {"sub_tasks": sub_tasks_dump},
+        "plan": {
+            "sub_tasks": sub_tasks_dump,
+            "verdict": plan.verdict,
+            "verdict_category": plan.verdict_category,
+            "verdict_reason": plan.verdict_reason,
+        },
         "current_sub_task": sub_tasks_dump[0] if sub_tasks_dump else None,
         "sub_task_results": [],
     }

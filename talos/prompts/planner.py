@@ -70,7 +70,73 @@ Hard rules:
 7. `keywords` are 3-8 lowercase tokens that describe the work — used for both
    vault search and as guidance to the Forger if forging.
 8. If the user query is conversational ("hi", "what can you do?"), return an
-   empty sub_tasks list — the Orchestrator handles those directly.
+   empty sub_tasks list with verdict='feasible' — the Orchestrator handles
+   those directly.
+
+8b. INFEASIBILITY VERDICT. If the query fundamentally cannot be answered, set
+    verdict='infeasible', leave sub_tasks empty, and provide:
+      - verdict_category, one of:
+          * physics-impossible: prediction of the future, solving the
+            halting problem, generating provably-correct programs for
+            undecidable problems.
+          * missing-resource: relies on a library / API / tool that
+            doesn't exist (e.g. 'use the obscurelib42 package').
+          * out-of-scope: outside Talos's capabilities (real-time
+            sensor input, image generation, sending email, etc.).
+          * underspecified: query is too vague to plan ('convert the
+            data', 'fix it'). The user must clarify first.
+      - verdict_reason: a short explanation we will show the user.
+    Do NOT try to forge a tool that pretends to solve an impossible task.
+    Do NOT invent a stand-in library when the named one doesn't exist.
+    Refusing cleanly is better than producing a confident-sounding wrong
+    answer.
+9. NEVER emit a `file_write` or `file_read` sub-task unless the user EXPLICITLY
+   asked for file I/O. Phrases that DO imply file I/O: "save", "write to a
+   file", "store in", "create <filename>", "dump to", "load from", an explicit
+   filename or extension (e.g. "mumbai.json", "report.md"). Phrases that DO
+   NOT imply file I/O: "tell me", "get", "look up", "what is", "find",
+   "fetch", "show me", "convert", "compute". When in doubt, do NOT add a
+   save sub-task — the user can always ask to save the result in a follow-up.
+   Self-inflicted "saved to file" failures from unrequested writes are the
+   most common bug class and waste a forge cycle's worth of latency.
+
+10. TYPED CONTRACT for forge sub-tasks. For every `needs="forge"` sub-task you
+    MUST also fill `input_schema`, `output_schema`, and `param_bindings`. These
+    define the EXACT function signature the Forger will produce and the EXACT
+    arguments the Executor will pass. No free-text arg resolution.
+
+    `input_schema` — dict of parameter name → Python type string. Use simple
+    types: 'str', 'int', 'float', 'bool', 'list', 'dict', 'list[dict]',
+    'list[str]', 'tuple[float, float]'. Pick the smallest set of params that
+    captures the variable inputs. Hard-code constants inside the function;
+    don't pass them as params.
+
+    `output_schema` — the return type as one of the same type strings.
+
+    `param_bindings` — dict of parameter name → concrete value. Two value
+    forms:
+      • LITERAL: a str/int/float/bool/list/dict. Used as-is.
+      • UPSTREAM REFERENCE: the string '__SUBTASK_OUTPUT_<N>__' to receive the
+        full output of sub-task N. You can chain accessors:
+            '__SUBTASK_OUTPUT_1__'                whole output
+            '__SUBTASK_OUTPUT_1__[0]'             first element
+            '__SUBTASK_OUTPUT_1__["price"]'       dict key
+            '__SUBTASK_OUTPUT_2__[0]["url"]'      list-of-dicts navigation
+
+    EVERY key in input_schema MUST appear in param_bindings. If the upstream
+    sub-task is in `depends_on`, prefer reading its output via
+    `__SUBTASK_OUTPUT_<id>__` rather than re-fetching.
+
+    Example (currency conversion that consumes an upstream rate fetch):
+      sub_task 1: needs='forge', input_schema={"base":"str","quote":"str"},
+                  output_schema='float', param_bindings={"base":"USD","quote":"INR"}
+      sub_task 2: needs='forge', depends_on=[1],
+                  input_schema={"amount":"float","rate":"float"},
+                  output_schema='float',
+                  param_bindings={"amount":100, "rate":"__SUBTASK_OUTPUT_1__"}
+
+    For primitive and vault sub-tasks, leave these three fields as empty
+    dicts/strings — the Executor uses its arg-resolver path for those.
 """
 
 

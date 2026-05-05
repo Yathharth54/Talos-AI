@@ -97,17 +97,27 @@ def forger_node(state: TalosState) -> dict:
     if retry_count == 0 and should_research(task_description):
         research_block = research(task_description) or ""
 
+    contract_block = _format_contract(sub_task)
+
+    previous_smoke = state.get("smoke_result") or {}
+
     if retry_count > 0 and previous:
-        error_summary = _summarise_failure(previous_test)
+        error_summary = _summarise_failure(previous_test, previous_smoke)
         retry_msg = build_retry_context(
             previous_code=previous.get("code", ""),
             previous_test_code=previous.get("test_code", ""),
             error_summary=error_summary,
             attempt=retry_count,
         )
-        messages.append(HumanMessage(content=f"Task: {task_description}\n\n{retry_msg}"))
+        body = f"Task: {task_description}"
+        if contract_block:
+            body += f"\n\n{contract_block}"
+        body += f"\n\n{retry_msg}"
+        messages.append(HumanMessage(content=body))
     else:
         body = f"Task: {task_description}"
+        if contract_block:
+            body += f"\n\n{contract_block}"
         if research_block:
             body += f"\n\n--- Research notes from the Researcher ---\n{research_block}"
         messages.append(HumanMessage(content=body))
@@ -121,8 +131,46 @@ def forger_node(state: TalosState) -> dict:
     }
 
 
-def _summarise_failure(test_result: dict) -> str:
-    """Compact a Tester result into something the LLM can act on."""
+def _format_contract(sub_task: dict) -> str:
+    """Render the Planner's typed contract (if present) as a block the Forger
+    must match. Empty string if no schema was emitted (primitive/vault path
+    or older planner output)."""
+    schema = sub_task.get("input_schema") or {}
+    out = sub_task.get("output_schema") or ""
+    if not schema and not out:
+        return ""
+    params = ", ".join(f"{k}: {v}" for k, v in schema.items())
+    sig = f"({params}) -> {out or 'Any'}"
+    return (
+        "--- TYPED CONTRACT (must match exactly) ---\n"
+        f"Required signature: your_function{sig}\n"
+        "Rules:\n"
+        "  - Function parameters must use these EXACT names and types — no extras, no renames.\n"
+        "  - Function return type must match output_schema.\n"
+        "  - Do NOT add api_key/token/url/etc. as parameters; read env vars internally.\n"
+        "  - Tests you write must call the function with these param names as kwargs."
+    )
+
+
+def _summarise_failure(test_result: dict, smoke_result: dict | None = None) -> str:
+    """Compact Tester + smoke results into something the LLM can act on.
+
+    A smoke failure means the unit tests passed (against mocks) but invoking
+    the function with the real planner-provided arguments raised. The Forger
+    needs to know which class of failure to fix.
+    """
+    smoke_result = smoke_result or {}
+    if smoke_result and not smoke_result.get("passed") and not smoke_result.get("skipped"):
+        # Unit tests passed; runtime call failed. Surface this prominently.
+        return (
+            "RUNTIME SMOKE FAILURE — unit tests passed against mocks, but "
+            "calling the function with the real planner-provided arguments "
+            "raised:\n"
+            f"  {smoke_result.get('error', 'unknown error')}\n\n"
+            "Fix the function so it handles the real input shape. Common "
+            "causes: missing/extra fields in API response, wrong field name, "
+            "type mismatch, KeyError on a dict path that didn't exist."
+        )
     if not test_result:
         return "Unknown failure."
     if test_result.get("timed_out"):

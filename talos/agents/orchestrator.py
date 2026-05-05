@@ -48,6 +48,7 @@ def orchestrator_in_node(state: TalosState) -> dict:
         "skill_matches": [],
         "forged_tool": None,
         "test_result": None,
+        "smoke_result": None,
         "retry_count": 0,
         "execution_result": None,
         "needs_forge": False,
@@ -63,11 +64,26 @@ def orchestrator_out_node(state: TalosState) -> dict:
     """
     user_query = _last_user_text(state)
     results = state.get("sub_task_results") or []
-    plan = (state.get("plan") or {}).get("sub_tasks", [])
+    plan_full = state.get("plan") or {}
+    plan = plan_full.get("sub_tasks", [])
     history = format_recent_history(state.get("messages") or [])
     history_block = history if history else "(this is the first turn)"
 
-    if not plan and not results:
+    if plan_full.get("verdict") == "infeasible":
+        # Refusal path — the Planner determined the query can't be answered.
+        # Surface the reason verbatim plus a short framing line; no fabrication.
+        category = plan_full.get("verdict_category") or "infeasible"
+        reason = plan_full.get("verdict_reason") or "no further detail provided"
+        body = (
+            f"Recent conversation:\n{history_block}\n\n"
+            f"User asked: {user_query}\n\n"
+            f"VERDICT: This query is {category}. Reason: {reason}\n\n"
+            "Reply to the user explaining why this can't be done, plainly and "
+            "without trying to substitute a different problem. If the category "
+            "is 'underspecified', ask the user the specific clarifying question "
+            "needed to proceed."
+        )
+    elif not plan and not results:
         # Conversational — no work was done; let the LLM respond directly.
         body = (
             f"Recent conversation:\n{history_block}\n\n"
@@ -96,8 +112,16 @@ def orchestrator_out_node(state: TalosState) -> dict:
 # ---- routers ---------------------------------------------------------------
 
 def route_after_planner(state: TalosState) -> str:
-    """If the plan has zero sub-tasks (conversational), skip straight to respond."""
-    sub_tasks = (state.get("plan") or {}).get("sub_tasks") or []
+    """Three terminals after planning:
+      - 'respond' for conversational queries (empty plan, feasible verdict).
+      - 'respond' for infeasible queries — orchestrator_out formats a refusal.
+      - 'dispatch' otherwise.
+    Both terminals route through orchestrator_out; it inspects the plan to
+    decide whether to synthesise from sub-task results or emit a refusal."""
+    plan = state.get("plan") or {}
+    if plan.get("verdict") == "infeasible":
+        return "respond"
+    sub_tasks = plan.get("sub_tasks") or []
     if not sub_tasks:
         return "respond"
     return "dispatch"
@@ -134,9 +158,14 @@ def route_advance(state: TalosState) -> str:
 
 
 def route_after_forge_test(state: TalosState) -> str:
-    """Inside the forge branch: did tests pass? -> learn. Else -> advance (failed)."""
+    """Inside the forge branch: only register if BOTH unit tests AND the
+    smoke gate passed. A unit-test fail or a real-call smoke fail both
+    mean the tool isn't ready for the vault."""
     test = state.get("test_result") or {}
-    return "learn" if test.get("passed") else "advance"
+    smoke = state.get("smoke_result") or {"passed": True}  # absent = no contract = pass
+    if test.get("passed") and smoke.get("passed"):
+        return "learn"
+    return "advance"
 
 
 def advance_node(state: TalosState) -> dict:
@@ -151,6 +180,7 @@ def advance_node(state: TalosState) -> dict:
         "current_sub_task": next_task,
         "forged_tool": None,
         "test_result": None,
+        "smoke_result": None,
         "retry_count": 0,
         "execution_result": None,
     }
