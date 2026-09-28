@@ -516,3 +516,49 @@ def test_executor_skip_propagates_transitively(vault, monkeypatch):
     ]
     out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
     assert "skipped: upstream sub-task 2 failed" in out["sub_task_results"][-1]["error"]
+
+
+# ---- type coercion at step boundaries -------------------------------------
+
+@pytest.mark.parametrize("value,type_str,expected", [
+    ('{"a": 1}', "dict", {"a": 1}),
+    ('{"a": 1}', "dict[str, Any]", {"a": 1}),
+    ("[1, 2]", "list[int]", [1, 2]),
+    ("[1, 2]", "List", [1, 2]),
+    ("3.5", "float", 3.5),
+    ("42", "int", 42),
+    (" 7 ", "int", 7),
+    ("not json", "dict", "not json"),     # unparseable → unchanged
+    ("[1, 2]", "dict", "[1, 2]"),         # parses, wrong type → unchanged
+    ("4.2", "int", "4.2"),                # not an int → unchanged
+    ("hello", "str", "hello"),
+    ({"a": 1}, "dict", {"a": 1}),         # already right type
+    ("12", "Any", "12"),                  # unknown/any → untouched
+])
+def test_coerce_to_schema(value, type_str, expected):
+    out = exec_mod.coerce_to_schema({"x": value}, {"x": type_str})
+    assert out == {"x": expected}
+
+
+def test_typed_path_parses_upstream_json_string(vault, monkeypatch):
+    """file_read returns a JSON *string*; a forged tool declaring a dict
+    param must receive the parsed dict."""
+    vault.register(
+        {"name": "count_keys", "description": "count keys", "keywords": ["keys"],
+         "function": "count_keys", "signature": "count_keys(data: dict) -> int"},
+        "def count_keys(data):\n"
+        "    if not isinstance(data, dict):\n"
+        "        raise TypeError(f'data must be a dict, got {type(data).__name__}')\n"
+        "    return len(data)\n",
+    )
+    sub_task = {
+        "id": 2, "needs": "forge", "action": "count", "depends_on": [1],
+        "input_schema": {"data": "dict"}, "output_schema": "int",
+        "param_bindings": {"data": "__SUBTASK_OUTPUT_1__"},
+    }
+    prior = [{"sub_task_id": 1, "ok": True, "output": '{"a": 1, "b": 2}', "error": None}]
+    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior,
+                               forged_tool={"name": "count_keys"}))
+    rec = out["sub_task_results"][-1]
+    assert rec["ok"] is True, rec["error"]
+    assert rec["output"] == 2

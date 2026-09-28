@@ -20,6 +20,7 @@ side by side.
 from __future__ import annotations
 
 import inspect
+import json
 import re
 from typing import Any, Callable
 
@@ -207,6 +208,39 @@ def _build_kwargs_from_bindings(
     return kwargs
 
 
+_JSON_TYPES: dict[str, type] = {"dict": dict, "list": list}
+_NUMERIC_TYPES: dict[str, type] = {"int": int, "float": float}
+
+
+def coerce_to_schema(kwargs: dict[str, Any], input_schema: dict[str, str]) -> dict[str, Any]:
+    """Convert string values to the type the contract declares.
+
+    Upstream steps often hand over text (file_read → JSON string, web_read →
+    markdown) where the next tool declares `dict`, `list`, `int` or `float`.
+    Only str values are touched, and only when the conversion yields exactly
+    the declared base type; anything else is left as-is so the tool's own
+    error surfaces.
+    """
+    out = dict(kwargs)
+    for name, value in kwargs.items():
+        if not isinstance(value, str):
+            continue
+        base = (input_schema.get(name) or "").split("[", 1)[0].strip().lower()
+        if base in _JSON_TYPES:
+            try:
+                parsed = json.loads(value)
+            except ValueError:
+                continue
+            if isinstance(parsed, _JSON_TYPES[base]):
+                out[name] = parsed
+        elif base in _NUMERIC_TYPES:
+            try:
+                out[name] = _NUMERIC_TYPES[base](value.strip())
+            except ValueError:
+                continue
+    return out
+
+
 def _validate_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     """Cheap pre-flight check: every kwarg must be a real param of fn, and
     every required param must be present. Raises TypeError with a clear
@@ -300,8 +334,9 @@ def executor_node(state: TalosState) -> dict:
     # validate against the function signature before invocation.
     if sub_task.get("needs") == "forge" and sub_task.get("input_schema"):
         try:
-            final_args, final_kwargs = [], _build_kwargs_from_bindings(
-                sub_task.get("param_bindings") or {}, results_by_id,
+            final_args, final_kwargs = [], coerce_to_schema(
+                _build_kwargs_from_bindings(sub_task.get("param_bindings") or {}, results_by_id),
+                sub_task.get("input_schema") or {},
             )
             _validate_kwargs(fn, final_kwargs)
         except (ValueError, TypeError) as e:

@@ -107,3 +107,18 @@ def test_smoke_catches_signature_mismatch():
     assert s["passed"] is False
     assert "contract violation" in s["error"]
     assert "unexpected" in s["error"] or "missing" in s["error"]
+
+
+def test_smoke_parses_upstream_json_string_for_dict_param():
+    code = ("def count_keys(data):\n"
+            "    if not isinstance(data, dict):\n"
+            "        raise TypeError('need dict')\n"
+            "    return len(data)\n")
+    sub_task = {
+        "id": 2, "needs": "forge", "input_schema": {"data": "dict"},
+        "output_schema": "int", "param_bindings": {"data": "__SUBTASK_OUTPUT_1__"},
+    }
+    prior = [{"sub_task_id": 1, "ok": True, "output": '{"a": 1}', "error": None}]
+    out = smoke_node(_state(code, "count_keys", sub_task, prior=prior))
+    assert out["smoke_result"]["passed"] is True, out["smoke_result"]
+    assert out["smoke_result"]["output"] == 1

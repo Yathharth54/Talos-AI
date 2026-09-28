@@ -21,6 +21,7 @@ from typing import Any
 from talos.agents.executor import (
     _build_kwargs_from_bindings,
     _validate_kwargs,
+    coerce_to_schema,
 )
 from talos.state import TalosState
 
@@ -93,7 +94,10 @@ def smoke_node(state: TalosState) -> dict:
 
     try:
         bindings = (sub_task.get("param_bindings") or {}) if has_contract else {}
-        kwargs = _build_kwargs_from_bindings(bindings, results_by_id)
+        kwargs = coerce_to_schema(
+            _build_kwargs_from_bindings(bindings, results_by_id),
+            sub_task.get("input_schema") or {},
+        )
         _validate_kwargs(fn, kwargs)
     except (ValueError, TypeError) as e:
         return {"smoke_result": {"passed": False, "skipped": False,
