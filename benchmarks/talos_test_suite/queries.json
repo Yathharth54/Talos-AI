@@ -79,7 +79,7 @@
       "query": "Forge a tool that returns the prime factorization of any positive integer. Use it on 84942.",
       "expects": {
         "should_succeed": true, "forge_count_max": 1, "vault_growth_min": 1,
-        "answer_contains_all": ["2", "3", "17", "277"]
+        "answer_contains_all": ["2", "3", "11", "13"]
       },
       "timeout_seconds": 120
     },
@@ -271,7 +271,7 @@
       "query": "Read the page at https://jsonplaceholder.typicode.com/users and tell me how many users have email addresses ending in .biz.",
       "expects": {
         "should_succeed": true,
-        "answer_matches_regex": "\\b[3-7]\\b"
+        "answer_matches_regex": "(?i)\\b([3-7]|three|four|five|six|seven)\\b"
       },
       "notes": "JSONPlaceholder returns 10 users; about 5 have .biz emails (varies slightly).",
       "timeout_seconds": 150
@@ -375,7 +375,7 @@
       "query": "Build a tool that uses the 'obscurelib42' package to transform data.",
       "expects": {
         "should_succeed": true,
-        "answer_contains_any": ["not found", "doesn't exist", "ImportError", "no such", "unavailable", "stdlib"]
+        "answer_contains_any": ["not found", "doesn't exist", "does not exist", "ImportError", "no such", "unavailable", "stdlib"]
       },
       "timeout_seconds": 240
     },
@@ -394,7 +394,7 @@
       "query": "Find the detailed quarterly revenue breakdown for Yathendra's Lemonade Stand Inc. in Q3 2025.",
       "expects": {
         "should_succeed": true,
-        "answer_contains_any": ["couldn't find", "could not find", "no information", "unable", "no results"]
+        "answer_contains_any": ["couldn't find", "could not find", "no information", "unable", "no results", "can't provide", "cannot provide", "not a real", "does not appear to"]
       },
       "timeout_seconds": 120
     },

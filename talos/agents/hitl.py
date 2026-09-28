@@ -69,7 +69,10 @@ def hitl_check_node(state: TalosState) -> dict:
     if not missing:
         return {}
 
-    integrations = dict(state.get("available_integrations") or {})
+    # LangGraph re-runs this node from the top on every resume and replays
+    # earlier answers by interrupt position. So `missing` must be identical
+    # on every re-run: collect all answers first, persist only after the loop.
+    answers: dict[str, str] = {}
     for var in missing:
         # Each interrupt pauses the graph until resumed; once resumed, the
         # call returns the user's value and execution continues.
@@ -86,7 +89,11 @@ def hitl_check_node(state: TalosState) -> dict:
             # User declined → don't write; the next executor call will fail
             # cleanly because the env var is still unset.
             continue
-        _persist_env_var(var, str(value).strip())
+        answers[var] = str(value).strip()
+
+    integrations = dict(state.get("available_integrations") or {})
+    for var, value in answers.items():
+        _persist_env_var(var, value)
         integrations[var] = var
 
     return {"available_integrations": integrations}

@@ -473,3 +473,120 @@ def test_executor_live_arg_resolution(vault):
     assert os.path.exists(target)
     assert "hello world" in open(target).read()
     os.unlink(target)
+
+
+def test_executor_records_failure_when_resolver_returns_none(vault, monkeypatch):
+    """A model that skips the schema tool yields None; that must become a
+    recorded sub-task failure, not an AttributeError that kills the graph."""
+    _patch_resolver(monkeypatch, None)  # type: ignore[arg-type]
+    sub_task = {"id": 1, "needs": "primitive", "tool_hint": "file_read", "action": "read"}
+    out = executor_node(_state(current_sub_task=sub_task))
+    rec = out["sub_task_results"][0]
+    assert rec["ok"] is False
+    assert "arg resolution failed" in rec["error"]
+
+
+# ---- dependency short-circuit ---------------------------------------------
+
+def test_executor_skips_subtask_when_upstream_failed(vault, monkeypatch):
+    """#2 depends on #1, #1 failed → #2 must not run (e.g. must not write an
+    empty file and report success)."""
+    monkeypatch.setattr(
+        exec_mod, "_make_resolver_llm",
+        lambda: (_ for _ in ()).throw(AssertionError("must not resolve args")),
+    )
+    sub_task = {"id": 2, "needs": "primitive", "tool_hint": "file_write",
+                "action": "save", "depends_on": [1]}
+    prior = [{"sub_task_id": 1, "ok": False, "output": None, "error": "boom"}]
+    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
+    rec = out["sub_task_results"][-1]
+    assert rec["sub_task_id"] == 2
+    assert rec["ok"] is False
+    assert "skipped: upstream sub-task 1 failed" in rec["error"]
+
+
+def test_executor_skip_propagates_transitively(vault, monkeypatch):
+    """#3 depends on #2 which was itself skipped → #3 is skipped too."""
+    sub_task = {"id": 3, "needs": "primitive", "tool_hint": "file_write",
+                "action": "save", "depends_on": [2]}
+    prior = [
+        {"sub_task_id": 1, "ok": False, "output": None, "error": "boom"},
+        {"sub_task_id": 2, "ok": False, "output": None,
+         "error": "skipped: upstream sub-task 1 failed"},
+    ]
+    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
+    assert "skipped: upstream sub-task 2 failed" in out["sub_task_results"][-1]["error"]
+
+
+# ---- type coercion at step boundaries -------------------------------------
+
+@pytest.mark.parametrize("value,type_str,expected", [
+    ('{"a": 1}', "dict", {"a": 1}),
+    ('{"a": 1}', "dict[str, Any]", {"a": 1}),
+    ("[1, 2]", "list[int]", [1, 2]),
+    ("[1, 2]", "List", [1, 2]),
+    ("3.5", "float", 3.5),
+    ("42", "int", 42),
+    (" 7 ", "int", 7),
+    ("not json", "dict", "not json"),     # unparseable → unchanged
+    ("[1, 2]", "dict", "[1, 2]"),         # parses, wrong type → unchanged
+    ("4.2", "int", "4.2"),                # not an int → unchanged
+    ("hello", "str", "hello"),
+    ({"a": 1}, "dict", {"a": 1}),         # already right type
+    ("12", "Any", "12"),                  # unknown/any → untouched
+])
+def test_coerce_to_schema(value, type_str, expected):
+    out = exec_mod.coerce_to_schema({"x": value}, {"x": type_str})
+    assert out == {"x": expected}
+
+
+def test_typed_path_parses_upstream_json_string(vault, monkeypatch):
+    """file_read returns a JSON *string*; a forged tool declaring a dict
+    param must receive the parsed dict."""
+    vault.register(
+        {"name": "count_keys", "description": "count keys", "keywords": ["keys"],
+         "function": "count_keys", "signature": "count_keys(data: dict) -> int"},
+        "def count_keys(data):\n"
+        "    if not isinstance(data, dict):\n"
+        "        raise TypeError(f'data must be a dict, got {type(data).__name__}')\n"
+        "    return len(data)\n",
+    )
+    sub_task = {
+        "id": 2, "needs": "forge", "action": "count", "depends_on": [1],
+        "input_schema": {"data": "dict"}, "output_schema": "int",
+        "param_bindings": {"data": "__SUBTASK_OUTPUT_1__"},
+    }
+    prior = [{"sub_task_id": 1, "ok": True, "output": '{"a": 1, "b": 2}', "error": None}]
+    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior,
+                               forged_tool={"name": "count_keys"}))
+    rec = out["sub_task_results"][-1]
+    assert rec["ok"] is True, rec["error"]
+    assert rec["output"] == 2
+
+
+def test_vault_path_parses_json_string_using_type_hints(vault, monkeypatch):
+    """Vault tools go through the LLM arg resolver (no input_schema); the
+    function's own type hints drive coercion there."""
+    vault.register(
+        {"name": "flatten_json", "description": "flatten", "keywords": ["flatten"],
+         "function": "flatten_json", "signature": "flatten_json(data: dict) -> dict"},
+        "def flatten_json(data: dict) -> dict:\n"
+        "    if not isinstance(data, dict):\n"
+        "        raise TypeError(f'data must be a dict, got {type(data).__name__}')\n"
+        "    return data\n",
+    )
+    _patch_resolver(monkeypatch, ResolvedArgs(args=["__SUBTASK_OUTPUT_1__"], kwargs={}))
+    sub_task = {"id": 2, "needs": "vault", "tool_hint": "flatten_json",
+                "action": "flatten", "depends_on": [1]}
+    prior = [{"sub_task_id": 1, "ok": True, "output": '{"app": "talos"}', "error": None}]
+    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
+    rec = out["sub_task_results"][-1]
+    assert rec["ok"] is True, rec["error"]
+    assert rec["output"] == {"app": "talos"}
+
+
+def test_schema_from_signature_reads_type_hints():
+    def f(a: dict, b: "list[int]", c, *rest, d: float = 1.0):
+        return a
+
+    assert exec_mod.schema_from_signature(f) == {"a": "dict", "b": "list[int]", "d": "float"}

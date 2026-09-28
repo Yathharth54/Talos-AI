@@ -10,8 +10,10 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+# All LLM calls go through OpenRouter's OpenAI-compatible endpoint.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+TALOS_MODEL = os.environ.get("TALOS_MODEL", "deepseek/deepseek-v4.1-flash")
 
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 JINA_API_KEY = os.environ.get("JINA_API_KEY", "")
@@ -22,6 +24,9 @@ LANGSMITH_PROJECT = os.environ.get("LANGSMITH_PROJECT", "talos-ai")
 
 SUBPROCESS_TIMEOUT = int(os.environ.get("TALOS_SUBPROCESS_TIMEOUT", "10"))
 FORGE_MAX_RETRIES = int(os.environ.get("TALOS_FORGE_MAX_RETRIES", "3"))
+# Per-request LLM timeout (seconds). The OpenAI SDK default is 600s, so a
+# stalled provider response would otherwise hang a query for minutes.
+LLM_TIMEOUT = float(os.environ.get("TALOS_LLM_TIMEOUT", "120"))
 
 VAULT_DIR = PROJECT_ROOT / "talos" / "vault"
 VAULT_TOOLS_DIR = VAULT_DIR / "tools"
@@ -35,7 +40,7 @@ WORKSPACE_DIR = PROJECT_ROOT / "workspace"
 def key_status() -> dict[str, bool]:
     """Return which keys are present (True) vs missing (False). For smoke tests."""
     return {
-        "OPENAI_API_KEY": bool(OPENAI_API_KEY),
+        "OPENROUTER_API_KEY": bool(OPENROUTER_API_KEY),
         "TAVILY_API_KEY": bool(TAVILY_API_KEY),
         "JINA_API_KEY": bool(JINA_API_KEY),
         "LANGSMITH_API_KEY": bool(LANGSMITH_API_KEY),

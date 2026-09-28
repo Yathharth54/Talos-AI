@@ -109,6 +109,36 @@ def test_hitl_interrupts_and_resumes(monkeypatch, tmp_path):
     assert "FAKE_API_KEY" in (final.get("available_integrations") or {})
 
 
+def test_hitl_multiple_missing_vars_get_their_own_values(monkeypatch, tmp_path):
+    """LangGraph re-runs the node from the top on every resume. Each var
+    must still receive the value that was answered for it, not the value
+    for an earlier prompt."""
+    monkeypatch.setattr(hitl_mod, "DOTENV_PATH", tmp_path / ".env")
+    monkeypatch.delenv("MULTI_A", raising=False)
+    monkeypatch.delenv("MULTI_B", raising=False)
+
+    g: StateGraph = StateGraph(TalosState)
+    g.add_node("hitl", hitl_check_node)
+    g.add_edge(START, "hitl")
+    g.add_edge("hitl", END)
+    app = g.compile(checkpointer=MemorySaver())
+    config = {"configurable": {"thread_id": "tMulti"}}
+    initial = {"forged_tool": {"name": "two_keys", "needs_env_vars": ["MULTI_A", "MULTI_B"]}}
+
+    first = app.invoke(initial, config=config)
+    assert first["__interrupt__"][0].value["env_var"] == "MULTI_A"
+    second = app.invoke(Command(resume="value-a"), config=config)
+    assert second["__interrupt__"][0].value["env_var"] == "MULTI_B"
+    app.invoke(Command(resume="value-b"), config=config)
+
+    import os
+    assert os.environ["MULTI_A"] == "value-a"
+    assert os.environ["MULTI_B"] == "value-b"
+    text = (tmp_path / ".env").read_text()
+    assert "MULTI_A=value-a" in text
+    assert "MULTI_B=value-b" in text
+
+
 def test_hitl_skip_does_not_persist(monkeypatch, tmp_path):
     monkeypatch.setattr(hitl_mod, "DOTENV_PATH", tmp_path / ".env")
     monkeypatch.delenv("OPTIONAL_KEY", raising=False)

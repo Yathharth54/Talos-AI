@@ -16,21 +16,17 @@ from __future__ import annotations
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from talos.agents._history import format_recent_history
-from talos.config import settings
+from talos.agents.executor import failed_dependencies
+from talos.config.llm import make_chat_model
 from talos.prompts.orchestrator import ORCHESTRATOR_RESPONSE_PROMPT
 from talos.state import TalosState
 
 
 def _make_llm() -> Any:
-    """Plain ChatOpenAI client (no structured output) for response synthesis."""
-    return ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.3,
-    )
+    """Plain chat client (no structured output) for response synthesis."""
+    return make_chat_model(temperature=0.3)
 
 
 # ---- nodes -----------------------------------------------------------------
@@ -130,9 +126,12 @@ def route_after_planner(state: TalosState) -> str:
 def route_dispatch(state: TalosState) -> str:
     """Pick the right execution path for the current sub-task.
 
-    Reads: current_sub_task["needs"] in {"primitive", "vault", "forge"}.
+    Reads: current_sub_task["needs"] in {"primitive", "vault", "forge"}; returns
+    "skip" when a dependency failed (the executor records the skip).
     """
     sub_task = state.get("current_sub_task") or {}
+    if failed_dependencies(sub_task, state.get("sub_task_results") or []):
+        return "skip"  # executor records the skip; don't forge for it
     needs = sub_task.get("needs")
     if needs == "primitive":
         return "primitive"
@@ -206,8 +205,39 @@ def _format_results(plan: list[dict], results: list[dict]) -> str:
             continue
         status = "OK" if r.get("ok") else "FAIL"
         out = r.get("output") if r.get("ok") else r.get("error")
-        snippet = repr(out)
-        if len(snippet) > 800:
-            snippet = snippet[:800] + "...(truncated)"
+        snippet = _summarise_output(out)
         lines.append(f"  [{sid}] {st.get('action', '')} — {status}: {snippet}")
     return "\n".join(lines)
+
+
+# Budgets for what the synthesiser sees per sub-task. Strings get more room
+# because raw web_read / web_search text is often the answer source.
+_STR_BUDGET = 6000
+_REPR_BUDGET = 800
+
+
+def _summarise_output(out: object) -> str:
+    """Render a sub-task output for the response prompt without losing its
+    shape: small values verbatim; long strings as head + tail with length;
+    big collections as type, length, and first/last items."""
+    if isinstance(out, str):
+        if len(out) <= _STR_BUDGET:
+            return repr(out)
+        head, tail = out[: _STR_BUDGET - 500], out[-500:]
+        return f"str, len={len(out)}: {head!r} ...(middle omitted)... {tail!r}"
+
+    text = repr(out)
+    if len(text) <= _REPR_BUDGET:
+        return text
+    kind = type(out).__name__
+    if isinstance(out, dict):
+        items = list(out.items())
+        first = ", ".join(f"{k!r}: {v!r}" for k, v in items[:5])
+        last = ", ".join(f"{k!r}: {v!r}" for k, v in items[-3:])
+        body = f"first={{{first}}}, last={{{last}}}"
+    elif isinstance(out, (list, tuple, set, frozenset)):
+        items = list(out)
+        body = f"first={items[:5]!r}, last={items[-3:]!r}"
+    else:
+        return text[:_REPR_BUDGET] + "...(truncated)"
+    return f"{kind}, len={len(out)}, {body}"[: _REPR_BUDGET * 2]

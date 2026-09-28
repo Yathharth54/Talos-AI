@@ -15,16 +15,18 @@ PydanticAI analogue: `Agent(..., result_type=ForgedTool)`.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from talos.agents.researcher import research, should_research
-from talos.config import settings
+from talos.config.llm import make_structured_model
 from talos.prompts.forger import FORGER_SYSTEM_PROMPT, build_retry_context
 from talos.state import TalosState
+
+log = logging.getLogger(__name__)
 
 
 class ForgedTool(BaseModel):
@@ -55,12 +57,8 @@ def _make_llm() -> Any:
 
     Factored out so tests can monkeypatch it with a fake.
     """
-    base = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.2,  # low but not zero — code gen tolerates a bit of variation
-    )
-    return base.with_structured_output(ForgedTool)
+    # low but not zero — code gen tolerates a bit of variation
+    return make_structured_model(ForgedTool, temperature=0.2)
 
 
 def forger_node(state: TalosState) -> dict:
@@ -95,7 +93,10 @@ def forger_node(state: TalosState) -> dict:
     # error trace to fix the bug.
     research_block = ""
     if retry_count == 0 and should_research(task_description):
-        research_block = research(task_description) or ""
+        try:
+            research_block = research(task_description) or ""
+        except Exception as e:  # noqa: BLE001 — forge without research rather than abort
+            log.warning("research raised, forging without it: %s: %s", type(e).__name__, e)
 
     contract_block = _format_contract(sub_task)
 
@@ -122,11 +123,20 @@ def forger_node(state: TalosState) -> dict:
             body += f"\n\n--- Research notes from the Researcher ---\n{research_block}"
         messages.append(HumanMessage(content=body))
 
-    llm = _make_llm()
-    forged: ForgedTool = llm.invoke(messages)  # type: ignore[assignment]
+    try:
+        forged: ForgedTool = _make_llm().invoke(messages)  # type: ignore[assignment]
+        forged_dump = forged.model_dump()
+    except Exception as e:  # noqa: BLE001 — count as a failed attempt, keep the retry loop
+        log.warning("forger LLM call failed: %s: %s", type(e).__name__, e)
+        # Empty code makes the Tester report a failure, which feeds the normal
+        # retry path (or exits it once retries are exhausted).
+        forged_dump = {
+            "name": "", "description": f"forger failed: {e}", "keywords": [],
+            "signature": "", "code": "", "test_code": "", "needs_env_vars": [],
+        }
 
     return {
-        "forged_tool": forged.model_dump(),
+        "forged_tool": forged_dump,
         "retry_count": retry_count + 1,
     }
 

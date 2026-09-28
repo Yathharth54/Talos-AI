@@ -1,9 +1,10 @@
 """Researcher — the Forger's web-research utility.
 
-This is the FIRST place we use a LangChain prebuilt: `create_react_agent`.
+This is the FIRST place we use a LangChain prebuilt ReAct agent: `create_agent`
+(formerly langgraph.prebuilt.create_react_agent, deprecated in LangGraph 1.0).
 
 LangGraph concept: prebuilt ReAct agent.
-- LangChain ships `from langgraph.prebuilt import create_react_agent`.
+- LangChain ships `from langchain.agents import create_agent`.
 - Give it a model + a list of tools + a system prompt; you get back a
   compiled graph that does the classic ReAct loop:
       model thinks → calls a tool → observes result → repeats → answers.
@@ -12,7 +13,7 @@ LangGraph concept: prebuilt ReAct agent.
   is a textbook ReAct task: the LLM should freely decide what to search for,
   what URL to follow, when it has enough context. We don't want to pre-script that.
 
-Why we DIDN'T use create_react_agent for Forger / Planner / Executor:
+Why we DIDN'T use create_agent for Forger / Planner / Executor:
 - Forger has structural rules (max 3 retries, validate via tester) that we
   don't want the LLM to override. Hand-rolled graph wins there.
 - Planner has structural rules (must emit ordered sub-tasks). Same.
@@ -24,16 +25,19 @@ PydanticAI parallel: `Agent(model, tools=[search_tool, read_tool])`.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
+from langchain.agents import create_agent
 from langchain_core.tools import tool
-from langgraph.prebuilt import create_react_agent
 
 from talos.config import settings
+from talos.config.llm import make_chat_model
 from talos.primitives.web_read import web_read as _web_read
 from talos.primitives.web_search import web_search as _web_search
 
+log = logging.getLogger(__name__)
 
 # Wrap primitives as LangChain Tool objects so the ReAct agent can pick them.
 # `@tool` introspects the function signature + docstring to build the JSON
@@ -45,7 +49,12 @@ def search_web(query: str) -> list[dict]:
     """Search the web for a free-text query. Returns up to 5 results, each
     with title, url, and a short content snippet. Use this to find what
     APIs / sites exist for a topic before reading specific URLs."""
-    return _web_search(query, max_results=5)
+    # Errors are returned as observations, not raised: one dead endpoint
+    # must not abort the whole ReAct loop (and with it the user's query).
+    try:
+        return _web_search(query, max_results=5)
+    except Exception as e:  # noqa: BLE001
+        return [{"title": "ERROR", "url": "", "content": f"ERROR: {type(e).__name__}: {e}"}]
 
 
 @tool
@@ -53,7 +62,10 @@ def read_url(url: str) -> str:
     """Fetch any public URL and return its content as clean markdown. Use
     after search_web finds promising URLs. Good for reading API docs or
     structured pages. Returns at most a few thousand characters."""
-    text = _web_read(url)
+    try:
+        text = _web_read(url)
+    except Exception as e:  # noqa: BLE001 — see search_web
+        return f"ERROR: {type(e).__name__}: {e}"
     if len(text) > 4000:
         text = text[:4000] + "\n...(truncated)"
     return text
@@ -78,10 +90,10 @@ Your output is fed into another agent that will write Python code. So:
 
 def _make_react_agent() -> Any:
     """Build the ReAct agent. Module-level factory so tests can patch it."""
-    return create_react_agent(
-        model=f"openai:{settings.OPENAI_MODEL}",
+    return create_agent(
+        model=make_chat_model(temperature=0.0),
         tools=[search_web, read_url],
-        prompt=_RESEARCHER_PROMPT,
+        system_prompt=_RESEARCHER_PROMPT,
     )
 
 
@@ -96,14 +108,18 @@ def research(query: str, max_iterations: int = 8) -> str:
     Returns:
         The final assistant message content as a string.
     """
-    if not settings.OPENAI_API_KEY:
-        return "(researcher unavailable: no OPENAI_API_KEY set)"
+    if not settings.OPENROUTER_API_KEY:
+        return "(researcher unavailable: no OPENROUTER_API_KEY set)"
 
     agent = _make_react_agent()
-    result = agent.invoke(
-        {"messages": [{"role": "user", "content": query}]},
-        config={"recursion_limit": max_iterations},
-    )
+    try:
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": query}]},
+            config={"recursion_limit": max_iterations},
+        )
+    except Exception as e:  # noqa: BLE001 — research is optional context
+        log.warning("research failed, continuing without it: %s: %s", type(e).__name__, e)
+        return ""
     # ReAct agents return state with .messages. Last AIMessage = the answer.
     msgs = result.get("messages", [])
     for msg in reversed(msgs):

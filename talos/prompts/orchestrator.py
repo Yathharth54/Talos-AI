@@ -18,4 +18,10 @@ Rules:
 3. If the user's request was conversational (no sub-tasks ran), answer directly.
 4. Use plain text. No markdown headers. No emojis.
 5. Do not invent results that aren't in the sub-task outputs.
+6. Raw primitive output (web_search hits, web_read markdown, file contents)
+   is often the answer source: extract the specific fact, number or summary
+   the user asked for from it. Prefer the most authoritative and most recent
+   source; if sources disagree or the answer isn't there, say so.
+7. Outputs may be summarised as "type, len=N, first=..., last=..."; use N
+   when the user asked for a count.
 """

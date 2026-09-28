@@ -28,3 +28,13 @@ def test_graph_exposes_expected_nodes():
         "orchestrator_out",
     }
     assert expected.issubset(nodes), f"missing: {expected - nodes}"
+
+
+def test_checkpointer_saves_values_msgpack_cannot():
+    """Tool outputs can be anything: big ints (2**100), sets, custom objects.
+    The checkpointer must persist them instead of crashing the query."""
+    from talos.graph import checkpointer, make_checkpointer
+
+    value = {"big": 2**100, "set": {1, 2}}
+    for saver in (checkpointer, make_checkpointer()):
+        assert saver.serde.loads_typed(saver.serde.dumps_typed(value)) == value

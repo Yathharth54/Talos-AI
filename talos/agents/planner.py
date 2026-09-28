@@ -17,11 +17,10 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from talos.agents._history import format_recent_history
-from talos.config import settings
+from talos.config.llm import make_structured_model
 from talos.prompts.planner import (
     PLANNER_SYSTEM_PROMPT,
     build_planner_user_message,
@@ -121,13 +120,9 @@ class Plan(BaseModel):
 
 
 def _make_llm() -> Any:
-    """Structured-output ChatOpenAI client for Plan. Test seam."""
-    base = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.1,  # decomposition wants determinism more than the Forger does
-    )
-    return base.with_structured_output(Plan)
+    """Structured-output LLM client for Plan. Test seam."""
+    # decomposition wants determinism more than the Forger does
+    return make_structured_model(Plan, temperature=0.1)
 
 
 def _get_skill_manager() -> SkillManager:
@@ -151,7 +146,22 @@ def planner_node(state: TalosState) -> dict:
         SystemMessage(content=PLANNER_SYSTEM_PROMPT),
         HumanMessage(content=build_planner_user_message(query, vault_summary, history)),
     ]
-    plan: Plan = _make_llm().invoke(messages)  # type: ignore[assignment]
+    try:
+        plan: Plan = _make_llm().invoke(messages)  # type: ignore[assignment]
+    except Exception as e:  # noqa: BLE001 — surface as an explained failure, don't crash
+        return {
+            "plan": {
+                "sub_tasks": [],
+                "verdict": "infeasible",
+                "verdict_category": "",
+                "verdict_reason": (
+                    f"Internal error: the planner could not produce a plan ({e}). "
+                    "Retrying the request may help."
+                ),
+            },
+            "current_sub_task": None,
+            "sub_task_results": [],
+        }
 
     # No vault-name validation here: a plan may legitimately reference a tool
     # that an *earlier* sub-task in the same plan will forge. The Executor

@@ -49,6 +49,7 @@ StateGraph. We add it directly with `add_node("forge_subgraph", forge_app)`
 from __future__ import annotations
 
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
 
 from talos.agents.executor import executor_node
@@ -103,7 +104,8 @@ def build_graph() -> StateGraph:
     g.add_conditional_edges(
         "_dispatch",
         route_dispatch,
-        {"primitive": "executor", "vault": "executor", "forge": "forge_subgraph"},
+        {"primitive": "executor", "vault": "executor", "forge": "forge_subgraph",
+         "skip": "executor"},
     )
 
     # Forge sub-graph terminates →
@@ -146,5 +148,13 @@ def build_graph() -> StateGraph:
 #
 # MemorySaver is in-process only. Swap to SqliteSaver / PostgresSaver later
 # for cross-process persistence (Phase 9 may want this for HITL resume).
-checkpointer = MemorySaver()
+#
+# pickle_fallback: the default msgpack serde rejects ints beyond 64 bits,
+# sets, and arbitrary objects — all legitimate tool outputs (e.g. 2**100).
+def make_checkpointer() -> MemorySaver:
+    """In-memory checkpointer that can persist any tool output."""
+    return MemorySaver(serde=JsonPlusSerializer(pickle_fallback=True))
+
+
+checkpointer = make_checkpointer()
 app = build_graph().compile(checkpointer=checkpointer)

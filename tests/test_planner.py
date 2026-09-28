@@ -204,3 +204,38 @@ def test_planner_live_multi_step(monkeypatch, tmp_path):
     assert len(sub_tasks) >= 2, f"expected ≥2 sub-tasks, got: {sub_tasks}"
     needs_set = {st["needs"] for st in sub_tasks}
     assert "primitive" in needs_set, f"expected at least one primitive, got: {sub_tasks}"
+
+
+def test_planner_failure_becomes_infeasible_plan(empty_vault, monkeypatch):
+    """If the planner model can't produce a Plan, the graph must still
+    respond — as an explained failure, not a crash or a silent chat reply."""
+    from talos.config.llm import StructuredOutputError
+
+    class _Broken:
+        def invoke(self, messages):
+            raise StructuredOutputError("model returned no Plan")
+
+    monkeypatch.setattr(planner_mod, "_make_llm", lambda: _Broken())
+    out = planner_node(_state("do something"))
+    assert out["plan"]["verdict"] == "infeasible"
+    assert out["plan"]["sub_tasks"] == []
+    assert "no Plan" in out["plan"]["verdict_reason"]
+
+
+# ---- prompt content: routing rules ------------------------------------------
+
+def test_planner_prompt_routes_answer_only_questions_to_primitives():
+    from talos.prompts.planner import PLANNER_SYSTEM_PROMPT as p
+
+    assert "ANSWER-ONLY QUESTIONS use primitives, never forge" in p
+    # The old example that told the planner to forge a page summariser is gone.
+    assert "summarise a website's content" not in p
+    # Rule 6 is scoped to typed hand-offs between sub-tasks.
+    assert "does NOT apply" in p and "rule 3a" in p
+
+
+def test_orchestrator_prompt_extracts_answers_from_raw_output():
+    from talos.prompts.orchestrator import ORCHESTRATOR_RESPONSE_PROMPT as p
+
+    assert "Raw primitive output" in p
+    assert "len=N" in p

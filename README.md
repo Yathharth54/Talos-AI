@@ -22,7 +22,7 @@ cd Talos-AI
 uv venv
 uv sync --extra dev
 cp .env.example .env
-# Edit .env — at minimum set OPENAI_API_KEY
+# Edit .env — at minimum set OPENROUTER_API_KEY
 uv run python -m talos.main
 ```
 
@@ -136,21 +136,22 @@ All via `.env` (see `.env.example`):
 
 | Var | Required | Notes |
 |---|---|---|
-| `OPENAI_API_KEY` | yes | Talos uses OpenAI for all LLM-using nodes |
-| `OPENAI_MODEL` | no | Defaults to `gpt-4o` |
+| `OPENROUTER_API_KEY` | yes | All LLM-using nodes call OpenRouter |
+| `TALOS_MODEL` | no | OpenRouter model slug; defaults to `deepseek/deepseek-v4.1-flash` |
 | `TAVILY_API_KEY` | yes (for web_search) | Free tier covers POC use |
 | `JINA_API_KEY` | no | Optional; raises Jina Reader rate limits |
 | `LANGSMITH_API_KEY` | no | Enables full tracing of every node |
 | `LANGSMITH_TRACING` | no | Set `true` to enable; tests force-disable it |
 | `TALOS_SUBPROCESS_TIMEOUT` | no | Default 10 (seconds) |
 | `TALOS_FORGE_MAX_RETRIES` | no | Default 3 |
+| `TALOS_LLM_TIMEOUT` | no | Per-request LLM timeout, default 120 (seconds) |
 | `TALOS_LOG_LEVEL` | no | Default WARNING |
 
 ## Tests
 
 ```bash
 uv run pytest                   # ~6s, all mocked
-RUN_LIVE=1 uv run pytest        # also exercises real OpenAI/Tavily/Jina
+RUN_LIVE=1 uv run pytest        # also exercises real OpenRouter/Tavily/Jina
 ```
 
 Tests are organised by component. Mock LLMs at the factory seam (`_make_llm`, `_make_resolver_llm`, etc.) for cheap deterministic runs. Live tests are gated by `RUN_LIVE=1`.
@@ -159,7 +160,7 @@ Tests are organised by component. Mock LLMs at the factory seam (`_make_llm`, `_
 
 - Subprocess sandboxing only — not Docker/E2B isolation.
 - Keyword vault search — no semantic search yet (deferred until vault grows).
-- OpenAI only for now (Anthropic would slot into the LangChain `ChatModel` seam).
+- Single provider (OpenRouter) — one model for every node, set via `TALOS_MODEL`.
 - OAuth-style API auth is out of scope; only env-var-keyed APIs supported via HITL.
 - In-memory checkpointer (`MemorySaver`); state lost on process exit. Vault persists.
 

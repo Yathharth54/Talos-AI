@@ -170,3 +170,19 @@ def test_forge_live_reverse_string():
     final = app.invoke({"current_sub_task": {"action": "Write a function that reverses a string."}})
     assert final["test_result"]["passed"] is True, final["test_result"].get("error")
     assert "def " in final["forged_tool"]["code"]
+
+
+def test_forger_failure_counts_as_a_failed_attempt(monkeypatch):
+    """An LLM failure inside the Forger must feed the normal retry loop
+    (empty code → tester fails → retry), not abort the graph."""
+    from talos.config.llm import StructuredOutputError
+
+    class _Broken:
+        def invoke(self, messages):
+            raise StructuredOutputError("model returned no ForgedTool")
+
+    monkeypatch.setattr(forger_mod, "_make_llm", lambda: _Broken())
+    out = forger_node({"current_sub_task": {"action": "reverse a string"}, "retry_count": 0})
+    assert out["retry_count"] == 1
+    assert out["forged_tool"]["code"] == ""
+    assert "no ForgedTool" in out["forged_tool"]["description"]

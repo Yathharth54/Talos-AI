@@ -20,24 +20,24 @@ side by side.
 from __future__ import annotations
 
 import inspect
+import json
 import re
 from typing import Any, Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from talos.agents._history import format_recent_history
-from talos.config import settings
+from talos.config.llm import make_structured_model
 from talos.primitives.file_ops import file_read, file_write
 from talos.primitives.python_exec import python_exec
 from talos.primitives.shell_exec import shell_exec
+from talos.primitives.vault_list import vault_list
 from talos.primitives.web_read import web_read
 from talos.primitives.web_search import web_search
 from talos.prompts.arg_resolver import ARG_RESOLVER_SYSTEM_PROMPT
 from talos.state import TalosState
 from talos.vault.manager import SkillManager
-
 
 # Primitives keyed by the names the Planner uses in `tool_hint`.
 # `human_input` is excluded — it's only invoked via the Orchestrator's
@@ -49,6 +49,7 @@ PRIMITIVES: dict[str, Callable[..., Any]] = {
     "file_write": file_write,
     "python_exec": python_exec,
     "shell_exec": shell_exec,
+    "vault_list": vault_list,
 }
 
 
@@ -66,15 +67,8 @@ class ResolvedArgs(BaseModel):
 
 
 def _make_resolver_llm() -> Any:
-    base = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.0,  # arg resolution should be fully deterministic
-    )
-    # `method="function_calling"` because our ResolvedArgs has open-ended
-    # types (`list[Any]`, `dict[str, Any]`) — OpenAI's strict structured-
-    # outputs mode rejects those, but the function_calling path accepts them.
-    return base.with_structured_output(ResolvedArgs, method="function_calling")
+    # arg resolution should be fully deterministic
+    return make_structured_model(ResolvedArgs, temperature=0.0)
 
 
 def _get_skill_manager() -> SkillManager:
@@ -216,6 +210,76 @@ def _build_kwargs_from_bindings(
     return kwargs
 
 
+_JSON_TYPES: dict[str, type] = {"dict": dict, "list": list}
+_NUMERIC_TYPES: dict[str, type] = {"int": int, "float": float}
+
+
+def coerce_to_schema(kwargs: dict[str, Any], input_schema: dict[str, str]) -> dict[str, Any]:
+    """Convert string values to the type the contract declares.
+
+    Upstream steps often hand over text (file_read → JSON string, web_read →
+    markdown) where the next tool declares `dict`, `list`, `int` or `float`.
+    Only str values are touched, and only when the conversion yields exactly
+    the declared base type; anything else is left as-is so the tool's own
+    error surfaces.
+    """
+    out = dict(kwargs)
+    for name, value in kwargs.items():
+        if not isinstance(value, str):
+            continue
+        base = (input_schema.get(name) or "").split("[", 1)[0].strip().lower()
+        if base in _JSON_TYPES:
+            try:
+                parsed = json.loads(value)
+            except ValueError:
+                continue
+            if isinstance(parsed, _JSON_TYPES[base]):
+                out[name] = parsed
+        elif base in _NUMERIC_TYPES:
+            try:
+                out[name] = _NUMERIC_TYPES[base](value.strip())
+            except ValueError:
+                continue
+    return out
+
+
+def schema_from_signature(fn: Callable[..., Any]) -> dict[str, str]:
+    """Map annotated named params of `fn` to type strings, for coercion when
+    the Planner gave no input_schema (vault tools, primitives)."""
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return {}
+    schema: dict[str, str] = {}
+    for name, p in params.items():
+        if p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            continue
+        ann = p.annotation
+        if ann is inspect.Parameter.empty:
+            continue
+        text = ann if isinstance(ann, str) else getattr(ann, "__name__", str(ann))
+        schema[name] = text.strip("'\"")  # quoted hints under __future__ annotations
+    return schema
+
+
+def _coerce_call_args(
+    fn: Callable[..., Any], args: list[Any], kwargs: dict[str, Any],
+) -> tuple[list[Any], dict[str, Any]]:
+    """Apply coerce_to_schema to positional + keyword args using fn's hints."""
+    schema = schema_from_signature(fn)
+    if not schema:
+        return args, kwargs
+    try:
+        names = list(inspect.signature(fn).parameters)
+    except (TypeError, ValueError):
+        return args, kwargs
+    positional = {names[i]: v for i, v in enumerate(args) if i < len(names)}
+    coerced_pos = coerce_to_schema(positional, schema)
+    new_args = [coerced_pos.get(names[i], v) if i < len(names) else v
+                for i, v in enumerate(args)]
+    return new_args, coerce_to_schema(kwargs, schema)
+
+
 def _validate_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     """Cheap pre-flight check: every kwarg must be a real param of fn, and
     every required param must be present. Raises TypeError with a clear
@@ -285,6 +349,11 @@ def executor_node(state: TalosState) -> dict:
     if not sub_task:
         return {"execution_result": None}
 
+    failed_deps = failed_dependencies(sub_task, state.get("sub_task_results") or [])
+    if failed_deps:
+        ids = ", ".join(str(i) for i in failed_deps)
+        return _record_failure(state, sub_task, f"skipped: upstream sub-task {ids} failed")
+
     mgr = _get_skill_manager()
 
     try:
@@ -304,8 +373,9 @@ def executor_node(state: TalosState) -> dict:
     # validate against the function signature before invocation.
     if sub_task.get("needs") == "forge" and sub_task.get("input_schema"):
         try:
-            final_args, final_kwargs = [], _build_kwargs_from_bindings(
-                sub_task.get("param_bindings") or {}, results_by_id,
+            final_args, final_kwargs = [], coerce_to_schema(
+                _build_kwargs_from_bindings(sub_task.get("param_bindings") or {}, results_by_id),
+                sub_task.get("input_schema") or {},
             )
             _validate_kwargs(fn, final_kwargs)
         except (ValueError, TypeError) as e:
@@ -314,10 +384,15 @@ def executor_node(state: TalosState) -> dict:
         # Legacy path: LLM-driven arg resolver (used for primitive + vault).
         try:
             resolved = _resolve_args(signature, sub_task, user_query, prior_results, history)
+            if resolved is None:
+                raise ValueError("resolver returned no ResolvedArgs")
         except Exception as e:  # noqa: BLE001 — resolver failure is recoverable
             return _record_failure(state, sub_task, f"arg resolution failed: {e}")
-        final_args = _substitute_placeholders(resolved.args, results_by_id)
-        final_kwargs = _substitute_placeholders(resolved.kwargs, results_by_id)
+        final_args, final_kwargs = _coerce_call_args(
+            fn,
+            _substitute_placeholders(resolved.args, results_by_id),
+            _substitute_placeholders(resolved.kwargs, results_by_id),
+        )
 
     try:
         output = fn(*final_args, **final_kwargs)
@@ -348,6 +423,20 @@ def executor_node(state: TalosState) -> dict:
         "execution_result": _stringify(output) if ok else error,
         "sub_task_results": [*prior_results, new_record],
     }
+
+
+def failed_dependencies(sub_task: dict, results: list[dict]) -> list[int]:
+    """IDs in `sub_task["depends_on"]` whose recorded result is a failure.
+
+    A dependent of a failed step would run on missing input (e.g. write an
+    empty file and report success), so callers skip it instead. Skipped
+    steps are recorded as failures, so this propagates transitively.
+    """
+    by_id = {r.get("sub_task_id"): r for r in results}
+    return [
+        dep for dep in sub_task.get("depends_on") or []
+        if dep in by_id and not by_id[dep].get("ok")
+    ]
 
 
 # ---- internal helpers -----------------------------------------------------

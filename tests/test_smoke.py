@@ -28,13 +28,34 @@ def test_smoke_passes_for_clean_pure_python():
     assert s["skipped"] is False
 
 
-def test_smoke_skips_when_no_contract():
-    """Old-style sub-task with no input_schema → smoke is a no-op pass."""
-    code = "def foo():\n    return 42\n"
+def test_smoke_skips_when_no_contract_and_args_required():
+    """No input_schema and the function needs args → no way to call it; pass."""
+    code = "def foo(x):\n    return x\n"
     sub_task = {"id": 1, "needs": "forge", "input_schema": {}, "param_bindings": {}}
     out = smoke_node(_state(code, "foo", sub_task))
     assert out["smoke_result"]["passed"] is True
     assert out["smoke_result"]["skipped"] is True
+
+
+def test_smoke_runs_zero_arg_tool_without_contract():
+    """A zero-arg tool is always callable, so it is smoke-tested even with
+    no input_schema."""
+    code = "def foo():\n    return 42\n"
+    sub_task = {"id": 1, "needs": "forge", "input_schema": {}, "param_bindings": {}}
+    out = smoke_node(_state(code, "foo", sub_task))
+    assert out["smoke_result"]["passed"] is True
+    assert out["smoke_result"]["skipped"] is False
+    assert out["smoke_result"]["output"] == 42
+
+
+def test_smoke_catches_zero_arg_tool_failure_without_contract():
+    """e.g. a fetcher whose mocked unit tests pass but the real API response
+    has a different shape — must fail smoke so the Forger retries."""
+    code = "def fetch():\n    raise ValueError('Unexpected response format')\n"
+    sub_task = {"id": 1, "needs": "forge", "input_schema": {}, "param_bindings": {}}
+    out = smoke_node(_state(code, "fetch", sub_task))
+    assert out["smoke_result"]["passed"] is False
+    assert "Unexpected response format" in out["smoke_result"]["error"]
 
 
 def test_smoke_skips_when_env_vars_required():
@@ -86,3 +107,18 @@ def test_smoke_catches_signature_mismatch():
     assert s["passed"] is False
     assert "contract violation" in s["error"]
     assert "unexpected" in s["error"] or "missing" in s["error"]
+
+
+def test_smoke_parses_upstream_json_string_for_dict_param():
+    code = ("def count_keys(data):\n"
+            "    if not isinstance(data, dict):\n"
+            "        raise TypeError('need dict')\n"
+            "    return len(data)\n")
+    sub_task = {
+        "id": 2, "needs": "forge", "input_schema": {"data": "dict"},
+        "output_schema": "int", "param_bindings": {"data": "__SUBTASK_OUTPUT_1__"},
+    }
+    prior = [{"sub_task_id": 1, "ok": True, "output": '{"a": 1}', "error": None}]
+    out = smoke_node(_state(code, "count_keys", sub_task, prior=prior))
+    assert out["smoke_result"]["passed"] is True, out["smoke_result"]
+    assert out["smoke_result"]["output"] == 1
