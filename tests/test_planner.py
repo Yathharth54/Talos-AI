@@ -220,3 +220,22 @@ def test_planner_failure_becomes_infeasible_plan(empty_vault, monkeypatch):
     assert out["plan"]["verdict"] == "infeasible"
     assert out["plan"]["sub_tasks"] == []
     assert "no Plan" in out["plan"]["verdict_reason"]
+
+
+# ---- prompt content: routing rules ------------------------------------------
+
+def test_planner_prompt_routes_answer_only_questions_to_primitives():
+    from talos.prompts.planner import PLANNER_SYSTEM_PROMPT as p
+
+    assert "ANSWER-ONLY QUESTIONS use primitives, never forge" in p
+    # The old example that told the planner to forge a page summariser is gone.
+    assert "summarise a website's content" not in p
+    # Rule 6 is scoped to typed hand-offs between sub-tasks.
+    assert "does NOT apply" in p and "rule 3a" in p
+
+
+def test_orchestrator_prompt_extracts_answers_from_raw_output():
+    from talos.prompts.orchestrator import ORCHESTRATOR_RESPONSE_PROMPT as p
+
+    assert "Raw primitive output" in p
+    assert "len=N" in p
