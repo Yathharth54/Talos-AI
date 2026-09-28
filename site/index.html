@@ -209,6 +209,41 @@
         </g>
       </svg>
     </div>
+
+    <!-- Phone layout of the same graph, read top to bottom -->
+    <div class="flow" data-reveal role="img" aria-label="Architecture, top to bottom: orchestrator, planner, then a primitive, a vault tool, or the forge sub-graph (forger and tester with up to three retries, a human check for API keys, then learn), then the executor, which loops back to the planner for the next sub-task or returns the answer.">
+      <div class="f-node llm">Orchestrator</div>
+      <span class="f-link"></span>
+      <div class="f-node llm">Planner</div>
+      <span class="f-link"></span>
+      <div class="f-fork">
+        <div class="f-node sm">Primitive</div>
+        <div class="f-node sm hot">Forge</div>
+        <div class="f-node sm">Vault tool</div>
+      </div>
+      <p class="f-note">Primitives and vault tools go straight to the Executor.</p>
+      <span class="f-link gold"><em>needs a new tool</em></span>
+      <div class="f-sub">
+        <span class="f-sub-label">Forge sub-graph</span>
+        <div class="f-pair">
+          <div class="f-node hot llm">Forger</div>
+          <span class="f-swap" aria-hidden="true"></span>
+          <div class="f-node hot">Tester</div>
+        </div>
+        <p class="f-cap">A failing test sends the trace back to the Forger, up to 3 times.</p>
+        <div class="f-pair">
+          <div class="f-node dim">Human check</div>
+          <div class="f-node">Learn</div>
+        </div>
+        <p class="f-cap">Human check pauses for a missing API key. Learn saves the tool to the vault.</p>
+      </div>
+      <span class="f-link"></span>
+      <div class="f-node llm">Executor</div>
+      <span class="f-link"><em>all done</em></span>
+      <div class="f-node solid">Answer</div>
+      <p class="f-loop">Another sub-task left? Back to the Planner.</p>
+    </div>
+
     <p class="legend"><span class="pip"></span>Calls a model. Everything else is plain Python.</p>
 
     <div class="agents">
