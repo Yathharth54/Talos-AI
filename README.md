@@ -144,6 +144,7 @@ All via `.env` (see `.env.example`):
 | `LANGSMITH_TRACING` | no | Set `true` to enable; tests force-disable it |
 | `TALOS_SUBPROCESS_TIMEOUT` | no | Default 10 (seconds) |
 | `TALOS_FORGE_MAX_RETRIES` | no | Default 3 |
+| `TALOS_LLM_TIMEOUT` | no | Per-request LLM timeout, default 120 (seconds) |
 | `TALOS_LOG_LEVEL` | no | Default WARNING |
 
 ## Tests

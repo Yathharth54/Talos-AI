@@ -29,6 +29,8 @@ def make_chat_model(temperature: float) -> ChatOpenAI:
         api_key=settings.OPENROUTER_API_KEY,
         base_url=settings.OPENROUTER_BASE_URL,
         temperature=temperature,
+        timeout=settings.LLM_TIMEOUT,
+        max_retries=2,
         default_headers={"X-Title": "Talos AI"},
     )
 

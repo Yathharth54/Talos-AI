@@ -24,6 +24,9 @@ LANGSMITH_PROJECT = os.environ.get("LANGSMITH_PROJECT", "talos-ai")
 
 SUBPROCESS_TIMEOUT = int(os.environ.get("TALOS_SUBPROCESS_TIMEOUT", "10"))
 FORGE_MAX_RETRIES = int(os.environ.get("TALOS_FORGE_MAX_RETRIES", "3"))
+# Per-request LLM timeout (seconds). The OpenAI SDK default is 600s, so a
+# stalled provider response would otherwise hang a query for minutes.
+LLM_TIMEOUT = float(os.environ.get("TALOS_LLM_TIMEOUT", "120"))
 
 VAULT_DIR = PROJECT_ROOT / "talos" / "vault"
 VAULT_TOOLS_DIR = VAULT_DIR / "tools"

@@ -66,3 +66,12 @@ def test_raises_structured_output_error_after_two_failures(monkeypatch):
     inner = _Seq(None, None)
     with pytest.raises(StructuredOutputError, match="_Out"):
         _patched(monkeypatch, inner).invoke(["m"])
+
+
+def test_chat_model_has_bounded_request_timeout():
+    """A stalled provider response must fail fast and retry, not hang the
+    query for the SDK default of 600s per attempt."""
+    model = llm_mod.make_chat_model(temperature=0.0)
+    assert model.request_timeout is not None
+    assert model.request_timeout <= 120
+    assert model.max_retries >= 1
