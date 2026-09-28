@@ -18,11 +18,10 @@ from __future__ import annotations
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from talos.agents.researcher import research, should_research
-from talos.config import settings
+from talos.config.llm import make_structured_model
 from talos.prompts.forger import FORGER_SYSTEM_PROMPT, build_retry_context
 from talos.state import TalosState
 
@@ -55,12 +54,8 @@ def _make_llm() -> Any:
 
     Factored out so tests can monkeypatch it with a fake.
     """
-    base = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.2,  # low but not zero — code gen tolerates a bit of variation
-    )
-    return base.with_structured_output(ForgedTool)
+    # low but not zero — code gen tolerates a bit of variation
+    return make_structured_model(ForgedTool, temperature=0.2)
 
 
 def forger_node(state: TalosState) -> dict:

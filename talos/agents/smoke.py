@@ -15,6 +15,7 @@ retry, with the runtime error in the same channel as unit-test failures.
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 from talos.agents.executor import (
@@ -45,6 +46,19 @@ def _load_forged_function(forged: dict) -> Any:
     return fn
 
 
+def _is_zero_arg(fn: Any) -> bool:
+    """True if `fn` can be called with no arguments."""
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        return False
+    return all(
+        p.default is not inspect.Parameter.empty
+        or p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+        for p in params
+    )
+
+
 def smoke_node(state: TalosState) -> dict:
     """Real-call validation between unit tests and registration.
 
@@ -54,11 +68,6 @@ def smoke_node(state: TalosState) -> dict:
     """
     forged = state.get("forged_tool") or {}
     sub_task = state.get("current_sub_task") or {}
-
-    if not sub_task.get("input_schema"):
-        # No typed contract → no deterministic way to invoke. Pass through.
-        return {"smoke_result": {"passed": True, "skipped": True,
-                                  "reason": "no typed contract on sub-task"}}
 
     # If the tool needs env vars we may not have set, smoke would always
     # fail with KeyError. Skip and let the HITL flow handle missing keys.
@@ -72,13 +81,19 @@ def smoke_node(state: TalosState) -> dict:
         return {"smoke_result": {"passed": False, "skipped": False,
                                   "error": f"load error: {type(e).__name__}: {e}"}}
 
+    has_contract = bool(sub_task.get("input_schema"))
+    if not has_contract and not _is_zero_arg(fn):
+        # No typed contract → no deterministic way to invoke. Pass through.
+        # (Zero-arg tools are still callable, so they fall through and run.)
+        return {"smoke_result": {"passed": True, "skipped": True,
+                                  "reason": "no typed contract on sub-task"}}
+
     prior = state.get("sub_task_results") or []
     results_by_id = {r.get("sub_task_id"): r for r in prior}
 
     try:
-        kwargs = _build_kwargs_from_bindings(
-            sub_task.get("param_bindings") or {}, results_by_id,
-        )
+        bindings = (sub_task.get("param_bindings") or {}) if has_contract else {}
+        kwargs = _build_kwargs_from_bindings(bindings, results_by_id)
         _validate_kwargs(fn, kwargs)
     except (ValueError, TypeError) as e:
         return {"smoke_result": {"passed": False, "skipped": False,

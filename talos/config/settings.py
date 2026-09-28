@@ -10,8 +10,10 @@ from dotenv import load_dotenv
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o")
+# All LLM calls go through OpenRouter's OpenAI-compatible endpoint.
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+TALOS_MODEL = os.environ.get("TALOS_MODEL", "deepseek/deepseek-v4.1-flash")
 
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
 JINA_API_KEY = os.environ.get("JINA_API_KEY", "")
@@ -35,7 +37,7 @@ WORKSPACE_DIR = PROJECT_ROOT / "workspace"
 def key_status() -> dict[str, bool]:
     """Return which keys are present (True) vs missing (False). For smoke tests."""
     return {
-        "OPENAI_API_KEY": bool(OPENAI_API_KEY),
+        "OPENROUTER_API_KEY": bool(OPENROUTER_API_KEY),
         "TAVILY_API_KEY": bool(TAVILY_API_KEY),
         "JINA_API_KEY": bool(JINA_API_KEY),
         "LANGSMITH_API_KEY": bool(LANGSMITH_API_KEY),

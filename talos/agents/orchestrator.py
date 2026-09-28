@@ -16,21 +16,16 @@ from __future__ import annotations
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 
 from talos.agents._history import format_recent_history
-from talos.config import settings
+from talos.config.llm import make_chat_model
 from talos.prompts.orchestrator import ORCHESTRATOR_RESPONSE_PROMPT
 from talos.state import TalosState
 
 
 def _make_llm() -> Any:
-    """Plain ChatOpenAI client (no structured output) for response synthesis."""
-    return ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.3,
-    )
+    """Plain chat client (no structured output) for response synthesis."""
+    return make_chat_model(temperature=0.3)
 
 
 # ---- nodes -----------------------------------------------------------------

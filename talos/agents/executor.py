@@ -24,11 +24,10 @@ import re
 from typing import Any, Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from talos.agents._history import format_recent_history
-from talos.config import settings
+from talos.config.llm import make_structured_model
 from talos.primitives.file_ops import file_read, file_write
 from talos.primitives.python_exec import python_exec
 from talos.primitives.shell_exec import shell_exec
@@ -37,7 +36,6 @@ from talos.primitives.web_search import web_search
 from talos.prompts.arg_resolver import ARG_RESOLVER_SYSTEM_PROMPT
 from talos.state import TalosState
 from talos.vault.manager import SkillManager
-
 
 # Primitives keyed by the names the Planner uses in `tool_hint`.
 # `human_input` is excluded — it's only invoked via the Orchestrator's
@@ -66,15 +64,8 @@ class ResolvedArgs(BaseModel):
 
 
 def _make_resolver_llm() -> Any:
-    base = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.0,  # arg resolution should be fully deterministic
-    )
-    # `method="function_calling"` because our ResolvedArgs has open-ended
-    # types (`list[Any]`, `dict[str, Any]`) — OpenAI's strict structured-
-    # outputs mode rejects those, but the function_calling path accepts them.
-    return base.with_structured_output(ResolvedArgs, method="function_calling")
+    # arg resolution should be fully deterministic
+    return make_structured_model(ResolvedArgs, temperature=0.0)
 
 
 def _get_skill_manager() -> SkillManager:

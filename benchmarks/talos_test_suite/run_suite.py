@@ -7,7 +7,7 @@ Differences from examples/run_benchmarks.py:
     tests (Q12, Q31, Q63 etc.) actually exercise reuse.
   - HITL-aware: queries with `requires_hitl=true` are skipped by default (use
     --include-hitl to opt in; you'll need to drive the interrupt yourself).
-  - --model flag: overrides OPENAI_MODEL env var BEFORE talos imports load settings.
+  - --model flag: overrides TALOS_MODEL env var BEFORE talos imports load settings.
   - Long-input expansion: handles `query_repeat` for Q45.
 
 Usage:
@@ -94,14 +94,14 @@ def main() -> None:
                     help="Wipe vault before EVERY query (default: wipe once at start, warm vault after)")
     ap.add_argument("--no-wipe", action="store_true", help="Do not wipe vault at all")
     ap.add_argument("--no-trace", action="store_true", help="Skip LangSmith trace summaries")
-    ap.add_argument("--model", help="Override OPENAI_MODEL for this run (e.g. gpt-5.1)")
+    ap.add_argument("--model", help="Override TALOS_MODEL for this run (OpenRouter slug, e.g. openai/gpt-4.1)")
     ap.add_argument("--out", default=str(REPORT_FILE), help="Report path")
     args = ap.parse_args()
 
     # Apply model override BEFORE importing talos (settings reads env at import time).
     if args.model:
-        os.environ["OPENAI_MODEL"] = args.model
-        print(f"[suite] OPENAI_MODEL = {args.model}")
+        os.environ["TALOS_MODEL"] = args.model
+        print(f"[suite] TALOS_MODEL = {args.model}")
 
     # Late imports so the env override above takes effect.
     from talos.config.logging import setup_logging
@@ -118,7 +118,7 @@ def main() -> None:
     if not queries:
         sys.exit("no queries selected")
 
-    print(f"Will run {len(queries)} queries (model={os.environ.get('OPENAI_MODEL', 'gpt-4o')})")
+    print(f"Will run {len(queries)} queries (model={os.environ.get('TALOS_MODEL', 'deepseek/deepseek-v4.1-flash')})")
     print(f"Report → {args.out}")
     skipped = [q["id"] for q in spec["queries"] if q.get("requires_hitl") and not args.include_hitl]
     if skipped:
@@ -196,7 +196,7 @@ def main() -> None:
 
     duration_s = time.monotonic() - t0
     pass_obj = {
-        "mode": f"talos test suite ({os.environ.get('OPENAI_MODEL', 'gpt-4o')})",
+        "mode": f"talos test suite ({os.environ.get('TALOS_MODEL', 'deepseek/deepseek-v4.1-flash')})",
         "started": started, "duration_s": duration_s, "results": results,
     }
     write_report([pass_obj], Path(args.out))

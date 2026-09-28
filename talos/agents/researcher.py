@@ -31,9 +31,9 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 
 from talos.config import settings
+from talos.config.llm import make_chat_model
 from talos.primitives.web_read import web_read as _web_read
 from talos.primitives.web_search import web_search as _web_search
-
 
 # Wrap primitives as LangChain Tool objects so the ReAct agent can pick them.
 # `@tool` introspects the function signature + docstring to build the JSON
@@ -79,7 +79,7 @@ Your output is fed into another agent that will write Python code. So:
 def _make_react_agent() -> Any:
     """Build the ReAct agent. Module-level factory so tests can patch it."""
     return create_react_agent(
-        model=f"openai:{settings.OPENAI_MODEL}",
+        model=make_chat_model(temperature=0.0),
         tools=[search_web, read_url],
         prompt=_RESEARCHER_PROMPT,
     )
@@ -96,8 +96,8 @@ def research(query: str, max_iterations: int = 8) -> str:
     Returns:
         The final assistant message content as a string.
     """
-    if not settings.OPENAI_API_KEY:
-        return "(researcher unavailable: no OPENAI_API_KEY set)"
+    if not settings.OPENROUTER_API_KEY:
+        return "(researcher unavailable: no OPENROUTER_API_KEY set)"
 
     agent = _make_react_agent()
     result = agent.invoke(

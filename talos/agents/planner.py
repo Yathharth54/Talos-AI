@@ -17,11 +17,10 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from talos.agents._history import format_recent_history
-from talos.config import settings
+from talos.config.llm import make_structured_model
 from talos.prompts.planner import (
     PLANNER_SYSTEM_PROMPT,
     build_planner_user_message,
@@ -121,13 +120,9 @@ class Plan(BaseModel):
 
 
 def _make_llm() -> Any:
-    """Structured-output ChatOpenAI client for Plan. Test seam."""
-    base = ChatOpenAI(
-        model=settings.OPENAI_MODEL,
-        api_key=settings.OPENAI_API_KEY,
-        temperature=0.1,  # decomposition wants determinism more than the Forger does
-    )
-    return base.with_structured_output(Plan)
+    """Structured-output LLM client for Plan. Test seam."""
+    # decomposition wants determinism more than the Forger does
+    return make_structured_model(Plan, temperature=0.1)
 
 
 def _get_skill_manager() -> SkillManager:
