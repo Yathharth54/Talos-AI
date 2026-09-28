@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/talos-banner.jpg" alt="Talos: forge, test, execute, learn" width="100%">
+</p>
+
 # Talos AI
 
 A LangGraph-based self-evolving agent that forges, tests, and accumulates reusable Python tools at runtime.
@@ -17,7 +21,7 @@ Everything is a visible LangGraph node. Every step shows up as a discrete event 
 ## Quick start
 
 ```bash
-git clone <repo>
+git clone https://github.com/Yathharth54/Talos-AI.git
 cd Talos-AI
 uv venv
 uv sync --extra dev
@@ -126,9 +130,21 @@ Talos-AI/
 │       └── logging.py
 ├── tests/                   # 80+ tests, ~6s end-to-end
 ├── examples/demo_queries.py
+├── site/                    # Static landing page (deployed on Vercel)
 ├── CLAUDE.md                # Architecture spec
 └── PROGRESS.md              # Build log per phase
 ```
+
+## Results
+
+Measured on the end-to-end suite in `benchmarks/talos_test_suite/` (62 queries), before and after the latest round of changes:
+
+| | Before | After |
+|---|---|---|
+| Suite score | 45/62 | **56/62** |
+| Search/reading questions | 0/5 | **5/5** |
+| Queries that crashed | 3 | **1** |
+| Median time per query | 13.9s | 17.1s |
 
 ## Configuration
 

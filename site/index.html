@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Talos, the agent that forges its own tools</title>
+  <meta name="description" content="Talos is an open-source LangGraph agent that writes the tools it's missing, tests them in a sandbox, and keeps the ones that work.">
+  <meta name="theme-color" content="#000000">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Talos, the agent that forges its own tools">
+  <meta property="og:description" content="Plan, forge, test, execute, learn. An open-source LangGraph agent whose toolbox grows with every request.">
+  <meta property="og:image" content="/assets/og.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script>document.documentElement.classList.add("js")</script>
+  <script src="/main.js" defer></script>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#top" aria-label="Talos, back to top">
+    <img src="/assets/apple-touch-icon.png" alt="" width="32" height="32">
+    <span>TALOS</span>
+  </a>
+  <nav class="nav-links" aria-label="Sections">
+    <a href="#loop">How it learns</a>
+    <a href="#arch">Architecture</a>
+    <a href="#vault">The vault</a>
+    <a href="#evals">Evals</a>
+  </nav>
+  <a class="btn btn-ghost btn-sm" href="https://github.com/Yathharth54/Talos-AI">GitHub</a>
+</header>
+
+<main id="top">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-art">
+      <img src="/assets/hero-mark.webp" width="2400" height="960" alt="The Talos mark: a crystalline T split by a vertical spine, inside concentric construction circles">
+      <span class="scan" aria-hidden="true"></span>
+    </div>
+    <h1 class="wordmark" data-scramble>TALOS</h1>
+    <p class="lede">An agent that writes the tools it's missing, tests them, and keeps the ones that work.</p>
+    <div class="actions">
+      <a class="btn btn-solid" href="https://github.com/Yathharth54/Talos-AI">View on GitHub</a>
+      <a class="btn btn-ghost" href="#loop">See how it learns</a>
+    </div>
+    <div class="scroll-cue" aria-hidden="true">
+      <span class="stem"></span><i></i><i></i><i></i><i></i>
+    </div>
+  </section>
+
+  <!-- Loop -->
+  <section class="section" id="loop">
+    <h2>Five steps, one loop</h2>
+    <p class="sub">Each step is its own node in the graph, so you can watch every run happen.</p>
+
+    <div class="loop-grid">
+    <svg class="ring" data-reveal viewBox="0 0 880 800" role="img" aria-label="The loop drawn as a ring: plan, forge, test, execute, learn, with the vault at the centre">
+      <circle class="draw" pathLength="1" cx="440" cy="400" r="340" stroke="rgba(236,230,218,0.07)"/>
+      <circle class="draw" pathLength="1" cx="440" cy="400" r="280" stroke="rgba(236,230,218,0.3)"/>
+      <circle class="fade" cx="440" cy="400" r="210" stroke="rgba(236,230,218,0.12)" stroke-dasharray="2 8"/>
+      <line class="fade" x1="440" y1="30" x2="440" y2="770" stroke="rgba(236,230,218,0.08)"/>
+      <line class="fade" x1="70" y1="400" x2="810" y2="400" stroke="rgba(236,230,218,0.08)"/>
+      <rect class="fade" x="66" y="396" width="8" height="8" stroke="rgba(236,230,218,0.5)"/>
+      <rect class="fade" x="806" y="396" width="8" height="8" stroke="rgba(236,230,218,0.5)"/>
+
+      <path class="draw gold" pathLength="1" d="M 706 313 A 280 280 0 0 1 605 627" stroke-width="2.5"/>
+      <path class="fade" d="M 605 627 Q 590 440 706 313" stroke="#D6B27A" stroke-dasharray="4 6"/>
+      <line class="fade" x1="174" y1="313" x2="400" y2="390" stroke="rgba(236,230,218,0.25)" stroke-dasharray="3 6"/>
+      <line class="fade" x1="440" y1="360" x2="440" y2="134" stroke="rgba(236,230,218,0.25)" stroke-dasharray="3 6"/>
+
+      <g class="orbiter">
+        <circle cx="440" cy="120" r="16" fill="#ECE6DA" opacity="0.12"/>
+        <circle cx="440" cy="120" r="5" fill="#ECE6DA"/>
+      </g>
+
+      <g class="stage s0"><circle class="halo" cx="440" cy="120" r="24"/><circle class="dot" cx="440" cy="120" r="12"/><circle cx="440" cy="120" r="4" fill="#ECE6DA"/></g>
+      <g class="stage s1 hot"><circle class="halo" cx="706" cy="313" r="24"/><circle class="dot" cx="706" cy="313" r="12"/><circle cx="706" cy="313" r="4" fill="#D6B27A"/></g>
+      <g class="stage s2 hot"><circle class="halo" cx="605" cy="627" r="24"/><circle class="dot" cx="605" cy="627" r="12"/><circle cx="605" cy="627" r="4" fill="#D6B27A"/></g>
+      <g class="stage s3"><circle class="halo" cx="275" cy="627" r="24"/><circle class="dot" cx="275" cy="627" r="12"/><circle cx="275" cy="627" r="4" fill="#ECE6DA"/></g>
+      <g class="stage s4"><circle class="halo" cx="174" cy="313" r="24"/><circle class="dot" cx="174" cy="313" r="12"/><circle cx="174" cy="313" r="4" fill="#ECE6DA"/></g>
+
+      <circle cx="440" cy="400" r="40" fill="#000" stroke="#ECE6DA" stroke-width="1.5"/>
+      <circle class="core" cx="440" cy="400" r="5" fill="#ECE6DA"/>
+
+      <g class="labels">
+        <text x="440" y="470" class="t-sub" text-anchor="middle">vault</text>
+        <text x="440" y="84" class="t-stage" text-anchor="middle">PLAN</text>
+        <text x="734" y="318" class="t-stage gold-t">FORGE</text>
+        <text x="632" y="668" class="t-stage gold-t">TEST</text>
+        <text x="248" y="668" class="t-stage" text-anchor="end">EXECUTE</text>
+        <text x="146" y="318" class="t-stage" text-anchor="end">LEARN</text>
+        <text x="612" y="470" class="t-sub gold-t" text-anchor="middle">retry up to 3×</text>
+      </g>
+    </svg>
+
+    <ol class="steps">
+      <li><span class="step-name">PLAN</span><p>Splits your request into sub-tasks and checks the vault before building anything.</p></li>
+      <li class="hot"><span class="step-name">FORGE</span><p>Writes a typed Python function for the gap, researching free APIs first.</p></li>
+      <li class="hot"><span class="step-name">TEST</span><p>Runs generated tests in a subprocess. Failures go back to Forge.</p></li>
+      <li><span class="step-name">EXECUTE</span><p>Runs the tool on your real input.</p></li>
+      <li><span class="step-name">LEARN</span><p>Saves it to the vault so next time it skips straight to Execute.</p></li>
+    </ol>
+    </div>
+  </section>
+
+  <!-- Two runs -->
+  <section class="section band" id="runs">
+    <h2>Ask once, it builds. Ask again, it remembers.</h2>
+    <p class="sub">The same kind of question, twice. The first run writes three tools. The second writes none.</p>
+
+    <div class="terms" data-reveal data-terms>
+      <figure class="term">
+        <figcaption><span>First run</span><span class="gold-t">3 tools forged</span></figcaption>
+        <div class="term-body">
+          <div class="ln cmd"><b>talos ›</b> <span class="typed">compare GitHub stars for langgraph and crewai</span></div>
+          <div class="ln gap"></div>
+          <div class="ln"><em>plan</em>3 sub-tasks, 3 need new tools</div>
+          <div class="ln"><em>vault</em>no match</div>
+          <div class="ln g"><em>forge</em>fetch_github_star_counts()</div>
+          <div class="ln g"><em>test</em>passed</div>
+          <div class="ln g"><em>forge</em>percentage_difference()</div>
+          <div class="ln g"><em>test</em>failed, ZeroDivisionError, retrying</div>
+          <div class="ln g"><em>test</em>passed</div>
+          <div class="ln g"><em>forge</em>format_repo_comparison()</div>
+          <div class="ln g"><em>test</em>passed</div>
+          <div class="ln"><em>learn</em>3 tools saved</div>
+          <div class="ln w"><em>execute</em>done</div>
+        </div>
+      </figure>
+      <figure class="term term-warm">
+        <figcaption><span>Next day</span><span>0 tools forged</span></figcaption>
+        <div class="term-body">
+          <div class="ln cmd"><b>talos ›</b> <span class="typed">compare GitHub stars for fastapi and flask</span></div>
+          <div class="ln gap"></div>
+          <div class="ln"><em>plan</em>3 sub-tasks, all in the vault</div>
+          <div class="ln"><em>vault</em>fetch_github_star_counts</div>
+          <div class="ln"><em>vault</em>percentage_difference</div>
+          <div class="ln"><em>vault</em>format_repo_comparison</div>
+          <div class="ln w"><em>execute</em>done</div>
+        </div>
+      </figure>
+    </div>
+    <p class="fine">Illustrative replay of how a session looks.</p>
+  </section>
+
+  <!-- Architecture -->
+  <section class="section" id="arch">
+    <h2>Built as a state graph</h2>
+    <p class="sub">Talos runs on LangGraph. Every agent below is a node with typed state, and every run is a trace you can open in LangSmith.</p>
+
+    <div class="arch-scroll">
+      <svg class="arch" data-reveal viewBox="0 0 1280 600" role="img" aria-label="Architecture graph: the orchestrator hands the query to the planner, which routes each sub-task to a primitive, a vault tool, or the forge sub-graph of forger, tester, human check and learn. All routes feed the executor, which loops back to the planner for the next sub-task or hands off for the answer.">
+        <g class="edges">
+          <path class="draw" pathLength="1" d="M 160 206 H 210"/>
+          <path class="draw" pathLength="1" d="M 370 206 H 405 V 66 H 440"/>
+          <path class="draw" pathLength="1" d="M 405 206 H 440"/>
+          <path class="draw" pathLength="1" d="M 405 206 V 376 H 440"/>
+          <path class="draw" pathLength="1" d="M 600 66 H 1060 V 194 H 1100"/>
+          <path class="draw" pathLength="1" d="M 600 206 H 1100"/>
+          <path class="draw" pathLength="1" d="M 600 376 H 660"/>
+          <path class="draw" pathLength="1" d="M 820 376 H 880"/>
+          <path class="draw" pathLength="1" d="M 1040 376 H 1210 V 232"/>
+          <path class="draw" pathLength="1" d="M 1180 180 V 92"/>
+          <path class="fade" d="M 1260 216 H 1272 V 580 H 290 V 232" stroke-dasharray="4 6"/>
+          <path class="fade" d="M 520 402 V 470" stroke-dasharray="3 5"/>
+        </g>
+        <path class="fade" d="M 740 350 C 740 312 520 312 520 350" fill="none" stroke="#D6B27A" stroke-width="1.5" stroke-dasharray="4 5"/>
+        <rect class="fade" x="420" y="296" width="640" height="248" rx="18" fill="none" stroke="rgba(214,178,122,0.4)" stroke-dasharray="2 6"/>
+
+        <!-- packets travel under the node boxes -->
+        <g class="packets">
+          <circle r="3.5" fill="#D6B27A"><animateMotion dur="6s" begin="1.2s" repeatCount="indefinite" path="M 80 206 H 405 V 376 H 1210 V 206 V 66"/></circle>
+          <circle r="3" fill="#ECE6DA"><animateMotion dur="4s" begin="2.5s" repeatCount="indefinite" path="M 80 206 H 1180 V 66"/></circle>
+          <circle r="3" fill="#ECE6DA"><animateMotion dur="5s" begin="3.8s" repeatCount="indefinite" path="M 80 206 H 405 V 66 H 1060 V 194 H 1180 V 66"/></circle>
+        </g>
+
+        <g class="edge-labels">
+          <text x="620" y="56">primitive</text>
+          <text x="620" y="196">already in the vault</text>
+          <text x="630" y="318" class="gold-t" text-anchor="middle">fails: retry, max 3</text>
+          <text x="532" y="442">needs an API key</text>
+          <text x="1194" y="140">all done</text>
+          <text x="700" y="570" text-anchor="middle">next sub-task</text>
+          <text x="1044" y="322" class="gold-t" text-anchor="end">Forge sub-graph</text>
+        </g>
+
+        <g class="nodes">
+          <g><rect x="0" y="180" width="160" height="52" rx="10"/><text x="80" y="211">Orchestrator</text><circle class="llm" cx="150" cy="190" r="4"/></g>
+          <g><rect x="210" y="180" width="160" height="52" rx="10"/><text x="290" y="211">Planner</text><circle class="llm" cx="360" cy="190" r="4"/></g>
+          <g><rect x="440" y="40" width="160" height="52" rx="10"/><text x="520" y="71">Primitive</text></g>
+          <g><rect x="440" y="180" width="160" height="52" rx="10"/><text x="520" y="211">Vault tool</text></g>
+          <g class="hot"><rect x="440" y="350" width="160" height="52" rx="10"/><text x="520" y="381">Forger</text><circle class="llm" cx="590" cy="360" r="4"/></g>
+          <g class="hot"><rect x="660" y="350" width="160" height="52" rx="10"/><text x="740" y="381">Tester</text></g>
+          <g><rect x="880" y="350" width="160" height="52" rx="10"/><text x="960" y="381">Learn</text></g>
+          <g><rect x="440" y="470" width="160" height="52" rx="10"/><text x="520" y="501">Human check</text></g>
+          <g><rect x="1100" y="180" width="160" height="52" rx="10"/><text x="1180" y="211">Executor</text><circle class="llm" cx="1250" cy="190" r="4"/></g>
+          <g class="solid"><rect x="1100" y="40" width="160" height="52" rx="10"/><text x="1180" y="71">Answer</text></g>
+        </g>
+      </svg>
+    </div>
+    <p class="legend"><span class="pip"></span>Calls a model. Everything else is plain Python.</p>
+
+    <div class="agents">
+      <div><h3>Planner</h3><p>Labels every sub-task as a primitive, a vault tool, or something to forge, before anything runs.</p></div>
+      <div><h3 class="gold-t">Forger and Tester</h3><p>Code and tests come out of one structured call. The tester runs them in a 10-second subprocess and hands back the trace.</p></div>
+      <div><h3>Researcher</h3><p>A ReAct agent the Forger calls to read API docs with Tavily search and Jina reader before writing web code.</p></div>
+      <div><h3>Human check</h3><p>If a tool needs an API key, the graph pauses, asks you once, and saves it for next time.</p></div>
+      <div><h3>Executor</h3><p>Fills in arguments from your query and earlier results, then runs the tool.</p></div>
+      <div><h3>Skill vault</h3><p>A JSON manifest and a folder of .py files. No database, nothing hidden.</p></div>
+    </div>
+
+    <ul class="stack" aria-label="Built with">
+      <li>LANGGRAPH</li><li>LANGCHAIN</li><li>LANGSMITH</li><li>TAVILY</li><li>JINA READER</li><li>OPENROUTER</li>
+    </ul>
+  </section>
+
+  <!-- Vault -->
+  <section class="section rule" id="vault">
+    <div class="big-num" data-reveal data-count="45">45</div>
+    <h2 class="h-plain">tools in the vault, every one written by Talos</h2>
+    <p class="sub">None were written by hand. They came out of test runs, passed their own tests, and got reused.</p>
+    <ul class="sigs" data-reveal data-sigs>
+      <li class="web"><b>fetch_github_star_counts</b>(repo1, repo2)</li>
+      <li><b>levenshtein_distance</b>(s1, s2)</li>
+      <li><b>haversine_distance</b>(lat1, lon1, lat2, lon2)</li>
+      <li><b>json_to_yaml</b>(json_str)</li>
+      <li class="web"><b>fetch_latest_python_version</b>()</li>
+      <li><b>count_http_status_codes</b>(log_text)</li>
+      <li><b>prime_factorization</b>(n)</li>
+      <li><b>normalize_dates</b>(dates)</li>
+      <li class="web"><b>fetch_bitcoin_price_usd</b>()</li>
+      <li><b>score_password_strength</b>(password)</li>
+      <li><b>flatten_json</b>(data)</li>
+      <li class="web"><b>extract_style_rules</b>(url)</li>
+      <li><b>caesar_cipher</b>(text, shift, mode)</li>
+      <li><b>add_revenue_column</b>(input_path, output_path)</li>
+      <li class="web"><b>fetch_top_trending_repo</b>()</li>
+      <li><b>hex_to_rgb</b>(hex_code)</li>
+      <li><b>slugify</b>(title)</li>
+      <li><b>validate_email</b>(email)</li>
+    </ul>
+    <p class="legend"><span class="pip"></span>Reaches the web through a free API it found itself</p>
+  </section>
+
+  <!-- Evals -->
+  <section class="section rule" id="evals">
+    <h2>Evaluated on 62 end-to-end queries</h2>
+    <p class="sub">The same suite, before and after the latest round of changes.</p>
+    <div class="evals" data-reveal>
+      <div class="eval lead">
+        <span class="eval-label">Suite score</span>
+        <span class="eval-num"><span class="gold-t">56</span><small>/62</small></span>
+        <span class="bar" role="img" aria-label="56 of 62 passed, up from 45"><i class="b0" style="--v: .726"></i><i class="b1" style="--v: .903"></i></span>
+        <span class="eval-was">was 45/62</span>
+      </div>
+      <div class="eval">
+        <span class="eval-label">Search and reading questions</span>
+        <span class="eval-num">5<small>/5</small></span>
+        <span class="bar" role="img" aria-label="5 of 5 passed, up from 0"><i class="b1" style="--v: 1"></i></span>
+        <span class="eval-was">was 0/5</span>
+      </div>
+      <div class="eval">
+        <span class="eval-label">Queries that crashed</span>
+        <span class="eval-num">1</span>
+        <span class="eval-was">was 3</span>
+      </div>
+      <div class="eval">
+        <span class="eval-label">Median time per query</span>
+        <span class="eval-num">17.1<small>s</small></span>
+        <span class="eval-was">was 13.9s</span>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <img src="/assets/mark.webp" width="200" height="200" alt="">
+  <h2>Run it on your machine</h2>
+  <pre class="quick"><code>git clone https://github.com/Yathharth54/Talos-AI
+cd Talos-AI &amp;&amp; uv sync
+cp .env.example .env   <span class="c"># add your OPENROUTER_API_KEY</span>
+uv run python -m talos.main</code></pre>
+  <a class="btn btn-solid" href="https://github.com/Yathharth54/Talos-AI">View on GitHub</a>
+  <p class="fine">Talos is a proof of concept. Forged code runs in a subprocess with a timeout, not a full sandbox.</p>
+</footer>
+
+</body>
+</html>
