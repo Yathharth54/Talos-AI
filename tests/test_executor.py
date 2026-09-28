@@ -562,3 +562,31 @@ def test_typed_path_parses_upstream_json_string(vault, monkeypatch):
     rec = out["sub_task_results"][-1]
     assert rec["ok"] is True, rec["error"]
     assert rec["output"] == 2
+
+
+def test_vault_path_parses_json_string_using_type_hints(vault, monkeypatch):
+    """Vault tools go through the LLM arg resolver (no input_schema); the
+    function's own type hints drive coercion there."""
+    vault.register(
+        {"name": "flatten_json", "description": "flatten", "keywords": ["flatten"],
+         "function": "flatten_json", "signature": "flatten_json(data: dict) -> dict"},
+        "def flatten_json(data: dict) -> dict:\n"
+        "    if not isinstance(data, dict):\n"
+        "        raise TypeError(f'data must be a dict, got {type(data).__name__}')\n"
+        "    return data\n",
+    )
+    _patch_resolver(monkeypatch, ResolvedArgs(args=["__SUBTASK_OUTPUT_1__"], kwargs={}))
+    sub_task = {"id": 2, "needs": "vault", "tool_hint": "flatten_json",
+                "action": "flatten", "depends_on": [1]}
+    prior = [{"sub_task_id": 1, "ok": True, "output": '{"app": "talos"}', "error": None}]
+    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
+    rec = out["sub_task_results"][-1]
+    assert rec["ok"] is True, rec["error"]
+    assert rec["output"] == {"app": "talos"}
+
+
+def test_schema_from_signature_reads_type_hints():
+    def f(a: dict, b: "list[int]", c, *rest, d: float = 1.0):
+        return a
+
+    assert exec_mod.schema_from_signature(f) == {"a": "dict", "b": "list[int]", "d": "float"}

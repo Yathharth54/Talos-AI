@@ -243,6 +243,43 @@ def coerce_to_schema(kwargs: dict[str, Any], input_schema: dict[str, str]) -> di
     return out
 
 
+def schema_from_signature(fn: Callable[..., Any]) -> dict[str, str]:
+    """Map annotated named params of `fn` to type strings, for coercion when
+    the Planner gave no input_schema (vault tools, primitives)."""
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return {}
+    schema: dict[str, str] = {}
+    for name, p in params.items():
+        if p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            continue
+        ann = p.annotation
+        if ann is inspect.Parameter.empty:
+            continue
+        text = ann if isinstance(ann, str) else getattr(ann, "__name__", str(ann))
+        schema[name] = text.strip("'\"")  # quoted hints under __future__ annotations
+    return schema
+
+
+def _coerce_call_args(
+    fn: Callable[..., Any], args: list[Any], kwargs: dict[str, Any],
+) -> tuple[list[Any], dict[str, Any]]:
+    """Apply coerce_to_schema to positional + keyword args using fn's hints."""
+    schema = schema_from_signature(fn)
+    if not schema:
+        return args, kwargs
+    try:
+        names = list(inspect.signature(fn).parameters)
+    except (TypeError, ValueError):
+        return args, kwargs
+    positional = {names[i]: v for i, v in enumerate(args) if i < len(names)}
+    coerced_pos = coerce_to_schema(positional, schema)
+    new_args = [coerced_pos.get(names[i], v) if i < len(names) else v
+                for i, v in enumerate(args)]
+    return new_args, coerce_to_schema(kwargs, schema)
+
+
 def _validate_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     """Cheap pre-flight check: every kwarg must be a real param of fn, and
     every required param must be present. Raises TypeError with a clear
@@ -351,8 +388,11 @@ def executor_node(state: TalosState) -> dict:
                 raise ValueError("resolver returned no ResolvedArgs")
         except Exception as e:  # noqa: BLE001 — resolver failure is recoverable
             return _record_failure(state, sub_task, f"arg resolution failed: {e}")
-        final_args = _substitute_placeholders(resolved.args, results_by_id)
-        final_kwargs = _substitute_placeholders(resolved.kwargs, results_by_id)
+        final_args, final_kwargs = _coerce_call_args(
+            fn,
+            _substitute_placeholders(resolved.args, results_by_id),
+            _substitute_placeholders(resolved.kwargs, results_by_id),
+        )
 
     try:
         output = fn(*final_args, **final_kwargs)
