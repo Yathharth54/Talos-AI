@@ -123,11 +123,20 @@ def forger_node(state: TalosState) -> dict:
             body += f"\n\n--- Research notes from the Researcher ---\n{research_block}"
         messages.append(HumanMessage(content=body))
 
-    llm = _make_llm()
-    forged: ForgedTool = llm.invoke(messages)  # type: ignore[assignment]
+    try:
+        forged: ForgedTool = _make_llm().invoke(messages)  # type: ignore[assignment]
+        forged_dump = forged.model_dump()
+    except Exception as e:  # noqa: BLE001 — count as a failed attempt, keep the retry loop
+        log.warning("forger LLM call failed: %s: %s", type(e).__name__, e)
+        # Empty code makes the Tester report a failure, which feeds the normal
+        # retry path (or exits it once retries are exhausted).
+        forged_dump = {
+            "name": "", "description": f"forger failed: {e}", "keywords": [],
+            "signature": "", "code": "", "test_code": "", "needs_env_vars": [],
+        }
 
     return {
-        "forged_tool": forged.model_dump(),
+        "forged_tool": forged_dump,
         "retry_count": retry_count + 1,
     }
 

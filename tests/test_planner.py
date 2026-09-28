@@ -204,3 +204,19 @@ def test_planner_live_multi_step(monkeypatch, tmp_path):
     assert len(sub_tasks) >= 2, f"expected ≥2 sub-tasks, got: {sub_tasks}"
     needs_set = {st["needs"] for st in sub_tasks}
     assert "primitive" in needs_set, f"expected at least one primitive, got: {sub_tasks}"
+
+
+def test_planner_failure_becomes_infeasible_plan(empty_vault, monkeypatch):
+    """If the planner model can't produce a Plan, the graph must still
+    respond — as an explained failure, not a crash or a silent chat reply."""
+    from talos.config.llm import StructuredOutputError
+
+    class _Broken:
+        def invoke(self, messages):
+            raise StructuredOutputError("model returned no Plan")
+
+    monkeypatch.setattr(planner_mod, "_make_llm", lambda: _Broken())
+    out = planner_node(_state("do something"))
+    assert out["plan"]["verdict"] == "infeasible"
+    assert out["plan"]["sub_tasks"] == []
+    assert "no Plan" in out["plan"]["verdict_reason"]

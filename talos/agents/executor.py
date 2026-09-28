@@ -305,6 +305,8 @@ def executor_node(state: TalosState) -> dict:
         # Legacy path: LLM-driven arg resolver (used for primitive + vault).
         try:
             resolved = _resolve_args(signature, sub_task, user_query, prior_results, history)
+            if resolved is None:
+                raise ValueError("resolver returned no ResolvedArgs")
         except Exception as e:  # noqa: BLE001 — resolver failure is recoverable
             return _record_failure(state, sub_task, f"arg resolution failed: {e}")
         final_args = _substitute_placeholders(resolved.args, results_by_id)

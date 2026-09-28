@@ -473,3 +473,14 @@ def test_executor_live_arg_resolution(vault):
     assert os.path.exists(target)
     assert "hello world" in open(target).read()
     os.unlink(target)
+
+
+def test_executor_records_failure_when_resolver_returns_none(vault, monkeypatch):
+    """A model that skips the schema tool yields None; that must become a
+    recorded sub-task failure, not an AttributeError that kills the graph."""
+    _patch_resolver(monkeypatch, None)  # type: ignore[arg-type]
+    sub_task = {"id": 1, "needs": "primitive", "tool_hint": "file_read", "action": "read"}
+    out = executor_node(_state(current_sub_task=sub_task))
+    rec = out["sub_task_results"][0]
+    assert rec["ok"] is False
+    assert "arg resolution failed" in rec["error"]

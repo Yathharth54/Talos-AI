@@ -146,7 +146,22 @@ def planner_node(state: TalosState) -> dict:
         SystemMessage(content=PLANNER_SYSTEM_PROMPT),
         HumanMessage(content=build_planner_user_message(query, vault_summary, history)),
     ]
-    plan: Plan = _make_llm().invoke(messages)  # type: ignore[assignment]
+    try:
+        plan: Plan = _make_llm().invoke(messages)  # type: ignore[assignment]
+    except Exception as e:  # noqa: BLE001 — surface as an explained failure, don't crash
+        return {
+            "plan": {
+                "sub_tasks": [],
+                "verdict": "infeasible",
+                "verdict_category": "",
+                "verdict_reason": (
+                    f"Internal error: the planner could not produce a plan ({e}). "
+                    "Retrying the request may help."
+                ),
+            },
+            "current_sub_task": None,
+            "sub_task_results": [],
+        }
 
     # No vault-name validation here: a plan may legitimately reference a tool
     # that an *earlier* sub-task in the same plan will forge. The Executor
