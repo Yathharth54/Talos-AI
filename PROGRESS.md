@@ -299,3 +299,16 @@ A short bullet per session — what we did, what's next. Append-only.
   3 new accessor tests; suite at 88 passed, 5 skipped.
 
 - **2026-09-28** — Revival session. LLM client moved to OpenRouter: new `talos/config/llm.py` (`make_chat_model` / `make_structured_model`, all structured output via `function_calling`); `OPENAI_*` → `OPENROUTER_API_KEY` + `TALOS_MODEL` (default `deepseek/deepseek-v4.1-flash`). Venv rebuilt on py3.12. Fixed two bugs found in audit: (1) HITL with 2+ missing env vars saved the first answer into every var (LangGraph re-runs the node on resume; answers now collected before persisting); (2) smoke gate skipped zero-arg forged tools with no `input_schema` — now calls them. Unit 115 passed / 5 skipped; RUN_LIVE 117 passed. Full suite (pre-fix code): **45/62 (73%)**, 1540s, median 14.5s/query. Open issues: planner forges instead of using web_search/web_read (cat 4: 0/5); big-int outputs crash the MemorySaver serializer (Q46); Researcher/web_read exceptions abort the whole graph (Q28); executor crashes when ArgResolver returns None (Q34); raw JSON string not parsed between steps (Q64); several suite regexes too strict (Q08 expectation is wrong, Q30/Q41/Q43).
+
+- **2026-09-28** — Robustness + routing pass on branch `fix/robustness-and-routing` (not merged). One commit per fix, each with tests:
+  1. Checkpointer uses `JsonPlusSerializer(pickle_fallback=True)` via `make_checkpointer()` — big ints / sets no longer crash (Q46).
+  2. Researcher tools return `ERROR: ...` observations; `research()` and the Forger survive research failures (Q28).
+  3. `make_structured_model` retries once on a missing/invalid tool call, then raises `StructuredOutputError`; planner → infeasible plan, forger → failed attempt, executor → recorded failure (Q34).
+  4. Sub-tasks with a failed `depends_on` are skipped (and never forged) — no more "OK" empty file writes.
+  5. `coerce_to_schema()` converts str → dict/list/int/float at step boundaries, from `input_schema` or (new) the tool's own type hints.
+  6. `_summarise_output()` — big outputs shown as type/len/first/last; strings get a 6k budget.
+  7. Planner rule 3a: answer-only questions → `web_search`/`web_read`, Orchestrator synthesises; rule 6 scoped to typed hand-offs.
+  8. `vault_list` primitive for self-introspection (Q49).
+  9. Suite fixes: Q08 expectation was arithmetically wrong; Q30/Q41 phrasing; runner links LangSmith `run_id`, reports HITL pauses.
+  10. `create_agent` replaces deprecated `create_react_agent`; LLM `timeout=120s` (`TALOS_LLM_TIMEOUT`) after a 10-min stalled OpenRouter call in the re-run.
+  Unit 158 passed / 5 skipped; RUN_LIVE 160 passed. **Suite 45/62 → 56/62 (90%)**; category 4 (search/read) 0/5 → 5/5; crashes 3 → 1. 12 fixed, 1 regressed (Q33: correct answer, 408s vs 240s budget — ran before the timeout fix). Median 13.9s → 17.1s per query (larger synthesis prompts). Remaining: Q01/Q43 correct but checks stale/strict; Q46 forges for `2 ** 100`; Q64 now fails one step later on a strict reused `format_markdown_table(rows: list[list[str]])`; Q65 table omits kg. Next: process isolation + timeout for forged tools (deferred item 9).
