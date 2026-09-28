@@ -322,3 +322,56 @@ def test_dispatch_forges_when_upstream_succeeded():
         "sub_task_results": [{"sub_task_id": 1, "ok": True, "output": 1}],
     }
     assert orch_mod.route_dispatch(state) == "forge"
+
+
+# ---- result formatting for the response synthesiser -------------------------
+
+def test_format_results_keeps_small_outputs_verbatim():
+    plan = [{"id": 1, "action": "add"}]
+    results = [{"sub_task_id": 1, "ok": True, "output": [1, 2, 3]}]
+    assert "OK: [1, 2, 3]" in orch_mod._format_results(plan, results)
+
+
+def test_format_results_summarises_large_collections():
+    """A 664k-element list must still tell the synthesiser how many items
+    there were and show both ends, not just the first 800 chars."""
+    big = list(range(664579))
+    text = orch_mod._format_results(
+        [{"id": 1, "action": "primes"}],
+        [{"sub_task_id": 1, "ok": True, "output": big}],
+    )
+    assert "len=664579" in text
+    assert "list" in text
+    assert "664578" in text  # last item visible
+    assert len(text) < 1500
+
+
+def test_format_results_keeps_page_sized_strings():
+    """web_read pages feed the synthesiser directly — a few KB must survive."""
+    s = "word " * 1000  # 5000 chars
+    text = orch_mod._format_results(
+        [{"id": 1, "action": "read"}],
+        [{"sub_task_id": 1, "ok": True, "output": s}],
+    )
+    assert s.strip() in text
+
+
+def test_format_results_summarises_long_strings():
+    s = "a" * 20000 + "TAIL"
+    text = orch_mod._format_results(
+        [{"id": 1, "action": "read"}],
+        [{"sub_task_id": 1, "ok": True, "output": s}],
+    )
+    assert "len=20004" in text
+    assert "TAIL" in text
+    assert len(text) < 8000
+
+
+def test_format_results_summarises_large_dicts():
+    d = {f"k{i}": i for i in range(1000)}
+    text = orch_mod._format_results(
+        [{"id": 1, "action": "map"}],
+        [{"sub_task_id": 1, "ok": True, "output": d}],
+    )
+    assert "dict" in text and "len=1000" in text
+    assert "k0" in text
