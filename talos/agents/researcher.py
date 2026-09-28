@@ -1,9 +1,10 @@
 """Researcher — the Forger's web-research utility.
 
-This is the FIRST place we use a LangChain prebuilt: `create_react_agent`.
+This is the FIRST place we use a LangChain prebuilt ReAct agent: `create_agent`
+(formerly langgraph.prebuilt.create_react_agent, deprecated in LangGraph 1.0).
 
 LangGraph concept: prebuilt ReAct agent.
-- LangChain ships `from langgraph.prebuilt import create_react_agent`.
+- LangChain ships `from langchain.agents import create_agent`.
 - Give it a model + a list of tools + a system prompt; you get back a
   compiled graph that does the classic ReAct loop:
       model thinks → calls a tool → observes result → repeats → answers.
@@ -12,7 +13,7 @@ LangGraph concept: prebuilt ReAct agent.
   is a textbook ReAct task: the LLM should freely decide what to search for,
   what URL to follow, when it has enough context. We don't want to pre-script that.
 
-Why we DIDN'T use create_react_agent for Forger / Planner / Executor:
+Why we DIDN'T use create_agent for Forger / Planner / Executor:
 - Forger has structural rules (max 3 retries, validate via tester) that we
   don't want the LLM to override. Hand-rolled graph wins there.
 - Planner has structural rules (must emit ordered sub-tasks). Same.
@@ -28,8 +29,8 @@ import logging
 import re
 from typing import Any
 
+from langchain.agents import create_agent
 from langchain_core.tools import tool
-from langgraph.prebuilt import create_react_agent
 
 from talos.config import settings
 from talos.config.llm import make_chat_model
@@ -89,10 +90,10 @@ Your output is fed into another agent that will write Python code. So:
 
 def _make_react_agent() -> Any:
     """Build the ReAct agent. Module-level factory so tests can patch it."""
-    return create_react_agent(
+    return create_agent(
         model=make_chat_model(temperature=0.0),
         tools=[search_web, read_url],
-        prompt=_RESEARCHER_PROMPT,
+        system_prompt=_RESEARCHER_PROMPT,
     )
 
 
