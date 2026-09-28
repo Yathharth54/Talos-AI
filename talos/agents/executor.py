@@ -32,6 +32,7 @@ from talos.config.llm import make_structured_model
 from talos.primitives.file_ops import file_read, file_write
 from talos.primitives.python_exec import python_exec
 from talos.primitives.shell_exec import shell_exec
+from talos.primitives.vault_list import vault_list
 from talos.primitives.web_read import web_read
 from talos.primitives.web_search import web_search
 from talos.prompts.arg_resolver import ARG_RESOLVER_SYSTEM_PROMPT
@@ -48,6 +49,7 @@ PRIMITIVES: dict[str, Callable[..., Any]] = {
     "file_write": file_write,
     "python_exec": python_exec,
     "shell_exec": shell_exec,
+    "vault_list": vault_list,
 }
 
 

@@ -24,6 +24,8 @@ Available primitives (built-in tools, always available):
                channel is stdout — if the snippet doesn't print, you get
                nothing back.
 - shell_exec:  run a shell command (same caveat as python_exec).
+- vault_list:  list Talos's own forged tools (name, description, signature,
+               usage_count). Use for questions about Talos's skills/vault.
 
 The final response is written by the Orchestrator, an LLM that reads every
 sub-task's raw output. It can read a fact off a search snippet, summarise a

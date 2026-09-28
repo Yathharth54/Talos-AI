@@ -192,3 +192,30 @@ def test_human_input_pauses_graph():
     payload = interrupts[0].value
     assert payload["message"] == "What is your name?"
     assert payload["hint"] == "just first name"
+
+
+# --- vault_list (self-introspection) ------------------------------------------
+
+def test_vault_list_reports_registered_tools(tmp_path, monkeypatch):
+    from talos.primitives import vault_list as vl_mod
+    from talos.vault.manager import SkillManager
+
+    mgr = SkillManager(vault_dir=tmp_path)
+    mgr.register(
+        {"name": "slugify", "description": "make a slug", "keywords": ["slug"],
+         "function": "slugify", "signature": "slugify(s: str) -> str"},
+        "def slugify(s):\n    return s\n",
+    )
+    monkeypatch.setattr(vl_mod, "_get_skill_manager", lambda: mgr)
+
+    out = vl_mod.vault_list()
+    assert out == [{"name": "slugify", "description": "make a slug",
+                    "signature": "slugify(s: str) -> str", "usage_count": 0}]
+
+
+def test_vault_list_is_a_planner_visible_primitive():
+    from talos.agents.executor import PRIMITIVES
+    from talos.prompts.planner import PLANNER_SYSTEM_PROMPT
+
+    assert "vault_list" in PRIMITIVES
+    assert "- vault_list:" in PLANNER_SYSTEM_PROMPT
