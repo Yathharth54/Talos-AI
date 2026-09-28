@@ -87,7 +87,7 @@ Each query requires the Forger to create exactly one pure Python function. No I/
 - **Query**: `Forge a tool that returns the prime factorization of any positive integer. Use it on 84942.`
 - **Tests**: Non-trivial algorithm forging, correct mathematical output
 - **Components**: `PL → SK(search, miss) → FG → TS → SK(register) → EX`
-- **Pass criteria**: Returns `[2, 3, 3, 17, 277]` (i.e., 2 × 3² × 17 × 277 = 84942). Tool persisted.
+- **Pass criteria**: Returns `[2, 3, 3, 3, 11, 11, 13]` (i.e., 2 × 3³ × 11² × 13 = 84942). Tool persisted.
 - **Notes**: Tests algorithmic correctness — Tester should catch bugs in trial division or similar approaches.
 
 ### Q09 · Data structure forge — frequency counter

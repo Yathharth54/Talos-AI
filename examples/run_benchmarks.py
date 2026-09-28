@@ -201,11 +201,10 @@ def _last_ai_text(messages: list) -> str:
 def run_one_query(query_obj: dict, thread_id: str | None = None) -> dict:
     """Execute one benchmark entry. Supports either `query` (single-turn) or
     `query_sequence` (multi-turn within a single thread)."""
-    from talos.graph import build_graph
+    from talos.graph import build_graph, make_checkpointer
     # IMPORTANT: build a fresh app per query so checkpointer state is clean
     # unless we explicitly want continuity (sequence within ONE entry).
-    from langgraph.checkpoint.memory import MemorySaver
-    app = build_graph().compile(checkpointer=MemorySaver())
+    app = build_graph().compile(checkpointer=make_checkpointer())
 
     config = {"configurable": {"thread_id": thread_id or f"bench-{uuid.uuid4()}"}}
 
@@ -227,8 +226,17 @@ def run_one_query(query_obj: dict, thread_id: str | None = None) -> dict:
             # We can't strictly enforce a wall-clock timeout on graph.invoke
             # without threading. We rely on the per-tool subprocess timeouts
             # plus a soft check after each turn.
-            last_state = app.invoke({"messages": [HumanMessage(content=q)]}, config=config)
-            last_run_id = _extract_root_run_id(last_state) or last_run_id
+            # Explicit root run id → the LangSmith trace for this turn.
+            run_id = uuid.uuid4()
+            last_state = app.invoke(
+                {"messages": [HumanMessage(content=q)]}, config={**config, "run_id": run_id},
+            )
+            last_run_id = str(run_id)
+            if last_state.get("__interrupt__"):
+                # The graph paused for human input (HITL); there's no answer to grade.
+                payload = [i.value for i in last_state["__interrupt__"]]
+                err = f"paused for human input: {payload}"
+                break
             if time.monotonic() - started > timeout:
                 timed_out = True
                 err = f"soft timeout after turn {turn_idx + 1} ({timeout}s)"
@@ -259,15 +267,6 @@ def run_one_query(query_obj: dict, thread_id: str | None = None) -> dict:
         "vault_added_names": [e.get("name") for e in vault_added],
         "vault_added_full": vault_added,
     }
-
-
-def _extract_root_run_id(state: dict) -> str | None:
-    """Best-effort: grab the run_id of the most recent AIMessage."""
-    for m in reversed(state.get("messages", []) or []):
-        rid = getattr(m, "id", None)
-        if rid and "run--" in rid:
-            return rid.split("run--", 1)[1]
-    return None
 
 
 # ---------------------------------------------------------------------------

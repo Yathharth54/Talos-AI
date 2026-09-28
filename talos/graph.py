@@ -151,5 +151,10 @@ def build_graph() -> StateGraph:
 #
 # pickle_fallback: the default msgpack serde rejects ints beyond 64 bits,
 # sets, and arbitrary objects — all legitimate tool outputs (e.g. 2**100).
-checkpointer = MemorySaver(serde=JsonPlusSerializer(pickle_fallback=True))
+def make_checkpointer() -> MemorySaver:
+    """In-memory checkpointer that can persist any tool output."""
+    return MemorySaver(serde=JsonPlusSerializer(pickle_fallback=True))
+
+
+checkpointer = make_checkpointer()
 app = build_graph().compile(checkpointer=checkpointer)

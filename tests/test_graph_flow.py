@@ -33,8 +33,8 @@ def test_graph_exposes_expected_nodes():
 def test_checkpointer_saves_values_msgpack_cannot():
     """Tool outputs can be anything: big ints (2**100), sets, custom objects.
     The checkpointer must persist them instead of crashing the query."""
-    from talos.graph import checkpointer
+    from talos.graph import checkpointer, make_checkpointer
 
-    serde = checkpointer.serde
     value = {"big": 2**100, "set": {1, 2}}
-    assert serde.loads_typed(serde.dumps_typed(value)) == value
+    for saver in (checkpointer, make_checkpointer()):
+        assert saver.serde.loads_typed(saver.serde.dumps_typed(value)) == value
