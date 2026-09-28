@@ -92,6 +92,52 @@ def test_forger_calls_research_on_api_task(monkeypatch):
     assert "Research notes" in user_msg
 
 
+def test_read_url_tool_returns_error_text_instead_of_raising(monkeypatch):
+    """A 4xx/5xx from Jina must not abort the ReAct loop — the agent sees the
+    error as an observation and can try a different URL."""
+    import requests
+
+    def boom(url):
+        raise requests.HTTPError("422 Client Error: Unprocessable Entity")
+
+    monkeypatch.setattr(research_mod, "_web_read", boom)
+    out = research_mod.read_url.invoke({"url": "https://api.example.com/v1/x"})
+    assert out.startswith("ERROR:")
+    assert "422" in out
+
+
+def test_search_web_tool_returns_error_text_instead_of_raising(monkeypatch):
+    def boom(query, max_results=5):
+        raise RuntimeError("tavily down")
+
+    monkeypatch.setattr(research_mod, "_web_search", boom)
+    out = research_mod.search_web.invoke({"query": "anything"})
+    assert "ERROR:" in str(out)
+    assert "tavily down" in str(out)
+
+
+def test_research_returns_empty_when_agent_raises(monkeypatch):
+    class _BrokenAgent:
+        def invoke(self, _input, config=None):
+            raise RuntimeError("recursion limit reached")
+
+    monkeypatch.setattr(research_mod, "_make_react_agent", lambda: _BrokenAgent())
+    assert research_mod.research("anything") == ""
+
+
+def test_forger_still_forges_when_research_raises(monkeypatch):
+    fake_llm = _FakeLLM(_good_tool())
+    monkeypatch.setattr(forger_mod, "_make_llm", lambda: fake_llm)
+    monkeypatch.setattr(forger_mod, "should_research", lambda t: True)
+
+    def boom(q):
+        raise RuntimeError("research exploded")
+
+    monkeypatch.setattr(forger_mod, "research", boom)
+    out = forger_node({"current_sub_task": {"action": "call the weather API for mumbai"}})
+    assert out["forged_tool"]["name"] == "get_weather"
+
+
 def test_forger_skips_research_for_pure_python(monkeypatch):
     fake_llm = _FakeLLM(_good_tool())
     monkeypatch.setattr(forger_mod, "_make_llm", lambda: fake_llm)

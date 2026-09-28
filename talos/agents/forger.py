@@ -15,6 +15,7 @@ PydanticAI analogue: `Agent(..., result_type=ForgedTool)`.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -24,6 +25,8 @@ from talos.agents.researcher import research, should_research
 from talos.config.llm import make_structured_model
 from talos.prompts.forger import FORGER_SYSTEM_PROMPT, build_retry_context
 from talos.state import TalosState
+
+log = logging.getLogger(__name__)
 
 
 class ForgedTool(BaseModel):
@@ -90,7 +93,10 @@ def forger_node(state: TalosState) -> dict:
     # error trace to fix the bug.
     research_block = ""
     if retry_count == 0 and should_research(task_description):
-        research_block = research(task_description) or ""
+        try:
+            research_block = research(task_description) or ""
+        except Exception as e:  # noqa: BLE001 — forge without research rather than abort
+            log.warning("research raised, forging without it: %s: %s", type(e).__name__, e)
 
     contract_block = _format_contract(sub_task)
 

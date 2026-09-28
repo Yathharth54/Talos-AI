@@ -24,6 +24,7 @@ PydanticAI parallel: `Agent(model, tools=[search_tool, read_tool])`.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -35,6 +36,8 @@ from talos.config.llm import make_chat_model
 from talos.primitives.web_read import web_read as _web_read
 from talos.primitives.web_search import web_search as _web_search
 
+log = logging.getLogger(__name__)
+
 # Wrap primitives as LangChain Tool objects so the ReAct agent can pick them.
 # `@tool` introspects the function signature + docstring to build the JSON
 # schema the LLM sees. This is the FIRST time we wrap things as Tools —
@@ -45,7 +48,12 @@ def search_web(query: str) -> list[dict]:
     """Search the web for a free-text query. Returns up to 5 results, each
     with title, url, and a short content snippet. Use this to find what
     APIs / sites exist for a topic before reading specific URLs."""
-    return _web_search(query, max_results=5)
+    # Errors are returned as observations, not raised: one dead endpoint
+    # must not abort the whole ReAct loop (and with it the user's query).
+    try:
+        return _web_search(query, max_results=5)
+    except Exception as e:  # noqa: BLE001
+        return [{"title": "ERROR", "url": "", "content": f"ERROR: {type(e).__name__}: {e}"}]
 
 
 @tool
@@ -53,7 +61,10 @@ def read_url(url: str) -> str:
     """Fetch any public URL and return its content as clean markdown. Use
     after search_web finds promising URLs. Good for reading API docs or
     structured pages. Returns at most a few thousand characters."""
-    text = _web_read(url)
+    try:
+        text = _web_read(url)
+    except Exception as e:  # noqa: BLE001 — see search_web
+        return f"ERROR: {type(e).__name__}: {e}"
     if len(text) > 4000:
         text = text[:4000] + "\n...(truncated)"
     return text
@@ -100,10 +111,14 @@ def research(query: str, max_iterations: int = 8) -> str:
         return "(researcher unavailable: no OPENROUTER_API_KEY set)"
 
     agent = _make_react_agent()
-    result = agent.invoke(
-        {"messages": [{"role": "user", "content": query}]},
-        config={"recursion_limit": max_iterations},
-    )
+    try:
+        result = agent.invoke(
+            {"messages": [{"role": "user", "content": query}]},
+            config={"recursion_limit": max_iterations},
+        )
+    except Exception as e:  # noqa: BLE001 — research is optional context
+        log.warning("research failed, continuing without it: %s: %s", type(e).__name__, e)
+        return ""
     # ReAct agents return state with .messages. Last AIMessage = the answer.
     msgs = result.get("messages", [])
     for msg in reversed(msgs):
