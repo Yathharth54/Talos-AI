@@ -484,3 +484,35 @@ def test_executor_records_failure_when_resolver_returns_none(vault, monkeypatch)
     rec = out["sub_task_results"][0]
     assert rec["ok"] is False
     assert "arg resolution failed" in rec["error"]
+
+
+# ---- dependency short-circuit ---------------------------------------------
+
+def test_executor_skips_subtask_when_upstream_failed(vault, monkeypatch):
+    """#2 depends on #1, #1 failed → #2 must not run (e.g. must not write an
+    empty file and report success)."""
+    monkeypatch.setattr(
+        exec_mod, "_make_resolver_llm",
+        lambda: (_ for _ in ()).throw(AssertionError("must not resolve args")),
+    )
+    sub_task = {"id": 2, "needs": "primitive", "tool_hint": "file_write",
+                "action": "save", "depends_on": [1]}
+    prior = [{"sub_task_id": 1, "ok": False, "output": None, "error": "boom"}]
+    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
+    rec = out["sub_task_results"][-1]
+    assert rec["sub_task_id"] == 2
+    assert rec["ok"] is False
+    assert "skipped: upstream sub-task 1 failed" in rec["error"]
+
+
+def test_executor_skip_propagates_transitively(vault, monkeypatch):
+    """#3 depends on #2 which was itself skipped → #3 is skipped too."""
+    sub_task = {"id": 3, "needs": "primitive", "tool_hint": "file_write",
+                "action": "save", "depends_on": [2]}
+    prior = [
+        {"sub_task_id": 1, "ok": False, "output": None, "error": "boom"},
+        {"sub_task_id": 2, "ok": False, "output": None,
+         "error": "skipped: upstream sub-task 1 failed"},
+    ]
+    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
+    assert "skipped: upstream sub-task 2 failed" in out["sub_task_results"][-1]["error"]

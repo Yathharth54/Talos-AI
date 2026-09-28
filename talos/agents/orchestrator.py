@@ -18,6 +18,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from talos.agents._history import format_recent_history
+from talos.agents.executor import failed_dependencies
 from talos.config.llm import make_chat_model
 from talos.prompts.orchestrator import ORCHESTRATOR_RESPONSE_PROMPT
 from talos.state import TalosState
@@ -125,9 +126,12 @@ def route_after_planner(state: TalosState) -> str:
 def route_dispatch(state: TalosState) -> str:
     """Pick the right execution path for the current sub-task.
 
-    Reads: current_sub_task["needs"] in {"primitive", "vault", "forge"}.
+    Reads: current_sub_task["needs"] in {"primitive", "vault", "forge"}; returns
+    "skip" when a dependency failed (the executor records the skip).
     """
     sub_task = state.get("current_sub_task") or {}
+    if failed_dependencies(sub_task, state.get("sub_task_results") or []):
+        return "skip"  # executor records the skip; don't forge for it
     needs = sub_task.get("needs")
     if needs == "primitive":
         return "primitive"

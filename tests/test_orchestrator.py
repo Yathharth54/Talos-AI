@@ -305,3 +305,20 @@ def test_e2e_live_read_url_and_write_file(tmp_vault, tmp_path):
     ))
     assert target.exists(), final.get("sub_task_results")
     assert "Example Domain" in target.read_text()
+
+
+def test_dispatch_skips_forge_when_upstream_failed():
+    """Don't spend a forge (several LLM calls) on a sub-task that can't run."""
+    state = {
+        "current_sub_task": {"id": 2, "needs": "forge", "depends_on": [1]},
+        "sub_task_results": [{"sub_task_id": 1, "ok": False, "error": "x"}],
+    }
+    assert orch_mod.route_dispatch(state) == "skip"
+
+
+def test_dispatch_forges_when_upstream_succeeded():
+    state = {
+        "current_sub_task": {"id": 2, "needs": "forge", "depends_on": [1]},
+        "sub_task_results": [{"sub_task_id": 1, "ok": True, "output": 1}],
+    }
+    assert orch_mod.route_dispatch(state) == "forge"

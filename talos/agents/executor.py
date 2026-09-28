@@ -276,6 +276,11 @@ def executor_node(state: TalosState) -> dict:
     if not sub_task:
         return {"execution_result": None}
 
+    failed_deps = failed_dependencies(sub_task, state.get("sub_task_results") or [])
+    if failed_deps:
+        ids = ", ".join(str(i) for i in failed_deps)
+        return _record_failure(state, sub_task, f"skipped: upstream sub-task {ids} failed")
+
     mgr = _get_skill_manager()
 
     try:
@@ -341,6 +346,20 @@ def executor_node(state: TalosState) -> dict:
         "execution_result": _stringify(output) if ok else error,
         "sub_task_results": [*prior_results, new_record],
     }
+
+
+def failed_dependencies(sub_task: dict, results: list[dict]) -> list[int]:
+    """IDs in `sub_task["depends_on"]` whose recorded result is a failure.
+
+    A dependent of a failed step would run on missing input (e.g. write an
+    empty file and report success), so callers skip it instead. Skipped
+    steps are recorded as failures, so this propagates transitively.
+    """
+    by_id = {r.get("sub_task_id"): r for r in results}
+    return [
+        dep for dep in sub_task.get("depends_on") or []
+        if dep in by_id and not by_id[dep].get("ok")
+    ]
 
 
 # ---- internal helpers -----------------------------------------------------

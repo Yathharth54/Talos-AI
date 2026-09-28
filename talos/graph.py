@@ -104,7 +104,8 @@ def build_graph() -> StateGraph:
     g.add_conditional_edges(
         "_dispatch",
         route_dispatch,
-        {"primitive": "executor", "vault": "executor", "forge": "forge_subgraph"},
+        {"primitive": "executor", "vault": "executor", "forge": "forge_subgraph",
+         "skip": "executor"},
     )
 
     # Forge sub-graph terminates →
