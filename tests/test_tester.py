@@ -111,3 +111,73 @@ def test_tester_node_handles_missing_forged_tool():
     out = tester_node({})  # type: ignore[arg-type]
     assert out["test_result"]["passed"] is False
     assert "no code" in out["test_result"]["error"].lower()
+
+
+# --- per-test results (spec 01 §9.2) ------------------------------------------
+
+
+def test_run_tests_reports_each_test_in_order():
+    code = "def add(a: int, b: int) -> int:\n    return a + b + (1 if a == 2 else 0)\n"
+    test_code = (
+        "def test_zero():\n    assert add(0, 0) == 0\n\n"
+        "def test_two():\n    assert add(2, 3) == 5, 'add(2, 3) should be 5'\n\n"
+        "def test_one():\n    assert add(1, 1) == 2\n"
+    )
+    r = run_tests(code, test_code)
+    assert r["results"] == [
+        {"name": "test_zero", "passed": True, "why": None},
+        {"name": "test_two", "passed": False, "why": "AssertionError: add(2, 3) should be 5"},
+        {"name": "test_one", "passed": True, "why": None},
+    ]
+
+
+def test_run_tests_results_empty_when_code_does_not_compile():
+    r = run_tests("def broken(:\n    pass\n", "def test_x():\n    assert True\n")
+    assert r["results"] == []
+
+
+def test_run_tests_results_empty_on_timeout():
+    code = "def loop() -> None:\n    while True:\n        pass\n"
+    r = run_tests(code, "def test_loop():\n    loop()\n", timeout=2)
+    assert r["results"] == []
+
+
+def test_failing_test_without_message_uses_exception_name():
+    code = "def f() -> int:\n    return 1\n"
+    r = run_tests(code, "def test_f():\n    assert f() == 2\n")
+    assert r["results"] == [{"name": "test_f", "passed": False, "why": "AssertionError"}]
+
+
+def test_tester_node_emits_forge_tests():
+    from langgraph.graph import END, START, StateGraph
+
+    from talos.state import TalosState
+
+    g: StateGraph = StateGraph(TalosState)
+    g.add_node("test", tester_node)
+    g.add_edge(START, "test")
+    g.add_edge("test", END)
+    forged = {
+        "name": "add",
+        "code": "def add(a: int, b: int) -> int:\n    return a + b\n",
+        "test_code": "def test_add():\n    assert add(1, 2) == 3\n",
+    }
+    chunks = list(
+        g.compile().stream({"forged_tool": forged, "retry_count": 2}, stream_mode="custom")
+    )
+    assert chunks == [
+        {
+            "type": "forge.tests",
+            "data": {
+                "tool": "add",
+                "attempt": 2,
+                "results": [{"name": "test_add", "passed": True, "why": None}],
+            },
+        }
+    ]
+
+
+def test_tester_node_without_code_reports_no_results():
+    out = tester_node({"forged_tool": {"name": "x", "code": "", "test_code": ""}})  # type: ignore[arg-type]
+    assert out["test_result"]["results"] == []
+    assert out["test_result"]["passed"] is False

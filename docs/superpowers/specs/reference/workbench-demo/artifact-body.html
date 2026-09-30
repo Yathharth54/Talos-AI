@@ -1,0 +1,2298 @@
+<title>Talos Workbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: three-column workbench (conversation 340 / bench / run log 320) with Vault and Settings views; stacks to one column on phones.
+   Single dark look, same tokens as the landing page (site/styles.css). Gold only ever marks forge work. */
+:root {
+  color-scheme: dark;
+  --ink: #000;
+  --ink-2: #050505;
+  --ink-3: #0B0906;
+  --bone: #ECE6DA;
+  --bone-2: #C9C2B6;
+  --stone: #9A938A;
+  --dim: #7D776F;
+  --sig: #8A847B;
+  --gutter-num: #5E5953;
+  --gold: #D6B27A;
+  --gold-60: rgba(214, 178, 122, .6);
+  --gold-45: rgba(214, 178, 122, .45);
+  --gold-12: rgba(214, 178, 122, .12);
+  --line: rgba(236, 230, 218, .1);
+  --line-16: rgba(236, 230, 218, .16);
+  --line-2: rgba(236, 230, 218, .3);
+  --line-5: rgba(236, 230, 218, .5);
+  --scrim: rgba(0, 0, 0, .72);
+  --display: "Michroma", "Eurostile", "Arial Black", sans-serif;
+  --sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--ink); color: var(--bone); font-family: var(--sans); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+a { color: var(--bone); }
+a:hover { color: var(--gold); }
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 1.5px solid var(--gold); outline-offset: 3px; border-radius: 4px; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--stone); }
+.gold { color: var(--gold); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+::placeholder { color: var(--dim); }
+* { scrollbar-width: thin; scrollbar-color: #2a2826 transparent; }
+
+/* ---------- shell ---------- */
+.app { height: 100%; display: flex; flex-direction: column; }
+.top { height: 60px; flex: none; padding: 0 24px; display: flex; align-items: center; gap: 32px; border-bottom: 1px solid var(--line); position: relative; z-index: 5; background: var(--ink); }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+.brand .disc { width: 30px; height: 30px; border-radius: 50%; overflow: hidden; display: block; }
+.brand .disc img { width: 36px; height: 36px; margin: -3px; display: block; max-width: none; }
+.brand .word { font: 13px var(--display); letter-spacing: .45em; }
+.nav { display: flex; align-self: stretch; }
+.nav a { position: relative; padding: 0 14px; display: flex; align-items: center; font-size: 15px; text-decoration: none; color: var(--stone); transition: color .2s; }
+.nav a:hover { color: var(--bone); }
+.nav a[aria-current="page"] { color: var(--bone); box-shadow: inset 0 -2px 0 var(--bone); }
+.nav .badge { position: absolute; top: 16px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.model { font-size: 13px; color: var(--stone); }
+
+.pill { min-height: 44px; padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; font-size: 15px; font-weight: 500; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .2s, color .2s, border-color .2s, opacity .2s; }
+.pill.solid { background: var(--bone); color: var(--ink); border: 1px solid var(--bone); font-weight: 600; }
+.pill.solid:hover { background: #fff; color: var(--ink); }
+.pill.ghost { background: transparent; color: var(--bone); border: 1px solid var(--line-2); }
+.pill.ghost:hover { border-color: var(--bone); color: var(--bone); }
+.pill.sm { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.pill.lg { min-height: 48px; padding: 0 26px; }
+.pill[disabled] { opacity: .45; cursor: not-allowed; }
+.pill[aria-pressed="true"] { background: var(--bone); color: var(--ink); border-color: var(--bone); font-weight: 600; }
+
+.views { flex: 1; min-height: 0; position: relative; }
+.view { height: 100%; }
+
+/* ---------- workbench ---------- */
+.wb { height: 100%; display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 4fr); }
+.col { min-height: 0; display: flex; flex-direction: column; }
+.convo { }
+.side { border-left: 1px solid var(--line); overflow-y: auto; padding: 20px; gap: 18px; }
+.convo-head { height: 64px; flex: none; padding: 0 20px 0 36px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.convo-head { gap: 12px; }
+.convo-head h2 { margin: 0; font-size: 15px; font-weight: 600; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 32px 36px; display: flex; flex-direction: column; gap: 30px; }
+.msg { display: flex; flex-direction: column; gap: 10px; max-width: 64ch; animation: rise .35s var(--ease) both; }
+.msg p { font-size: 15.5px; line-height: 1.65; }
+.msg .who { font-size: 13px; color: var(--stone); }
+.msg p { margin: 0; line-height: 1.55; overflow-wrap: anywhere; }
+.msg.you p { color: var(--bone-2); }
+.msg .note { font-size: 14px; color: var(--stone); }
+.msg.past { opacity: .6; }
+.msg.past p { font-size: 14px; }
+.chip { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.chip i { width: 8px; height: 8px; display: block; flex: none; }
+.chip.forged { color: var(--gold); }
+.chip.forged i { background: var(--gold); }
+.chip.reused { color: var(--bone-2); }
+.chip.reused i { border: 1px solid var(--bone-2); }
+.chip.failed { color: var(--bone); }
+.chip.failed i { border: 1.5px solid var(--bone); transform: rotate(45deg); width: 7px; height: 7px; }
+.thinking { color: var(--stone); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.caret { display: inline-block; width: .6em; height: 1.1em; vertical-align: -.2em; background: currentColor; animation: blink 1s steps(1) infinite; }
+.empty-convo { margin-top: auto; font-size: 14px; color: var(--stone); }
+.run-link { all: unset; width: max-content; font-size: 13px; color: var(--stone); cursor: pointer; text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 4px; transition: color .2s, text-decoration-color .2s; }
+.run-link:hover { color: var(--bone); text-decoration-color: var(--bone); }
+.run-link:focus-visible { outline: 1.5px solid var(--gold); outline-offset: 3px; border-radius: 3px; }
+.run-link[aria-current="true"] { color: var(--gold); text-decoration-color: var(--gold-45); }
+.setup-line { margin: 4px 0 0; font-size: 13px; color: var(--dim); text-align: center; }
+.setup-line a { color: var(--stone); }
+.log-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 28px; align-items: start; }
+.log-wrap .earlier { padding-top: 4px; }
+@media (max-width: 1180px) { .log-wrap { grid-template-columns: minmax(0, 1fr); } }
+.suggest-inline { display: flex; flex-direction: column; gap: 8px; }
+.suggest-inline button { text-align: left; padding: 10px 14px; background: transparent; border: 1px solid var(--line-16); border-radius: 14px; font-size: 14px; line-height: 1.45; cursor: pointer; color: var(--bone-2); }
+.suggest-inline button:hover { border-color: var(--line-5); color: var(--bone); }
+
+.composer { margin: 0; padding: 20px 36px 28px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; flex: none; }
+.composer label { font-size: 13px; color: var(--stone); }
+.composer textarea { resize: none; padding: 12px 16px; background: var(--ink-2); border: 1px solid var(--line-16); border-radius: 16px; font-size: 15px; line-height: 1.5; transition: border-color .2s; }
+.composer textarea:focus { border-color: var(--line-5); outline: none; }
+.composer textarea:disabled { opacity: .5; }
+.composer-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.composer-row .hint { font-size: 12px; color: var(--dim); }
+
+.bench { position: relative; min-width: 0; overflow-y: auto; padding: 32px 44px 56px; display: flex; flex-direction: column; gap: 30px; background: var(--ink-2); border-left: 1px solid var(--line); }
+.b-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+.b-head .meta { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.b-head .label { font-size: 13px; color: var(--stone); }
+.sig { margin: 0; font: 500 19px/1.4 var(--mono); overflow-wrap: anywhere; }
+.sig span { color: var(--sig); }
+#b-banner:empty, #b-tabs:empty, #b-act:empty { display: none; }
+.caption:empty { display: none; }
+.caption { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--stone); min-height: 24px; max-width: 70ch; }
+
+/* graph strip */
+.strip { margin: 0; padding: 0 0 2px; list-style: none; display: flex; align-items: center; overflow-x: auto; }
+.node { position: relative; flex: none; height: 40px; padding: 0 16px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line-16); border-radius: 10px; font-size: 13px; color: var(--dim); white-space: nowrap; transition: border-color .3s, color .3s, background .3s; }
+.node .pip { position: absolute; top: 5px; right: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--gold-45); transition: background .3s; }
+.node.done { border-color: var(--line-2); color: var(--bone); }
+.node.done .pip, .node.forge .pip, .node.active .pip { background: var(--gold); }
+.node.forge { border-color: var(--gold-60); color: var(--gold); }
+.node.active { background: var(--ink-3); border-color: var(--gold); color: var(--gold); font-weight: 600; animation: halo 2.4s ease-in-out infinite; }
+.node.skip { border-style: dashed; border-color: var(--line-2); color: var(--stone); }
+.node.fail { border: 1.5px solid var(--bone); color: var(--bone); font-weight: 600; }
+.node.answer { background: var(--bone); border-color: var(--bone); color: var(--ink); font-weight: 600; }
+.node.stopped { border-style: dashed; border-color: var(--line-5); color: var(--bone-2); }
+.node svg { flex: none; }
+.link { position: relative; flex: 1 1 12px; min-width: 12px; height: 1px; background: var(--line); transition: background .3s; }
+.link.lit { background: var(--line-16); }
+.link.swap { min-width: 20px; height: 3px; background: none; border-top: 1px solid var(--line-16); border-bottom: 1px solid var(--line-16); }
+.link.swap.lit { border-top-color: var(--gold); border-bottom-color: var(--gold-45); }
+.link.flow::after { content: ""; position: absolute; top: -2.5px; left: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); animation: packet .55s var(--ease) forwards; }
+.link.swap.flow::after { top: -1.5px; }
+.link.swap.retrying::after { content: ""; position: absolute; top: -1.5px; right: 0; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); animation: packet-back .9s linear infinite; }
+
+/* saved banner */
+.banner { border: 1px solid rgba(214, 178, 122, .5); border-radius: 16px; padding: 18px 20px; display: flex; align-items: center; gap: 18px; animation: rise .5s var(--ease) both; }
+.banner .sq { width: 12px; height: 12px; flex: none; background: var(--gold); box-shadow: 0 0 14px rgba(214, 178, 122, .55); animation: glow 1.6s ease-out 1; }
+.banner .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.banner p { margin: 0; }
+.banner .sub { font-size: 14px; color: var(--stone); }
+.banner.removed { border-color: var(--line-2); }
+.banner.removed .sq { background: none; border: 1.5px solid var(--bone); box-shadow: none; transform: rotate(45deg); width: 10px; height: 10px; }
+
+/* tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tab { min-height: 44px; padding: 0 14px; background: transparent; border: 0; color: var(--stone); font-size: 14px; cursor: pointer; white-space: nowrap; transition: color .2s; }
+.tab:hover { color: var(--bone); }
+.tab[aria-selected="true"] { color: var(--bone); font-weight: 600; box-shadow: inset 0 -2px 0 var(--bone); }
+.tab .n { color: var(--dim); font-weight: 400; }
+
+/* panels */
+.fig { margin: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--ink); min-width: 0; }
+.fig.warm { border-color: rgba(214, 178, 122, .5); }
+
+.fig.alert { border-color: var(--line-2); }
+.fig-cap { padding: 14px 18px 0; display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: var(--stone); }
+.fig-cap > span:first-child { color: var(--bone-2); }
+.fig-cap .r { color: var(--stone); text-align: right; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.stack { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+.code { background: var(--ink-2); }
+.code-body { max-height: 440px; overflow: auto; padding: 10px 0; font: 13px/19px var(--mono); }
+.code-row { display: flex; white-space: pre; min-width: max-content; }
+.code-row .ln { width: 52px; flex: none; padding-right: 14px; text-align: right; color: var(--gutter-num); user-select: none; }
+.code-row .tx { padding-right: 18px; color: var(--bone-2); }
+.code-row.changed { background: rgba(214, 178, 122, .1); box-shadow: inset 2px 0 0 var(--gold); }
+.code-row.changed .ln { color: var(--gold); }
+.code-row.changed .tx { color: var(--bone); }
+.code-row.flash { animation: flash 1.2s ease-out 1; }
+.kw { color: var(--bone); font-weight: 500; }
+.str { color: var(--stone); }
+.com { color: var(--dim); }
+.code-note { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--stone); }
+.code-note i { width: 8px; height: 8px; background: var(--gold); display: block; flex: none; }
+
+.tests { margin: 0; padding: 14px 18px 16px; list-style: none; display: flex; flex-direction: column; gap: 10px; font: 13px var(--mono); }
+.tests li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.tests .st { color: var(--stone); display: inline-flex; align-items: center; gap: 6px; }
+.tests li.waiting { color: var(--dim); }
+.tests li.running .st { color: var(--gold); }
+.tests li.running .st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); animation: blink 0.8s steps(1) infinite; }
+.tests li.failed .st { color: var(--bone); font-weight: 500; }
+.tests li .why { flex-basis: 100%; font-size: 12px; color: var(--stone); white-space: pre-wrap; }
+.smoke-body { padding: 14px 18px 16px; font: 13px/1.7 var(--mono); overflow-wrap: anywhere; }
+.attempts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.attempts li { padding: 14px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; }
+.attempts li:last-child { border-bottom: 1px solid var(--line); }
+.attempts .a-n { font-size: 14px; }
+.attempts .a-r { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.attempts .a-r span:last-child { font: 12px/1.6 var(--mono); color: var(--stone); overflow-wrap: anywhere; }
+
+.args { margin: 0; padding: 16px 18px 18px; display: grid; grid-template-columns: 7ch minmax(0, 1fr); row-gap: 10px; font: 14px var(--mono); }
+.args dt { color: var(--stone); }
+.args dd { margin: 0; overflow-wrap: anywhere; animation: rise .3s var(--ease) both; }
+.args .bad { padding: 1px 6px; margin-left: -6px; border: 1px solid var(--bone); border-radius: 4px; }
+.result { padding: 20px 18px 22px; font: 26px/1.3 var(--mono); overflow-wrap: anywhere; animation: rise .35s var(--ease) both; }
+.result.small { font-size: 15px; line-height: 1.5; }
+.record { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding-top: 6px; }
+.record > div { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+.record > div.hot { border-top-color: var(--gold); }
+.record .k { font-size: 13px; color: var(--stone); }
+.health { border-top: 1px solid var(--line); padding-top: 18px; display: flex; flex-direction: column; gap: 12px; }
+.health h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.meter { display: flex; gap: 6px; }
+.meter span { width: 56px; height: 6px; border-radius: 3px; background: var(--line-16); display: block; transition: background .4s; }
+.meter span.on { background: var(--bone); }
+.health .row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.health p { margin: 0; font-size: 14px; color: var(--stone); max-width: 68ch; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* idle bench */
+.idle { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 22px; padding-top: 8px; }
+.idle .art { width: min(600px, 100%); aspect-ratio: 5 / 2; object-fit: cover; display: block; -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 58%, transparent 100%); mask-image: radial-gradient(ellipse 50% 50% at 50% 50%, #000 58%, transparent 100%); animation: art-in 1.6s var(--ease) both; }
+.idle h1 { margin: 0; font: 400 26px/1.35 var(--display); text-align: center; text-wrap: balance; }
+.idle .lede { margin: 0; max-width: 52ch; text-align: center; font-size: 16px; line-height: 1.6; color: var(--bone-2); text-wrap: pretty; }
+.try-wrap { width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.try-wrap h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--stone); }
+.try-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.try { padding: 16px 18px; background: transparent; border: 1px solid var(--line-16); border-radius: 16px; text-align: left; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color .2s, background .2s; }
+.try:hover { border-color: var(--line-5); background: var(--ink-2); }
+.try .q { font-size: 15px; line-height: 1.45; }
+.try .what { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--stone); }
+.try .what.gold { color: var(--gold); }
+.try .what.gold i { width: 7px; height: 7px; background: var(--gold); display: block; }
+
+/* run log */
+.side h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.term { margin: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--ink); flex: none; transition: border-color .4s; }
+.term.warm { border-color: rgba(214, 178, 122, .5); }
+.term.alert { border-color: var(--line-2); }
+.term-cap { padding: 14px 18px; display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.term.warm .term-cap { border-bottom-color: rgba(214, 178, 122, .2); }
+.term-body { padding: 20px 22px 24px; font: 13px/1.9 var(--mono); color: var(--stone); }
+.term-body .cmd { color: var(--bone); white-space: pre-wrap; overflow-wrap: anywhere; }
+.term-body .gap { height: 12px; }
+.term-body .ln { padding-left: 8ch; text-indent: -8ch; overflow-wrap: anywhere; animation: print .18s linear both; }
+.term-body .ln em { font-style: normal; display: inline-block; width: 8ch; text-indent: 0; }
+.term-body .ln.g { color: var(--gold); }
+.term-body .ln.w { color: var(--bone); }
+.term-body .ln.sub { color: var(--sig); }
+.side-note { margin: 0; font-size: 13px; line-height: 1.5; color: var(--dim); }
+.earlier { display: flex; flex-direction: column; }
+.earlier h2 { margin-bottom: 6px; font-size: 14px; }
+.earlier button { min-height: 44px; padding: 10px 0; display: flex; flex-direction: column; gap: 2px; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; cursor: pointer; }
+.earlier button:hover .q { color: var(--gold); }
+.earlier .q { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.earlier .s { font-size: 13px; color: var(--stone); }
+.earlier .s.gold { color: var(--gold); }
+.setup ul { margin: 0; padding: 0; list-style: none; }
+.setup li { padding: 12px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.setup li:last-child { border-bottom: 1px solid var(--line); }
+.setup .k { display: flex; justify-content: space-between; gap: 10px; font: 12px var(--mono); }
+.setup .k b { font: 13px var(--sans); font-weight: 400; }
+.setup .k b.no { color: var(--stone); }
+.setup .d { font-size: 13px; color: var(--stone); }
+.facts { margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.facts div { display: flex; justify-content: space-between; gap: 12px; }
+.facts dt { color: var(--stone); }
+.facts dd { margin: 0; }
+
+/* ---------- vault view ---------- */
+.vault { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 480px; }
+.v-main { min-width: 0; overflow-y: auto; padding: 28px 32px; display: flex; flex-direction: column; gap: 20px; }
+.v-main h1 { margin: 0; font: 400 26px/1.3 var(--display); }
+.v-main .lede { margin: 6px 0 0; color: var(--stone); }
+.v-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.v-tools input { width: 320px; max-width: 100%; height: 44px; padding: 0 18px; background: var(--ink-2); border: 1px solid var(--line-16); border-radius: 999px; font-size: 15px; }
+.v-tools input:focus { outline: none; border-color: var(--line-5); }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.filters .pill { font-size: 14px; font-weight: 400; min-height: 44px; padding: 0 16px; }
+.filters .pill .c { color: var(--stone); }
+.filters .pill[aria-pressed="true"] .c { color: var(--ink); opacity: .6; }
+.tbl-wrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.tbl th { padding: 0 12px 10px; font-weight: 400; font-size: 13px; color: var(--stone); text-align: left; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+.tbl th.num, .tbl td.num { text-align: right; }
+.tbl td { height: 44px; padding: 0 12px; border-bottom: 1px solid rgba(236, 230, 218, .08); white-space: nowrap; }
+.tbl tr { cursor: pointer; transition: background .15s; }
+.tbl tbody tr:hover { background: rgba(236, 230, 218, .04); }
+.tbl tr[aria-selected="true"] { background: rgba(236, 230, 218, .07); }
+.tbl tr.fresh td:first-child .nm { color: var(--gold); }
+.tbl td .nm { font: 13px var(--mono); }
+.tbl td .nm.web { color: var(--gold); }
+.tbl td .ar { font: 13px var(--mono); color: var(--sig); }
+.tbl td.zero { color: var(--dim); }
+.tbl td.when { color: var(--stone); }
+.tbl td button { all: unset; cursor: pointer; }
+.tbl td button:focus-visible { outline: 1.5px solid var(--gold); outline-offset: 3px; border-radius: 4px; }
+.tbl .newtag { margin-left: 10px; font: 12px var(--sans); color: var(--gold); }
+.v-foot { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--stone); }
+.v-foot .legend { display: flex; align-items: center; gap: 10px; }
+.v-foot .legend i { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); display: block; }
+.v-empty { padding: 40px 0; color: var(--stone); text-align: center; }
+.v-detail { background: var(--ink-2); border-left: 1px solid var(--line); overflow-y: auto; padding: 28px; display: flex; flex-direction: column; gap: 18px; }
+.v-detail h2 { margin: 0; font: 500 20px var(--mono); overflow-wrap: anywhere; }
+.v-detail .desc { margin: 0; color: var(--bone-2); }
+.sigbox { padding: 12px 16px; background: var(--ink); border: 1px solid var(--line); border-radius: 10px; font: 13px/1.5 var(--mono); color: var(--bone-2); overflow-wrap: anywhere; }
+.kws { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.kws li { padding: 4px 12px; border: 1px solid var(--line-16); border-radius: 999px; font-size: 13px; color: var(--bone-2); }
+.dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; font-size: 14px; }
+.dl > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dl > div.full { grid-column: 1 / -1; }
+.dl dt { font-size: 13px; color: var(--stone); }
+.dl dd { margin: 0; overflow-wrap: anywhere; }
+.dl dd.mono { font-size: 13px; }
+.v-detail .health { padding-top: 16px; gap: 10px; }
+.v-detail .meter span { width: 44px; }
+.v-detail .actions { margin-top: auto; }
+
+/* ---------- settings view ---------- */
+.settings { height: 100%; overflow-y: auto; padding: 32px 24px 64px; }
+.settings-in { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+.settings h1 { margin: 0; font: 400 26px/1.3 var(--display); }
+.settings section { display: flex; flex-direction: column; gap: 12px; }
+.settings h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.settings .setup li { flex-direction: row; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.settings .setup li > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.switch-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.switch-row p { margin: 4px 0 0; font-size: 14px; color: var(--stone); max-width: 56ch; }
+.switch { position: relative; flex: none; width: 52px; height: 30px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; cursor: pointer; transition: background .2s, border-color .2s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--stone); transition: transform .25s var(--ease), background .2s; }
+.switch[aria-checked="true"] { background: var(--bone); border-color: var(--bone); }
+.switch[aria-checked="true"]::after { transform: translateX(22px); background: var(--ink); }
+
+/* ---------- dialog ---------- */
+.scrim { position: fixed; inset: 0; z-index: 20; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 16px; animation: fade .2s linear both; }
+.dialog { width: 600px; max-width: 100%; max-height: 100%; overflow-y: auto; background: var(--ink-2); border: 1px solid var(--line-16); border-radius: 16px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6); display: flex; flex-direction: column; animation: rise .3s var(--ease) both; }
+.dialog .d-top { padding: 26px 28px 0; display: flex; flex-direction: column; gap: 10px; }
+.dialog .eyebrow { font-size: 13px; color: var(--gold); }
+.dialog h2 { margin: 0; font-size: 24px; font-weight: 600; line-height: 1.3; text-wrap: balance; }
+.dialog p { margin: 0; line-height: 1.6; color: var(--bone-2); }
+.dialog pre { margin: 20px 28px 0; padding: 18px 20px; background: var(--ink); border: 1px solid var(--line); border-radius: 10px; font: 15px/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.dialog .field { padding: 22px 28px 0; display: flex; flex-direction: column; gap: 8px; }
+.dialog .field label { font: 13px var(--mono); }
+.dialog .field input { height: 48px; padding: 0 18px; background: var(--ink); border: 1px solid var(--line-2); border-radius: 999px; font-size: 15px; }
+.dialog .field input:focus { outline: none; border-color: var(--bone); }
+.dialog .field .err { font-size: 13px; color: var(--bone); min-height: 20px; }
+.dialog .d-act { padding: 22px 28px; display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.dialog .d-foot { margin: 0; padding: 14px 28px 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--stone); }
+.dialog .d-foot .mono { font-size: 12px; color: var(--bone-2); }
+
+/* ---------- demo controls ---------- */
+.demo-btn { position: relative; }
+.popover { position: absolute; top: calc(100% + 10px); right: 0; width: 300px; padding: 18px; background: var(--ink-2); border: 1px solid var(--line-16); border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6); display: flex; flex-direction: column; gap: 14px; animation: rise .2s var(--ease) both; z-index: 30; }
+.popover p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--stone); }
+.popover .lbl { font-size: 13px; color: var(--bone-2); }
+.seg { display: flex; gap: 6px; }
+.seg .pill { flex: 1; min-height: 40px; padding: 0 10px; font-size: 14px; font-weight: 400; }
+
+/* ---------- motion ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes print { from { opacity: 0; } to { opacity: 1; } }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes halo { 0%, 100% { box-shadow: 0 0 0 3px rgba(214, 178, 122, .10); } 50% { box-shadow: 0 0 0 6px rgba(214, 178, 122, .2); } }
+@keyframes packet { from { left: 0; opacity: 1; } 85% { opacity: 1; } to { left: calc(100% - 6px); opacity: 0; } }
+@keyframes packet-back { from { right: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } to { right: calc(100% - 6px); opacity: 0; } }
+@keyframes flash { 0% { background: rgba(214, 178, 122, .35); } 100% { background: rgba(214, 178, 122, .1); } }
+@keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(214, 178, 122, .8); } 100% { box-shadow: 0 0 14px rgba(214, 178, 122, .55); } }
+@keyframes art-in { from { opacity: 0; filter: blur(8px) brightness(.4); transform: scale(1.03); } to { opacity: 1; filter: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- polish: motion layer ---------- */
+html { scroll-behavior: smooth; }
+.msgs { scroll-behavior: smooth; }
+.pill:active:not([disabled]) { transform: scale(.97); }
+.pill { transition: background .2s, color .2s, border-color .2s, opacity .2s, transform .15s var(--ease); }
+
+/* boot sequence */
+.booting .top { animation: drop .7s var(--ease) both; }
+.booting .convo { animation: rise .7s .12s var(--ease) both; }
+.booting .bench { animation: rise .7s .22s var(--ease) both; }
+
+
+/* busy ring around the mark */
+.disc-wrap { position: relative; width: 30px; height: 30px; display: block; }
+.disc-wrap .ring { position: absolute; inset: -5px; border-radius: 50%; opacity: 0; transition: opacity .4s;
+  background: conic-gradient(from 0deg, transparent 0 62%, var(--gold) 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px)); mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px)); }
+.brand.busy .ring { opacity: 1; animation: spin 1.4s linear infinite; }
+
+/* orbit spinner in the conversation */
+.orb { position: relative; flex: none; width: 14px; height: 14px; border: 1px solid var(--line-2); border-radius: 50%; animation: spin 1.4s linear infinite; }
+.orb i { position: absolute; top: -2.5px; left: 50%; margin-left: -2px; width: 4px; height: 4px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+.thinking { gap: 10px; }
+.thinking .tt { animation: fade .35s linear both; }
+
+/* words fade in as an answer streams */
+.wd { opacity: 0; filter: blur(3px); transition: opacity .4s var(--ease), filter .4s var(--ease); }
+.wd.on { opacity: 1; filter: none; }
+.msg .note, .msg .chip { animation: rise .45s var(--ease) both; }
+.msg.you { animation: slide-in .45s var(--ease) both; }
+
+/* progress rail across the top of the bench */
+.rail { position: absolute; top: 0; left: 0; right: 0; z-index: 2; margin: 0; height: 2px; background: var(--line); flex: none; overflow: hidden; }
+.rail i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--gold); box-shadow: 0 0 12px var(--gold); transition: width .7s var(--ease); display: block; }
+.rail.running i::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: 80px; background: linear-gradient(90deg, transparent, rgba(255, 244, 220, .9)); animation: fade 1s ease-in-out infinite alternate; }
+.rail { opacity: 0; transition: opacity .6s; background: transparent; }
+.rail.running { opacity: 1; background: var(--line); }
+
+/* graph nodes */
+.node.active::after { content: ""; position: absolute; inset: -1px; border-radius: 11px; border: 1px solid var(--gold); pointer-events: none; animation: ignite .9s var(--ease) 1 forwards; }
+.node.done, .node.forge, .node.answer, .node.fail { animation: settle .45s var(--ease) 1; }
+.node.fail { animation: shake .45s var(--ease) 1; }
+
+/* sliding tab indicator */
+.tabs { position: relative; }
+.tab { box-shadow: none !important; }
+.tab-ind { position: absolute; bottom: 0; left: 0; height: 2px; width: 0; background: var(--bone); transition: left .35s var(--ease), width .35s var(--ease); pointer-events: none; }
+.panel-in { animation: rise .35s var(--ease) both; }
+
+/* tests */
+.tick { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tick path { stroke-dasharray: 14; stroke-dashoffset: 14; animation: draw .4s var(--ease) forwards; }
+.tick.done path { stroke-dashoffset: 0; animation: none; }
+.tests li.just-failed { animation: flash-row 1s ease-out 1; border-radius: 6px; }
+
+/* log lines decode in */
+.term-body .ln.fresh { animation: print-in .35s var(--ease) both; }
+
+/* saved banner sweep */
+.banner { position: relative; overflow: hidden; }
+.banner::before { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(214, 178, 122, .16) 50%, transparent 70%); transform: translateX(-100%); animation: sweep 1.4s .2s var(--ease) 1 forwards; pointer-events: none; }
+.nav .badge { animation: badge 1.8s ease-out infinite; }
+
+/* idle: orbit rings, scan line, pointer glow */
+.art-wrap { position: relative; width: min(600px, 100%); aspect-ratio: 5 / 2; display: flex; align-items: center; justify-content: center; }
+.art-wrap .art { position: absolute; inset: 0; width: 100%; height: 100%; }
+.art-wrap::before { content: ""; position: absolute; inset: -10% 15%; background: radial-gradient(closest-side, rgba(214, 178, 122, .09), transparent); z-index: -1; }
+.orbit { position: absolute; top: 50%; left: 50%; border-radius: 50%; border: 1px dashed rgba(236, 230, 218, .12); transform: translate(-50%, -50%); pointer-events: none; }
+.orbit.o1 { width: 118%; aspect-ratio: 1 / 1; max-height: 340%; width: min(118%, 700px); animation: orbit 60s linear infinite; }
+.orbit.o2 { width: min(86%, 520px); aspect-ratio: 1 / 1; border-style: solid; border-color: rgba(236, 230, 218, .06); animation: orbit-rev 90s linear infinite; }
+.orbit.o1::after { content: ""; position: absolute; top: -3px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.art-wrap .scan { position: absolute; left: 20%; right: 20%; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(236, 230, 218, .7) 50%, transparent); box-shadow: 0 0 18px 2px rgba(214, 178, 122, .35); opacity: 0; animation: scan 2.2s .3s var(--ease) both; }
+.idle { overflow: hidden; }
+.idle .lede, .idle .try-wrap { animation: rise .8s .5s var(--ease) both; }
+.idle .try-wrap { animation-delay: .65s; }
+.try { position: relative; overflow: hidden; transition: border-color .25s, transform .25s var(--ease); }
+.try::before { content: ""; position: absolute; inset: 0; background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(214, 178, 122, .1), transparent 60%); opacity: 0; transition: opacity .3s; pointer-events: none; }
+.try:hover { transform: translateY(-2px); }
+.try:hover::before { opacity: 1; }
+.try-grid .try { animation: rise .6s var(--ease) both; }
+.try-grid .try:nth-child(2) { animation-delay: .75s; }
+.try-grid .try:nth-child(3) { animation-delay: .82s; }
+.try-grid .try:nth-child(4) { animation-delay: .89s; }
+.try-grid .try:nth-child(1) { animation-delay: .68s; }
+
+/* views and lists */
+.view.enter { animation: view-in .4s var(--ease) both; }
+.tbl tbody tr.in { animation: rise .4s var(--ease) both; }
+.v-detail.swap > * { animation: rise .35s var(--ease) both; }
+.v-detail.swap > *:nth-child(2) { animation-delay: .03s; }
+.v-detail.swap > *:nth-child(3) { animation-delay: .06s; }
+.v-detail.swap > *:nth-child(n+4) { animation-delay: .09s; }
+.scr { display: inline-block; }
+
+/* ---------- readable source: vault preview + full-file reader ---------- */
+.code-read { background: var(--ink); }
+.code-read .fig-cap { align-items: center; padding: 10px 12px 10px 18px; }
+.code-read .fig-cap .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.code-read .fig-cap .meta span:last-child { font-size: 12px; color: var(--stone); }
+.code-read .code-body { max-height: 440px; padding: 14px 0 18px; font: 14px/1.75 var(--mono); }
+.code-read .code-row { white-space: pre-wrap; min-width: 0; }
+.code-read .code-row .ln { width: 40px; padding-right: 14px; font-size: 12px; line-height: inherit; color: var(--gutter-num); }
+.code-read .code-row .tx { flex: 1; min-width: 0; padding-right: 18px; overflow-wrap: anywhere; color: var(--bone-2); }
+.code-read .code-row:hover { background: rgba(236, 230, 218, .03); }
+.code-fade { position: relative; }
+.code-fade::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: linear-gradient(transparent, var(--ink)); pointer-events: none; }
+.dialog.reader { width: min(1000px, 100%); height: min(860px, 100%); overflow: hidden; }
+.reader .r-head { padding: 18px 20px 16px 28px; display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid var(--line); flex: none; }
+.reader .r-head h2 { font: 500 17px var(--mono); overflow-wrap: anywhere; }
+.reader .r-head p { font-size: 13px; color: var(--stone); margin-top: 4px; }
+.reader .r-act { display: flex; gap: 8px; flex: none; }
+.reader .code-body { flex: 1; min-height: 0; max-height: none; overflow: auto; padding: 18px 0 28px; font: 15px/1.8 var(--mono); }
+.reader .code-row .ln { width: 56px; padding-right: 20px; font-size: 13px; }
+.reader .code-row .tx { padding-right: 28px; }
+@media (max-width: 820px) {
+  .code-read .code-body { font-size: 13px; }
+  .reader .code-body { font-size: 13px; }
+  .reader .code-row .ln { width: 40px; padding-right: 12px; }
+  .reader .r-head { padding: 14px 16px; flex-wrap: wrap; }
+}
+
+/* ---------- sessions view ---------- */
+.sessions { height: 100%; overflow-y: auto; padding: 32px 24px 64px; }
+.sessions-in { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+.sessions h1 { margin: 0; font: 400 26px/1.3 var(--display); }
+.sessions .lede { margin: 6px 0 0; color: var(--stone); max-width: 62ch; }
+.day { display: flex; flex-direction: column; gap: 0; }
+.day h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--stone); }
+.sess { padding: 20px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 20px; align-items: start; animation: rise .45s var(--ease) both; }
+.day .sess:last-child { border-bottom: 1px solid var(--line); }
+.sess .when { font-size: 14px; color: var(--stone); display: flex; flex-direction: column; gap: 4px; }
+.sess .when b { font-weight: 400; color: var(--bone); font-variant-numeric: tabular-nums; }
+.sess .live { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--gold); }
+.sess .live::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); animation: badge 1.8s ease-out infinite; }
+.sess .body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sess h3 { margin: 0; font-size: 17px; font-weight: 600; }
+.sess ol { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.sess ol li { display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: var(--bone-2); min-width: 0; }
+.sess ol li span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sess ol li i { width: 7px; height: 7px; flex: none; display: block; transform: translateY(-1px); border: 1px solid var(--line-2); }
+.sess ol li i.forged { background: var(--gold); border-color: var(--gold); }
+.sess ol li i.reused { border-color: var(--bone-2); }
+.sess ol li i.failed { border-color: var(--bone); transform: translateY(-1px) rotate(45deg); }
+.sess .tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.sess .tools span { padding: 3px 10px; border: 1px solid var(--line-16); border-radius: 999px; font: 12px var(--mono); color: var(--bone-2); }
+.sess .tools span.forged { border-color: rgba(214, 178, 122, .5); color: var(--gold); }
+.sess-empty { color: var(--stone); font-size: 14px; }
+.viewing-note { margin: 0 0 4px; padding: 12px 14px; border: 1px dashed var(--line-2); border-radius: 14px; font-size: 13px; color: var(--stone); display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+@keyframes drop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes orbit { to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes orbit-rev { to { transform: translate(-50%, -50%) rotate(-360deg); } }
+@keyframes ignite { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.22, 1.5); } }
+@keyframes settle { 0% { transform: scale(.94); } 60% { transform: scale(1.02); } 100% { transform: none; } }
+@keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-3px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-2px); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes flash-row { 0% { background: rgba(236, 230, 218, .14); } 100% { background: transparent; } }
+@keyframes print-in { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+@keyframes sweep { to { transform: translateX(100%); } }
+@keyframes badge { 0% { box-shadow: 0 0 0 0 rgba(214, 178, 122, .6); } 70%, 100% { box-shadow: 0 0 0 7px rgba(214, 178, 122, 0); } }
+@keyframes scan { 0% { top: 0; opacity: 0; } 10% { opacity: 1; } 90% { opacity: .8; } 100% { top: 100%; opacity: 0; } }
+@keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wd { opacity: 1; filter: none; } .art-wrap .scan { display: none; } }
+@media (max-width: 820px) {
+  .rail { margin: 0; }
+  .sess { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .sessions { padding: 24px 16px 48px; }
+  .orbit.o1 { width: 104%; }
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1180px) {
+  .wb { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+  .vault { grid-template-columns: minmax(0, 1fr) 380px; }
+  .model { display: none; }
+}
+@media (max-width: 820px) {
+  .top { padding: 0 16px; gap: 12px; }
+  .brand .word { display: none; }
+  .nav a { padding: 0 10px; }
+  .top-right .gh-label { display: none; }
+  .top-right .pill { padding: 0 14px; }
+  .wb { display: flex; flex-direction: column; }
+  .convo { border-right: 0; border-bottom: 1px solid var(--line); max-height: none; position: static; }
+  .msgs { max-height: 46vh; padding: 20px 16px; gap: 22px; }
+  .convo-head { padding: 0 16px; }
+  .composer { padding: 14px 16px 16px; }
+  .bench { padding: 24px 16px 36px; overflow: visible; border-left: 0; border-top: 1px solid var(--line); gap: 24px; }
+  .wb, .view { height: auto; min-height: 100%; }
+  .views { overflow-y: auto; }
+  .grid2, .try-grid { grid-template-columns: minmax(0, 1fr); }
+  .record { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .b-head { flex-direction: column; gap: 12px; }
+  .vault { display: flex; flex-direction: column; height: auto; }
+  .v-main { padding: 20px 16px; overflow: visible; }
+  .v-detail { border-left: 0; border-top: 1px solid var(--line); padding: 20px 16px 32px; overflow: visible; }
+  .v-tools input { width: 100%; }
+  .dl { grid-template-columns: minmax(0, 1fr); }
+  .attempts li { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .settings { padding: 24px 16px 48px; }
+  .idle h1 { font-size: 21px; }
+  .dialog .d-top, .dialog .field, .dialog .d-act { padding-left: 20px; padding-right: 20px; }
+  .dialog pre { margin-left: 20px; margin-right: 20px; }
+  .popover { position: fixed; top: 68px; left: 16px; right: 16px; width: auto; }
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="#workbench" aria-label="Talos, open the workbench">
+      <span class="disc-wrap"><span class="disc"><img src="assets/apple-touch-icon.png" alt="" width="36" height="36"></span><span class="ring" aria-hidden="true"></span></span>
+      <span class="word">TALOS</span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#workbench" data-view="workbench">Workbench</a>
+      <a href="#vault" data-view="vault">Vault<span class="badge" id="vault-badge" hidden></span></a>
+      <a href="#sessions" data-view="sessions">Sessions</a>
+      <a href="#settings" data-view="settings">Settings</a>
+    </nav>
+    <div class="top-right">
+      <span class="model">deepseek/deepseek-v4.1-flash</span>
+      <div class="demo-btn">
+        <button type="button" class="pill ghost sm" id="demo-toggle" aria-expanded="false" aria-controls="demo-pop">Demo controls</button>
+        <div class="popover" id="demo-pop" hidden>
+          <p>Scripted runs over the real Talos vault. Nothing calls a model or leaves your browser.</p>
+          <span class="lbl" id="speed-lbl">Run speed</span>
+          <div class="seg" role="group" aria-labelledby="speed-lbl">
+            <button type="button" class="pill ghost" data-speed="0.5" aria-pressed="false">Slow</button>
+            <button type="button" class="pill ghost" data-speed="1" aria-pressed="true">Normal</button>
+            <button type="button" class="pill ghost" data-speed="2" aria-pressed="false">Fast</button>
+          </div>
+          <button type="button" class="pill ghost" id="demo-reset">Reset the demo</button>
+        </div>
+      </div>
+      <a class="pill ghost sm" href="https://github.com/Yathharth54/Talos-AI" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg><span class="gh-label">GitHub</span></a>
+    </div>
+  </header>
+
+  <div class="views">
+    <section class="view" id="view-workbench" aria-label="Workbench">
+      <div class="wb">
+        <section class="col convo" aria-label="Conversation">
+          <div class="convo-head">
+            <h2 id="session-name"><span class="scr" id="session-title">Session 1</span></h2>
+            <button type="button" class="pill ghost sm" id="new-session">New session</button>
+            <button type="button" class="pill ghost sm" id="back-session" hidden>Back to now</button>
+          </div>
+          <div class="msgs" id="msgs"></div>
+          <div class="sr" aria-live="polite" id="live"></div>
+          <form class="composer" id="composer">
+            <label for="ask">Ask Talos</label>
+            <textarea id="ask" rows="3" placeholder="Ask for something it can't do yet"></textarea>
+            <div class="composer-row">
+              <span class="hint" id="composer-hint">Enter to send, Shift+Enter for a new line</span>
+              <button type="submit" class="pill solid" id="send">Send</button>
+            </div>
+          </form>
+        </section>
+        <main class="bench" id="bench" aria-label="Bench"></main>
+      </div>
+    </section>
+
+    <section class="view" id="view-vault" aria-label="Vault" hidden>
+      <div class="vault">
+        <div class="v-main">
+          <div>
+            <h1>Vault</h1>
+            <p class="lede" id="v-lede"></p>
+          </div>
+          <div class="v-tools">
+            <label for="v-search" class="sr">Search the vault</label>
+            <input id="v-search" type="search" placeholder="Search by name or keyword" autocomplete="off">
+            <div class="filters" role="group" aria-label="Filter">
+              <button type="button" class="pill ghost" data-filter="all" aria-pressed="true">All <span class="c" id="c-all"></span></button>
+              <button type="button" class="pill ghost" data-filter="web" aria-pressed="false">Uses the web <span class="c" id="c-web"></span></button>
+              <button type="button" class="pill ghost" data-filter="failed" aria-pressed="false">Has failed <span class="c" id="c-failed"></span></button>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead><tr><th scope="col">Tool</th><th scope="col" class="num">Uses</th><th scope="col" class="num">Failures</th><th scope="col" class="num">Last used</th></tr></thead>
+              <tbody id="v-rows"></tbody>
+            </table>
+          </div>
+          <div class="v-foot">
+            <span class="legend"><i></i>Gold names reach the web through a free API Talos found itself</span>
+            <span id="v-count"></span>
+          </div>
+        </div>
+        <aside class="v-detail" id="v-detail" aria-label="Tool details"></aside>
+      </div>
+    </section>
+
+    <section class="view" id="view-sessions" aria-label="Sessions" hidden>
+      <div class="sessions"><div class="sessions-in" id="sessions-in"></div></div>
+    </section>
+
+    <section class="view" id="view-settings" aria-label="Settings" hidden>
+      <div class="settings"><div class="settings-in" id="settings-in"></div></div>
+    </section>
+  </div>
+</div>
+<div id="modal-root"></div>
+
+<script type="text/plain" id="src-caesar">"""Caesar cipher tool: shift-based encryption/decryption of text."""
+
+import string
+
+
+def caesar_cipher(text: str, shift: int, mode: str) -> str:
+    """Encrypt or decrypt text with a Caesar cipher using the given shift.
+
+    Each ASCII letter is rotated by ``shift`` positions within the alphabet
+    (A-Z / a-z), preserving letter case. Non-alphabetic characters (spaces,
+    digits, punctuation) are passed through unchanged. In ``"encrypt"`` mode
+    letters move forward by ``shift``; in ``"decrypt"`` mode they move
+    backward by the same amount. Shifts larger than 26 or negative are
+    normalised modulo 26.
+
+    Args:
+        text: The input string to transform. Must be a ``str``.
+        shift: The integer number of alphabet positions to rotate. May be
+            negative or greater than 25; it is normalised modulo 26.
+        mode: Either ``"encrypt"`` or ``"decrypt"`` (case-insensitive,
+            surrounding whitespace ignored).
+
+    Returns:
+        The transformed string with the same length as ``text``.
+
+    Raises:
+        TypeError: If ``text`` or ``mode`` is not a ``str``, or ``shift`` is
+            not an ``int`` (booleans are rejected).
+        ValueError: If ``mode`` is not ``"encrypt"`` or ``"decrypt"``.
+
+    Example:
+        >>> caesar_cipher(text="TALOS AGENT", shift=7, mode="encrypt")
+        'AHSVZ HNLUA'
+    """
+    if not isinstance(text, str):
+        raise TypeError(f"text must be a str, got {type(text).__name__}")
+    if isinstance(shift, bool) or not isinstance(shift, int):
+        raise TypeError(f"shift must be an int, got {type(shift).__name__}")
+    if not isinstance(mode, str):
+        raise TypeError(f"mode must be a str, got {type(mode).__name__}")
+
+    normalized_mode = mode.strip().lower()
+    if normalized_mode not in ("encrypt", "decrypt"):
+        raise ValueError(
+            f"mode must be 'encrypt' or 'decrypt', got {mode!r}"
+        )
+
+    effective_shift = shift if normalized_mode == "encrypt" else -shift
+    effective_shift %= 26
+
+    result_chars = []
+    for char in text:
+        if char in string.ascii_uppercase:
+            base = ord("A")
+        elif char in string.ascii_lowercase:
+            base = ord("a")
+        else:
+            result_chars.append(char)
+            continue
+        rotated = (ord(char) - base + effective_shift) % 26 + base
+        result_chars.append(chr(rotated))
+
+    return "".join(result_chars)</script>
+
+<script type="text/plain" id="src-weather">"""Current temperature for a city from OpenWeatherMap."""
+
+import os
+
+import requests
+
+
+def get_current_temperature(city: str) -> float:
+    """Return the current temperature in Celsius for ``city``.
+
+    Reads the API key from the OPENWEATHERMAP_API_KEY environment variable.
+
+    Args:
+        city: City name, for example "Mumbai".
+
+    Returns:
+        The current temperature in degrees Celsius.
+
+    Raises:
+        RuntimeError: If the API key is not set.
+        ValueError: If the city is empty or not found.
+    """
+    key = os.environ.get("OPENWEATHERMAP_API_KEY")
+    if not key:
+        raise RuntimeError("OPENWEATHERMAP_API_KEY is not set")
+    if not city.strip():
+        raise ValueError("city must not be empty")
+    resp = requests.get(
+        "https://api.openweathermap.org/data/2.5/weather",
+        params={"q": city, "appid": key, "units": "metric"},
+        timeout=10,
+    )
+    if resp.status_code == 404:
+        raise ValueError(f"city not found: {city!r}")
+    resp.raise_for_status()
+    return float(resp.json()["main"]["temp"])</script>
+
+<script>
+"use strict";
+
+/* ===================== data ===================== */
+// Real vault manifest (talos/vault/manifest.json), minus caesar_cipher, which the demo forges live.
+// [name, args, returns, description, keywords, uses, failures, failures in a row, created, last used, last failure]
+const VAULT_DATA = [["nth_fibonacci","n: int","int","Returns the Nth Fibonacci number using an iterative O(n) computation.",["fibonacci","sequence","math","integer","recursion"],3,0,0,"2026-09-28T14:20","2026-09-28T14:32",""],["alternating_case","text: str","str","Convert a string to alternating case where letters alternate lower/upper while non-letters pass through unchanged.",["string","case","alternating","text","transform","format"],1,0,0,"2026-09-28T14:21","2026-09-28T14:21",""],["prime_factorization","n: int","list","Return the prime factors of a positive integer in ascending order, with multiplicity.",["prime","factorization","factors","math","number","integer"],2,1,0,"2026-09-28T14:22","2026-09-28T14:44","TypeError: n must be an int"],["string_frequencies","strings: list[str]","dict","Counts how often each string appears in a list and returns the counts sorted by frequency descending with ties broken by first appearance.",["frequency","count","strings","tally","histogram","sort"],1,0,0,"2026-09-28T14:22","2026-09-28T14:22",""],["levenshtein_distance","s1: str, s2: str","int","Computes the Levenshtein edit distance between two strings.",["levenshtein","edit distance","string","diff","similarity"],3,0,0,"2026-09-28T14:23","2026-09-28T14:44",""],["hamming_distance","a: str, b: str","int","Compute the Hamming distance between two strings, counting positions where characters differ.",["hamming","distance","string","compare","difference","mismatch"],1,0,0,"2026-09-28T14:25","2026-09-28T14:25",""],["hex_to_rgb","hex_code: str","tuple[int, int, int]","Convert a HEX color code (with or without a leading '#') into an (R, G, B) tuple of integers.",["hex","color","rgb","convert","css","colour"],1,0,0,"2026-09-28T14:27","2026-09-28T14:27",""],["unix_to_utc_string","timestamp: int","str","Converts a Unix timestamp (integer seconds since epoch) into a human-readable UTC datetime string formatted as 'YYYY-MM-DD HH:MM:SS'.",["unix","timestamp","datetime","utc","epoch","convert","time"],1,0,0,"2026-09-28T14:28","2026-09-28T14:28",""],["haversine_distance","lat1: float, lon1: float, lat2: float, lon2: float","float","Computes the great-circle distance in kilometers between two latitude/longitude points using the Haversine formula.",["haversine","distance","great-circle","coordinates","geography","kilometers","latitude"],2,0,0,"2026-09-28T14:28","2026-09-28T14:32",""],["base64_codec","text: str, mode: str","str","Encode a UTF-8 string to Base64 or decode Base64 back to the original UTF-8 string.",["base64","encode","decode","codec","roundtrip","encoding"],2,0,0,"2026-09-28T14:29","2026-09-28T14:44",""],["population_std_dev","numbers: list","float","Computes the population standard deviation of a list of numbers using only the standard library.",["statistics","standard deviation","population","math","list","no-numpy"],1,0,0,"2026-09-28T14:29","2026-09-28T14:29",""],["fetch_latest_stable_release_version","","str","Fetch the latest stable Python release version number from a public release API and return it as a plain version string.",["python","version","release","latest","stable","endoflife","web"],1,0,0,"2026-09-28T14:30","2026-09-28T14:30",""],["to_uppercase","text: str","str","Convert a string's contents to uppercase.",["uppercase","string","text","convert","case","transform"],1,0,0,"2026-09-28T14:30","2026-09-28T14:30",""],["fetch_btc_price_usd","","float","Fetch the current Bitcoin (BTC) price in USD from a public keyless price source and return it as a float.",["bitcoin","btc","price","crypto","usd","coingecko","spot"],1,0,0,"2026-09-28T14:31","2026-09-28T14:31",""],["convert_usd_to_inr","amount_usd: float","float","Convert a USD amount to INR using a fixed exchange rate of 83.5.",["currency","usd","inr","convert","exchange","rate","forex"],1,0,0,"2026-09-28T14:31","2026-09-28T14:31",""],["generate_password","length: int","str","Generates a cryptographically-random password of a given length using letters, digits, and symbols.",["password","random","generator","security","string","symbols","digits"],1,0,0,"2026-09-28T14:32","2026-09-28T14:32",""],["score_password_strength","password: str","str","Scores a password's strength as 'weak', 'medium', or 'strong' from its length and character-class diversity.",["password","strength","security","scoring","validation","entropy","characters"],1,0,0,"2026-09-28T14:32","2026-09-28T14:32",""],["extract_top_programming_languages","search_results: list[dict]","list[str]","Extract a ranked list of the top 5 programming language names mentioned across raw search-result dicts.",["programming","languages","extract","search","ranking","parse","text"],1,0,0,"2026-09-28T14:39","2026-09-28T14:39",""],["format_ranked_markdown_list","items: list[str]","str","Formats a ranked list of strings into a numbered markdown list.",["markdown","format","list","ranked","numbered","render"],1,0,0,"2026-09-28T14:39","2026-09-28T14:39",""],["validate_email","email: str","bool","Validate an email address against a strict regex enforcing a single '@', a non-empty local part with allowed characters, a dotted domain, and a 2+ letter TLD.",["email","validate","regex","string","validation","format"],1,0,0,"2026-09-28T14:40","2026-09-28T14:40",""],["sieve_primes","n: int","list[int]","Return all prime numbers up to and including N using the Sieve of Eratosthenes.",["primes","sieve","eratosthenes","math","numbers","primality"],1,0,0,"2026-09-28T14:40","2026-09-28T14:40",""],["integer_power","base: int, exponent: int","int","Computes base raised to an integer exponent and returns the exact integer result.",["power","exponent","exponentiation","integer","math","arithmetic"],1,0,0,"2026-09-28T14:43","2026-09-28T14:43",""],["generate_uuid4","","str","Generate a random UUID version 4 string in canonical 8-4-4-4-12 hex format.",["uuid","uuid4","random","identifier","hex","generate"],1,0,0,"2026-09-28T14:43","2026-09-28T14:43",""],["fetch_github_star_counts","repos: list[str]","dict","Fetch GitHub star counts for a list of repository slugs from the keyless ungh.cc endpoint, returning a mapping of slug to integer star count.",["github","stars","repository","repo","ungh","stars-count"],1,0,0,"2026-09-28T14:48","2026-09-28T14:48",""],["percentage_difference","a: float, b: float","float","Compute the symmetric percentage difference between two numbers as |a-b| / ((a+b)/2) * 100.",["percentage","difference","math","statistics","compare","numbers","ratio"],1,0,0,"2026-09-28T14:49","2026-09-28T14:49",""],["format_repo_comparison","label_a: str, label_b: str, stars_a: int, stars_b: int, pct_diff: float","str","Format a single-line summary comparing two repositories with their star counts and percentage difference.",["format","repository","stars","comparison","summary","github"],1,0,0,"2026-09-28T14:49","2026-09-28T14:49",""],["normalize_date_strings","dates: list[str]","list[str]","Normalize a list of date strings in mixed formats into ISO 'YYYY-MM-DD' strings, preserving order.",["date","normalize","parse","iso","format","strptime","convert"],1,1,1,"2026-09-28T14:50","2026-09-28T14:50","ValueError: dates[1]='2025/04/01' does not match any supported date format"],["compute_revenue_csv","input_path: str","str","Read a product CSV file, append a computed 'revenue' column (price × quantity), and return the whole result as a CSV text string.",["csv","revenue","price","quantity","file","transform","report"],1,0,0,"2026-09-28T14:51","2026-09-28T14:51",""],["count_http_status_codes","log_text: str","list[dict]","Parse nginx-style log lines and count requests per HTTP status code, sorted by frequency descending with ties broken by ascending numeric status.",["nginx","log","http","status","parse","count","frequency"],1,0,0,"2026-09-28T14:52","2026-09-28T14:52",""],["flatten_json","data: dict","dict","Flatten a nested dictionary into a single-level dict using dot-notation keys, leaving lists and other non-dict values as leaves.",["flatten","json","dict","nested","dot-notation","recursive","transform"],2,1,0,"2026-09-28T14:53","2026-09-28T15:16","TypeError: data must be a dict, got str"],["analyze_text_file","file_path: str","dict","Reads a plain-text file and returns word statistics: total words, unique words, average word length, and the top 10 most frequent words.",["text","file","word count","frequency","analysis","statistics","nlp"],1,0,0,"2026-09-28T14:55","2026-09-28T14:55",""],["parse_json_to_json_and_yaml","json_str: str","dict","Parse a JSON string and return a dict with a pretty-printed JSON rendering and an equivalent YAML rendering of the parsed object.",["json","yaml","parse","convert","serialize","format","config"],1,0,0,"2026-09-28T14:57","2026-09-28T14:57",""],["slugify","title: str","str","Convert a title string into a clean lowercase hyphenated URL slug.",["slug","url","string","normalize","text","hyphen"],1,0,0,"2026-09-28T14:58","2026-09-28T14:58",""],["rename_files_in_directory","directory: str","list[dict]","Renames every file in a directory by lowercasing its name and replacing spaces with underscores, returning old→new name mappings.",["rename","files","directory","normalize","filename","underscore","lowercase"],1,0,0,"2026-09-28T14:59","2026-09-28T14:59",""],["format_markdown_table","headers: list[str], rows: list[list[str]]","str","Format headers and rows into a clean GitHub-flavored markdown table string.",["markdown","table","gfm","format","headers","rows","string"],1,1,1,"2026-09-28T15:00","2026-09-28T15:00","TypeError: rows must be a list of lists of strings"],["convert_units","conversions: list[dict]","list[dict]","Convert a list of values between supported units (km/miles, kg/pounds, liters/gallons, celsius/fahrenheit) and return per-conversion result dicts.",["unit","convert","conversion","km","miles","celsius","fahrenheit"],1,0,0,"2026-09-28T15:01","2026-09-28T15:01",""],["regex_analyze","pattern: str, test_string: str","dict","Analyze a regex pattern against a test string, returning match presence, all match groups, and match positions.",["regex","pattern","match","groups","positions"],1,0,0,"2026-09-28T15:01","2026-09-28T15:01",""],["fetch_space_station_mass","","float","Fetch the current published mass of the International Space Station in kilograms from its Wikipedia infobox via the MediaWiki action API.",["iss","space station","mass","kilograms","wikipedia","wikitext","nasa"],1,0,0,"2026-09-28T15:13","2026-09-28T15:13",""],["convert_mass_from_kg","mass_kg: float","dict","Convert a mass in kilograms into pounds, ounces, grams, and metric tons.",["mass","conversion","kilograms","pounds","ounces","grams","metric tons"],1,0,0,"2026-09-28T15:13","2026-09-28T15:13",""],["format_conversions_table","conversions: dict","str","Format a unit-conversion mapping into a GitHub-flavored markdown table with 'Unit' and 'Value' columns.",["markdown","table","unit","conversion","format","github","gfm"],1,0,0,"2026-09-28T15:14","2026-09-28T15:14",""]];
+
+const CAESAR = {
+  name: "caesar_cipher", args: "text: str, shift: int, mode: str", ret: "str",
+  desc: "Encrypts or decrypts a text string using a Caesar cipher with a given shift, preserving case and non-alphabetic characters.",
+  kw: ["caesar", "cipher", "encrypt", "decrypt", "shift", "text", "cryptography"],
+  src: "src-caesar",
+};
+const WEATHER = {
+  name: "get_current_temperature", args: "city: str", ret: "float",
+  desc: "Returns the current temperature in Celsius for a city from OpenWeatherMap.",
+  kw: ["weather", "temperature", "openweathermap", "city", "celsius", "mumbai"],
+  src: "src-weather", env: "OPENWEATHERMAP_API_KEY", web: true,
+};
+const PRUNE_AT = 2;
+const NUM_WORDS = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13 };
+
+const SUGGESTIONS = [
+  { q: 'Build a Caesar cipher tool that can both encrypt and decrypt. Encrypt "TALOS AGENT" with a shift of 7.', what: "Forges a new tool", forge: true },
+  { q: 'Decrypt this Caesar cipher message with shift 7: "AHSVZ HNLUA"', what: "Reuses it once it's in the vault" },
+  { q: "Run this Python code and give me the output: print(sum(range(1, 101)))", what: "Built in, asks before it runs code" },
+  { q: "Use the OpenWeatherMap API to get the current temperature in Mumbai.", what: "Forges a tool that needs an API key", forge: true },
+];
+
+/* ===================== helpers ===================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const STOP = Symbol("stop");
+const GLYPHS = "ΛΣΔ01<>/#_+=*";
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+let speed = 1;
+
+function fmtTime(iso) {
+  if (!iso) return "Never";
+  const d = new Date(iso);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${hh}:${mm}`;
+}
+function fmtClock(iso) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function nowIso() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function splitArgs(args) {
+  const out = []; let depth = 0; let cur = "";
+  for (const ch of args) {
+    if (ch === "[" || ch === "(") depth++;
+    if (ch === "]" || ch === ")") depth--;
+    if (ch === "," && depth === 0) { out.push(cur.trim()); cur = ""; } else cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+const argNames = (args) => splitArgs(args).map((a) => a.split(":")[0].trim()).join(", ");
+const pyRepr = (v) => typeof v === "string" ? JSON.stringify(v) : String(v);
+const pyStr = (v) => `'${String(v).replace(/'/g, "\\'")}'`;
+
+function scramble(el, finalText, duration = 900) {
+  if (!el) return;
+  if (still) { el.textContent = finalText; return; }
+  const start = performance.now();
+  const tick = (now) => {
+    const p = Math.min((now - start) / duration, 1);
+    const settled = Math.floor(p * finalText.length);
+    let out = finalText.slice(0, settled);
+    for (let i = settled; i < finalText.length; i++) out += finalText[i] === " " ? " " : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+    el.textContent = out;
+    if (p < 1) requestAnimationFrame(tick); else el.textContent = finalText;
+  };
+  requestAnimationFrame(tick);
+}
+
+function caesar(text, shift, mode) {
+  let k = mode === "decrypt" ? -shift : shift;
+  k = ((k % 26) + 26) % 26;
+  return [...text].map((c) => {
+    const code = c.charCodeAt(0);
+    if (code >= 65 && code <= 90) return String.fromCharCode(((code - 65 + k) % 26) + 65);
+    if (code >= 97 && code <= 122) return String.fromCharCode(((code - 97 + k) % 26) + 97);
+    return c;
+  }).join("");
+}
+
+/* python-ish highlighter for the code panel */
+const KW = /\b(def|return|if|elif|else|for|in|not|or|and|is|raise|import|from|continue|None|True|False)\b/g;
+function highlight(lines) {
+  let inDoc = false;
+  return lines.map((raw) => {
+    const e = esc(raw);
+    const triple = (raw.match(/"""/g) || []).length;
+    if (inDoc || raw.trim().startsWith('"""')) {
+      const html = `<span class="str">${e}</span>`;
+      if (inDoc && triple) inDoc = false;
+      else if (!inDoc && triple === 1) inDoc = true;
+      return html;
+    }
+    let h = e.replace(/(f?&quot;.*?&quot;|&#39;.*?&#39;)/g, "\u0000$1\u0001");
+    h = h.split(/(\u0000[^\u0001]*\u0001)/).map((part) => part.startsWith("\u0000")
+      ? `<span class="str">${part.slice(1, -1)}</span>`
+      : part.replace(KW, '<span class="kw">$1</span>')).join("");
+    return h;
+  });
+}
+
+/* ===================== state ===================== */
+function freshVault() {
+  return VAULT_DATA.map(([name, args, ret, desc, kw, uses, fails, streak, created, last, lastFail]) => ({
+    name, args, ret, desc, kw, uses, fails, streak, created, last, lastFail,
+    lastFailAt: lastFail ? last : "", web: name.startsWith("fetch_"), fresh: false,
+  }));
+}
+const S = {
+  vault: freshVault(), sessions: [], cur: null, viewSession: null, sessionCount: 0, allRuns: 0, current: null, viewing: null, busy: false, detailShown: null,
+  askExec: true, env: {}, filter: "all", query: "", selected: "caesar_cipher", view: "workbench",
+  dialog: null,
+};
+const findTool = (name) => S.vault.find((t) => t.name === name);
+
+/* ===================== timing ===================== */
+function wait(run, ms) {
+  return new Promise((resolve, reject) => {
+    if (run.cancelled) return reject(STOP);
+    const t = setTimeout(() => (run.cancelled ? reject(STOP) : resolve()), still ? Math.min(ms, 40) : ms / speed);
+    run.timers.push(t);
+  });
+}
+
+/* ===================== conversation ===================== */
+const msgs = $("#msgs");
+function addYou(text) {
+  const el = document.createElement("div");
+  el.className = "msg you";
+  el.innerHTML = `<span class="who">You</span><p>${esc(text)}</p>`;
+  msgs.append(el); scrollMsgs(); return el;
+}
+function addTalos() {
+  const el = document.createElement("div");
+  el.className = "msg talos";
+  el.innerHTML = `<span class="who">Talos</span><span class="thinking"><span class="orb" aria-hidden="true"><i></i></span><span class="tt">Working on it</span></span>`;
+  msgs.append(el); scrollMsgs();
+  const api = {
+    el,
+    status(text) { const t = el.querySelector(".thinking .tt"); if (t && t.textContent !== text) { const n = document.createElement("span"); n.className = "tt"; n.textContent = text; t.replaceWith(n); } scrollMsgs(); },
+    async say(run, html, note) {
+      el.querySelector(".thinking")?.remove();
+      const p = document.createElement("p");
+      p.innerHTML = html;
+      const words = wrapWords(p);
+      el.append(p);
+      for (const w of words) { w.classList.add("on"); if (!still) { scrollMsgs(); await wait(run, 34); } }
+      if (note) { const n = document.createElement("p"); n.className = "note"; n.innerHTML = note; el.append(n); }
+      $("#live").textContent = "Talos: " + p.textContent;
+      scrollMsgs();
+    },
+    chip(kind, text) {
+      const c = document.createElement("span");
+      c.className = `chip ${kind}`; c.innerHTML = `<i aria-hidden="true"></i>${esc(text)}`;
+      el.append(c); scrollMsgs();
+    },
+    append(node) { el.append(node); scrollMsgs(); },
+    stop(text) { el.querySelector(".thinking")?.remove(); el.querySelectorAll(".caret").forEach((c) => c.remove()); el.querySelectorAll(".wd").forEach((w) => w.classList.add("on")); const p = document.createElement("p"); p.className = "note"; p.textContent = text; el.append(p); },
+  };
+  return api;
+}
+function scrollMsgs() { msgs.scrollTop = msgs.scrollHeight; }
+function wrapWords(root) {
+  const out = []; const nodes = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach((t) => {
+    const frag = document.createDocumentFragment();
+    t.textContent.split(/(\s+)/).forEach((part) => {
+      if (!part) return;
+      if (/^\s+$/.test(part)) { frag.append(part); return; }
+      const w = document.createElement("span"); w.className = "wd"; w.textContent = part; frag.append(w); out.push(w);
+    });
+    t.replaceWith(frag);
+  });
+  return out;
+}
+function renderEmptyConvo() {
+  msgs.innerHTML = `<p class="empty-convo">Messages from this session show up here. Talos keeps the conversation until you close it; the vault stays on disk.</p>`;
+}
+
+/* ===================== graph strip ===================== */
+const STRIPS = {
+  forge: [["planner", "Planner", true], ["forger", "Forger", true], ["tester", "Tester"], ["human", "Human check"], ["learn", "Learn"], ["executor", "Executor", true], ["answer", "Answer"]],
+  vault: [["planner", "Planner", true], ["vault", "Vault tool"], ["skip", "Forge sub-graph skipped"], ["executor", "Executor", true], ["answer", "Answer"]],
+  primitive: [["planner", "Planner", true], ["primitive", "Primitive"], ["executor", "Executor", true], ["answer", "Answer"]],
+  chat: [["planner", "Planner", true], ["answer", "Answer"]],
+};
+const X_ICON = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M2 2l8 8M10 2l-8 8"></path></svg>';
+
+function initStrip(run, kind) {
+  run.strip = kind;
+  run.nodes = {};
+  STRIPS[kind].forEach(([key, label, llm]) => { run.nodes[key] = { label, llm: !!llm, state: "pending" }; });
+  if (kind === "vault") run.nodes.skip.state = "skip";
+  run.links = {};
+}
+function stripHtml(run) {
+  const items = STRIPS[run.strip];
+  return items.map(([key], i) => {
+    const n = run.nodes[key];
+    const node = `<li class="node ${n.state}" data-node="${key}"${n.state === "active" ? ' aria-current="step"' : ""}>${n.state === "fail" ? X_ICON : ""}<span class="nl">${esc(n.label)}</span>${n.llm ? '<span class="pip" aria-hidden="true"></span>' : ""}</li>`;
+    if (i === items.length - 1) return node;
+    const next = items[i + 1][0];
+    const lk = `${key}-${next}`;
+    const swap = key === "forger" && next === "tester" ? " swap" : "";
+    const lit = run.links[lk] ? " lit" : "";
+    return node + `<li class="link${swap}${lit}" data-link="${lk}" aria-hidden="true"></li>`;
+  }).join("");
+}
+function setNode(run, key, state, label) {
+  const n = run.nodes[key]; if (!n) return;
+  n.state = state; if (label) n.label = label;
+  updateRail(run);
+  if (!isShown(run)) return;
+  const el = $(`[data-node="${key}"]`);
+  if (!el) return;
+  el.className = `node ${state}`;
+  if (state === "active") el.setAttribute("aria-current", "step"); else el.removeAttribute("aria-current");
+  el.innerHTML = `${state === "fail" ? X_ICON : ""}<span class="nl">${esc(n.label)}</span>${n.llm ? '<span class="pip" aria-hidden="true"></span>' : ""}`;
+}
+function flow(run, from, to) {
+  const lk = `${from}-${to}`;
+  run.links[lk] = true;
+  if (!isShown(run)) return;
+  const el = $(`[data-link="${lk}"]`);
+  if (!el) return;
+  el.classList.add("lit");
+  el.classList.remove("flow"); void el.offsetWidth; el.classList.add("flow");
+}
+function retrying(run, on) {
+  if (!isShown(run)) return;
+  const el = $('[data-link="forger-tester"]');
+  if (el) el.classList.toggle("retrying", on);
+}
+const isShown = (run) => S.viewing === run;
+const DONE_STATES = ["done", "forge", "skip", "answer", "fail", "stopped"];
+function updateRail(run) {
+  if (!isShown(run)) return;
+  const r = $("#b-rail"); if (!r) return;
+  const all = Object.values(run.nodes);
+  const d = all.filter((n) => DONE_STATES.includes(n.state)).length + all.filter((n) => n.state === "active").length * 0.5;
+  r.querySelector("i").style.width = `${Math.round((d / all.length) * 100)}%`;
+  const live = S.busy && run === S.current && (run.status === "running" || run.status === "waiting");
+  r.classList.toggle("running", live); r.classList.toggle("done", !live);
+}
+
+/* ===================== bench ===================== */
+const bench = $("#bench");
+
+function renderIdle() {
+  const count = S.vault.length;
+  bench.innerHTML = `
+    <div class="idle">
+      <div class="art-wrap"><span class="orbit o1" aria-hidden="true"></span><span class="orbit o2" aria-hidden="true"></span><img class="art" src="assets/hero-mark.webp" alt="" width="1200" height="480"><span class="scan" aria-hidden="true"></span></div>
+      <h1 id="idle-h">Ask for something it can't do yet</h1>
+      <p class="lede"><span id="idle-count">${count}</span> tools are already in the vault. Anything missing, Talos writes, tests, and keeps, so the next similar request skips straight to the answer.</p>
+      <div class="try-wrap">
+        <h2>Try one of these</h2>
+        <div class="try-grid">
+          ${SUGGESTIONS.map((s, i) => `<button type="button" class="try" data-suggest="${i}"><span class="q">${esc(s.q)}</span><span class="what${s.forge ? " gold" : ""}">${s.forge ? '<i aria-hidden="true"></i>' : ""}${esc(s.what)}</span></button>`).join("")}
+        </div>
+      </div>
+    </div>`;
+  const tw = bench.querySelector(".try-wrap");
+  if (tw) tw.insertAdjacentHTML("beforeend", `<p class="setup-line">${S.env.OPENWEATHERMAP_API_KEY ? "3 of 5" : "2 of 4"} keys set in .env. Ask before running code is ${S.askExec ? "on" : "off"}. <a href="#settings">Settings</a></p>`);
+  scramble($("#idle-h"), "Ask for something it can't do yet", 1000);
+  countUp($("#idle-count"), count);
+}
+function countUp(el, target) {
+  if (!el || still) return;
+  const start = performance.now();
+  const tick = (now) => { const p = Math.min((now - start) / 1200, 1); el.textContent = String(Math.round(target * (1 - Math.pow(1 - p, 3)))); if (p < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}
+
+function renderBench(run) {
+  bench.innerHTML = `
+    <div class="rail" id="b-rail" aria-hidden="true"><i></i></div>
+    <div class="b-head">
+      <div class="meta">
+        <span class="label" id="b-label">${esc(run.label || "")}</span>
+        <h1 class="sig" id="b-sig">${run.sig ? sigHtml(run.sig) : esc(run.title || "")}</h1>
+      </div>
+      <div id="b-act">${run.status === "running" || run.status === "waiting" ? '<button type="button" class="pill ghost sm" data-action="stop">Stop run</button>' : ""}</div>
+    </div>
+    <div class="stack" style="gap:16px">
+      <ol class="strip" id="b-strip" aria-label="Graph progress">${stripHtml(run)}</ol>
+      <p class="caption" id="b-cap">${run.caption || ""}</p>
+    </div>
+    <div id="b-banner">${bannerHtml(run)}</div>
+    <div id="b-tabs">${tabsHtml(run)}</div>
+    <div id="b-panel" class="stack">${panelHtml(run)}</div>`;
+  run.ind = null; placeInd(run); updateRail(run);
+}
+const sigHtml = (sig) => `${esc(sig.name)}<span>(${esc(sig.args)})${sig.ret ? ` -&gt; ${esc(sig.ret)}` : ""}</span>`;
+
+function setLabel(run, text) { run.label = text; if (isShown(run)) { const el = $("#b-label"); if (el) el.textContent = text; } }
+function setSig(run, sig) { run.sig = sig; if (isShown(run)) { const el = $("#b-sig"); if (el) el.innerHTML = sigHtml(sig); } }
+function setCaption(run, html) { run.caption = html; if (isShown(run)) { const el = $("#b-cap"); if (el) el.innerHTML = html; } }
+function setActions(run) {
+  if (!isShown(run)) return;
+  const el = $("#b-act");
+  if (el) el.innerHTML = run.status === "running" || run.status === "waiting" ? '<button type="button" class="pill ghost sm" data-action="stop">Stop run</button>' : "";
+}
+function setBanner(run, banner) {
+  run.banner = banner;
+  if (!isShown(run)) return;
+  const el = $("#b-banner"); if (!el) return;
+  el.innerHTML = bannerHtml(run);
+  if (banner && banner.kind === "saved") scramble(el.querySelector("[data-scramble]"), banner.name);
+}
+function bannerHtml(run) {
+  const b = run.banner; if (!b) return "";
+  if (b.kind === "saved") {
+    return `<section class="banner" aria-label="Saved to the vault"><span class="sq" aria-hidden="true"></span><div class="txt"><p><span class="mono gold" data-scramble>${esc(b.name)}</span> is in the vault</p><p class="sub">${esc(b.sub)}</p></div><a class="pill ghost sm" href="#vault" data-open-tool="${esc(b.name)}">Open in vault</a></section>`;
+  }
+  return `<section class="banner removed" aria-label="Removed from the vault"><span class="sq" aria-hidden="true"></span><div class="txt"><p><span class="mono">${esc(b.name)}</span> was removed from the vault</p><p class="sub">${esc(b.sub)}</p></div></section>`;
+}
+const allTabs = (run) => [...(run.tabs || []), { id: "log", label: "Run log" }];
+function tabsHtml(run) {
+  const tabs = allTabs(run);
+  if (tabs.length < 2) return "";
+  return `<div class="tabs" role="tablist" aria-label="Details">${tabs.map((t) => `<button type="button" class="tab" role="tab" data-tab="${t.id}" aria-selected="${run.tab === t.id}">${esc(t.label)}${t.count != null ? ` <span class="n">${t.count}</span>` : ""}</button>`).join("")}<span class="tab-ind" aria-hidden="true"></span></div>`;
+}
+function setTab(run, id) {
+  const changed = run.tab !== id; run.tab = id;
+  if (!isShown(run)) return;
+  $("#b-tabs").innerHTML = tabsHtml(run); placeInd(run); renderPanel(run);
+  if (changed) { const b = $("#b-panel"); b.classList.remove("panel-in"); void b.offsetWidth; b.classList.add("panel-in"); }
+}
+function refreshTabs(run) { if (isShown(run)) { $("#b-tabs").innerHTML = tabsHtml(run); placeInd(run); } }
+function placeInd(run) {
+  if (!isShown(run)) return;
+  const tabs = $("#b-tabs .tabs"); if (!tabs) return;
+  const ind = tabs.querySelector(".tab-ind"); const sel = tabs.querySelector('.tab[aria-selected="true"]');
+  if (!ind || !sel) return;
+  const to = { l: sel.offsetLeft, w: sel.offsetWidth };
+  const from = run.ind || to;
+  ind.style.transition = "none"; ind.style.left = from.l + "px"; ind.style.width = from.w + "px";
+  void ind.offsetWidth;
+  ind.style.transition = ""; ind.style.left = to.l + "px"; ind.style.width = to.w + "px";
+  run.ind = to;
+}
+function renderPanel(run) { if (isShown(run)) { const el = $("#b-panel"); el.innerHTML = panelHtml(run); const cb = el.querySelector(".code-body"); if (cb && run.codeScroll === "bottom") cb.scrollTop = cb.scrollHeight; if (cb && typeof run.codeScroll === "number") { const row = cb.querySelector(`[data-ln="${run.codeScroll}"]`); if (row) cb.scrollTop = row.offsetTop - cb.clientHeight / 2; } } }
+
+function panelHtml(run) {
+  switch (run.tab) {
+    case "code": return codeHtml(run);
+    case "tests": return testsHtml(run);
+    case "attempts": return attemptsHtml(run);
+    case "call": return callHtml(run);
+    case "history": return historyHtml(run);
+    case "answer": return run.answerPanel || "";
+    case "log": return logPanelHtml(run);
+    default: return "";
+  }
+}
+function codeHtml(run) {
+  const c = run.code; if (!c) return "";
+  const lines = c.lines.slice(0, c.shown);
+  const hl = highlight(c.lines).slice(0, c.shown);
+  const rows = lines.map((_, i) => {
+    const n = i + 1;
+    const changed = c.changed === n ? " changed" + (c.flash ? " flash" : "") : "";
+    return `<div class="code-row${changed}" data-ln="${n}"><span class="ln">${n}</span><span class="tx">${hl[i] || " "}</span></div>`;
+  }).join("");
+  const typing = c.shown < c.lines.length ? '<div class="code-row"><span class="ln"></span><span class="tx"><span class="caret gold" aria-hidden="true"></span></span></div>' : "";
+  const note = c.note ? `<p class="code-note"><i aria-hidden="true"></i>${c.note}</p>` : "";
+  return `<figure class="fig code"><figcaption class="fig-cap"><span class="mono">${esc(c.file)}</span><span class="r">${esc(c.cap)}</span></figcaption><div class="code-body" tabindex="0" aria-label="Source code">${rows}${typing}</div></figure>${note}`;
+}
+function testsHtml(run) {
+  const t = run.tests; if (!t) return `<p class="muted">Tests appear here once the Forger has written them.</p>`;
+  const passed = t.list.filter((x) => x.state === "passed").length;
+  const done = t.list.every((x) => x.state === "passed" || x.state === "failed");
+  const right = done ? `${passed} of ${t.list.length} passed` : `Attempt ${t.attempt}, running`;
+  const rows = t.list.map((x) => {
+    let st = x.state;
+    if (x.state === "passed") { st = `<svg class="tick${x.drawn ? " done" : ""}" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5l2.5 2.5L10 3"></path></svg>passed`; x.drawn = true; }
+    else if (x.state === "failed") st = X_ICON + "failed";
+    const flash = x.state === "failed" && !x.flashed ? " just-failed" : "";
+    if (x.state === "failed") x.flashed = true;
+    return `<li class="${x.state}${flash}"><span>${esc(x.name)}</span><span class="st">${st}</span>${x.why ? `<span class="why">${esc(x.why)}</span>` : ""}</li>`;
+  }).join("");
+  const unit = `<figure class="fig"><figcaption class="fig-cap"><span>Unit tests</span><span class="r">${right}</span></figcaption><ul class="tests">${rows}</ul></figure>`;
+  const smoke = run.smoke ? `<figure class="fig"><figcaption class="fig-cap"><span>Smoke test</span><span class="r">Real input, run once</span></figcaption><div class="smoke-body"><div class="muted">${esc(run.smoke.call)}</div><div>${run.smoke.result ? esc(run.smoke.result) : '<span class="gold">running<span class="caret" aria-hidden="true"></span></span>'}</div></div></figure>` : "";
+  const prev = run.attempts && run.attempts.find((a) => !a.ok) && run.attempts.length > 1
+    ? `<div class="stack" style="gap:6px;padding:0 4px"><p style="margin:0;font-size:14px">Attempt ${run.attempts.find((a) => !a.ok).n} failed one test</p><p class="mono muted" style="margin:0;font-size:12px;line-height:1.6;overflow-wrap:anywhere">${esc(run.attempts.find((a) => !a.ok).detail)}</p></div>` : "";
+  const note = `<p class="muted" style="margin:0;font-size:13px;line-height:1.55;padding:0 4px">Tests run in a fresh subprocess inside a temporary folder, with a ${10}-second limit. They can't touch the network or your files.</p>`;
+  return `<div class="grid2">${unit}<div class="stack">${smoke}${prev}${note}</div></div>`;
+}
+function attemptsHtml(run) {
+  const a = run.attempts || [];
+  if (!a.length) return `<p class="muted">No attempts yet.</p>`;
+  return `<ol class="attempts">${a.map((x) => `<li><span class="a-n">Attempt ${x.n}</span><span class="a-r"><span>${x.ok == null ? '<span class="gold">Under test</span>' : x.ok ? "Passed every test" : "Failed"}</span><span>${esc(x.detail || "")}</span></span></li>`).join("")}</ol><p class="muted" style="margin:0;font-size:13px">The Forger gets up to 3 attempts. Each failure goes back to it with the failing test and its traceback.</p>`;
+}
+function callHtml(run) {
+  const c = run.call; if (!c) return "";
+  const args = c.noArgs ? '<dt></dt><dd class="muted">None</dd>' : c.args.slice(0, c.shownArgs == null ? c.args.length : c.shownArgs)
+    .map(([k, v, bad]) => `<dt>${esc(k)}</dt><dd>${bad ? `<span class="bad">${esc(v)}</span>` : esc(v)}</dd>`).join("");
+  const argsFig = `<figure class="fig"><figcaption class="fig-cap"><span>Arguments</span><span class="r">${esc(c.argsCap || "Filled in by the Executor")}</span></figcaption><dl class="args">${args || '<dt></dt><dd class="muted">resolving<span class="caret" aria-hidden="true"></span></dd>'}</dl></figure>`;
+  let res = "";
+  if (c.error) {
+    res = `<figure class="fig alert"><figcaption class="fig-cap"><span>The tool raised an error</span><span class="r">${esc(c.when || "")}</span></figcaption><div class="result small mono">${esc(c.error)}</div></figure>`;
+  } else if (c.result != null) {
+    res = `<figure class="fig"><figcaption class="fig-cap"><span>${esc(c.resultCap || "Result")}</span><span class="r">${esc(c.resultType || "")}</span></figcaption><div class="result${c.smallResult ? " small" : ""}">${esc(c.result)}</div></figure>`;
+  } else {
+    res = `<figure class="fig"><figcaption class="fig-cap"><span>Result</span><span class="r"></span></figcaption><div class="result small muted">${c.pending || "Waiting for the Executor"}</div></figure>`;
+  }
+  let extra = "";
+  if (c.record) {
+    const r = c.record;
+    extra += `<section class="record" aria-label="Tool record"><div><span class="k">Forged</span><span>${esc(r.forged)}</span></div><div class="hot"><span class="k">Uses</span><span>${esc(r.uses)}</span></div><div><span class="k">Failures</span><span>${esc(r.fails)}</span></div></section>`;
+  }
+  if (c.health) {
+    const h = c.health;
+    extra += `<section class="health" aria-label="What this means for the vault"><h3>What this means for the vault</h3><div class="row"><div class="meter" role="img" aria-label="${h.streak} of ${PRUNE_AT} failures in a row">${Array.from({ length: PRUNE_AT }, (_, i) => `<span class="${i < h.streak ? "on" : ""}"></span>`).join("")}</div><span>${h.streak} failure${h.streak === 1 ? "" : "s"} in a row</span></div><p>${h.text}</p>${h.retry ? `<div class="actions"><button type="button" class="pill solid" data-ask="${esc(h.retry.q)}">${esc(h.retry.label)}</button><a class="pill ghost" href="#vault" data-open-tool="${esc(h.tool)}">Open in vault</a></div>` : ""}</section>`;
+  }
+  return `<div class="grid2">${argsFig}${res}</div>${extra}`;
+}
+function historyHtml(run) {
+  const t = findTool(run.toolName);
+  if (!t) return `<p class="muted">This tool is no longer in the vault.</p>`;
+  return `<dl class="dl"><div><dt>Forged</dt><dd>${esc(fmtTime(t.created))}</dd></div><div><dt>Last used</dt><dd>${esc(fmtTime(t.last))}</dd></div><div><dt>Uses</dt><dd>${t.uses}</dd></div><div><dt>Failures</dt><dd>${t.fails} in total, ${t.streak} in a row</dd></div>${t.lastFail ? `<div class="full"><dt>Last failure</dt><dd class="mono">${esc(t.lastFail)}</dd></div>` : ""}</dl>`;
+}
+
+/* ===================== run log (a tab in the bench) ===================== */
+function renderSideIdle() {}
+function renderSide(run) { if (isShown(run) && run.tab === "log") renderPanel(run); }
+function logPanelHtml(run) {
+  return `<div class="log-wrap"><div class="stack" style="gap:12px"><figure class="term${run.logTone ? " " + run.logTone : ""}" id="term">
+      <figcaption class="term-cap"><span>${run === S.current ? "This run" : "Run " + run.n}</span><span id="term-status" class="${run.logStatusGold ? "gold" : "muted"}">${esc(run.logStatus || "")}</span></figcaption>
+      <div class="term-body" id="term-body">${run.log.map(logLineHtml).join("")}</div>
+    </figure>
+    <p class="side-note">Each line is a node in the graph. With LangSmith set up, the whole run is traced there too.</p></div>
+    ${earlierHtml(run)}</div>`;
+}
+function oldSideIdle() {
+  const keys = [
+    ["OPENROUTER_API_KEY", true, "Required. Every model call."],
+    ["TAVILY_API_KEY", true, "Needed for web search."],
+    ["JINA_API_KEY", false, "Optional. Raises web-reading limits."],
+    ["LANGSMITH_API_KEY", false, "Optional. Traces every node."],
+  ];
+  if (S.env.OPENWEATHERMAP_API_KEY) keys.push(["OPENWEATHERMAP_API_KEY", true, "Saved by Human check this session."]);
+  return `
+    <div class="setup stack" style="gap:14px">
+      <div class="stack" style="gap:4px"><h2>Setup</h2><p class="side-note" style="color:var(--stone)">Read from .env when Talos started.</p></div>
+      <ul>${keys.map(([k, ok, d]) => `<li><span class="k"><span>${k}</span><b class="${ok ? "" : "no"}">${ok ? "Set" : "Not set"}</b></span><span class="d">${d}</span></li>`).join("")}</ul>
+    </div>
+    <dl class="facts">
+      <div><dt>Forge retries</dt><dd>3</dd></div>
+      <div><dt>Test time limit</dt><dd>10 seconds</dd></div>
+      <div><dt>Ask before running code</dt><dd>${S.askExec ? "On" : "Off"}</dd></div>
+    </dl>
+    ${earlierHtml()}
+    <p class="side-note">Forged tools are tested in a subprocess, not a sandbox. Run Talos somewhere you're comfortable running new code.</p>`;
+}
+function earlierHtml(except) {
+  const list = (S.viewSession || S.cur).runs.filter((r) => r !== except && r.status !== "running" && r.status !== "waiting");
+  if (!list.length) return "";
+  return `<div class="earlier"><h2>${S.viewSession ? "In this session" : "Earlier in this session"}</h2>${list.slice().reverse().map((r) => `<button type="button" data-run="${r.n}"><span class="q">${esc(r.query)}</span><span class="s${r.summaryGold ? " gold" : ""}">${esc(r.summary || "")}</span></button>`).join("")}</div>`;
+}
+function logLineHtml(l) {
+  if (l.kind === "cmd") return `<div class="cmd">talos › ${esc(l.shown != null ? l.text.slice(0, l.shown) : l.text)}${l.typing ? '<span class="caret" aria-hidden="true"></span>' : ""}</div><div class="gap"></div>`;
+  const caret = l.caret ? '<span class="caret" aria-hidden="true" style="margin-left:4px"></span>' : "";
+  if (l.kind === "sub") return `<div class="ln sub">${esc(l.text)}</div>`;
+  return `<div class="ln${l.tone ? " " + l.tone : ""}${l.fresh ? " fresh" : ""}"><em>${esc(l.label)}</em><span class="lt">${esc(l.text)}</span>${caret}</div>`;
+}
+function redrawLog(run) { if (isShown(run)) { const b = $("#term-body"); if (b) b.innerHTML = run.log.map(logLineHtml).join(""); } }
+function log(run, label, text, tone, opts = {}) {
+  run.log.forEach((l) => { l.caret = false; });
+  const line = { label, text, tone, caret: !!opts.caret, kind: opts.sub ? "sub" : "ln", fresh: true };
+  run.log.push(line);
+  redrawLog(run);
+  line.fresh = false;
+  if (isShown(run) && !opts.sub) {
+    const lines = $$("#term-body .ln"); const last = lines[lines.length - 1];
+    if (last) { scramble(last.querySelector("em"), label, 320); if (tone === "g") scramble(last.querySelector(".lt"), text, 480); }
+  }
+}
+function logStatus(run, text, gold) {
+  run.logStatus = text; run.logStatusGold = !!gold;
+  if (isShown(run)) { const s = $("#term-status"); if (s) { s.textContent = text; s.className = gold ? "gold" : "muted"; } }
+}
+function logTone(run, tone) { run.logTone = tone; if (isShown(run)) { const t = $("#term"); if (t) t.className = `term${tone ? " " + tone : ""}`; } }
+async function typeCmd(run, text) {
+  const l = { kind: "cmd", text, shown: 0, typing: true };
+  run.log.push(l);
+  const step = Math.max(1, Math.ceil(text.length / 40));
+  while (l.shown < text.length) {
+    l.shown = Math.min(text.length, l.shown + step);
+    redrawLog(run);
+    await wait(run, 22);
+  }
+  l.typing = false; l.shown = null; redrawLog(run);
+}
+
+/* ===================== code reveal ===================== */
+function getSource(id) { return $("#" + id).textContent.split("\n"); }
+async function revealCode(run, lines, opts) {
+  run.code = { file: opts.file, cap: opts.cap, lines, shown: 0, changed: null, note: "" };
+  run.codeScroll = "bottom";
+  setTab(run, "code");
+  const perTick = Math.max(1, Math.round(lines.length / 45));
+  while (run.code.shown < lines.length) {
+    run.code.shown = Math.min(lines.length, run.code.shown + perTick);
+    renderPanel(run);
+    await wait(run, 24);
+  }
+  renderPanel(run);
+}
+
+/* ===================== tests ===================== */
+async function runTests(run, names, failIdx, failWhy, attempt) {
+  run.tests = { attempt, list: names.map((name) => ({ name, state: "waiting", why: "" })) };
+  refreshTabs(run);
+  setTab(run, "tests");
+  for (let i = 0; i < names.length; i++) {
+    run.tests.list[i].state = "running"; renderPanel(run);
+    await wait(run, 360);
+    const fail = i === failIdx;
+    run.tests.list[i].state = fail ? "failed" : "passed";
+    if (fail) run.tests.list[i].why = failWhy;
+    renderPanel(run);
+    await wait(run, 90);
+  }
+  return names.length - (failIdx >= 0 ? 1 : 0);
+}
+
+/* ===================== dialogs ===================== */
+function openDialog(html, onMount) {
+  return new Promise((resolve) => {
+    const root = $("#modal-root");
+    const prevFocus = document.activeElement;
+    root.innerHTML = `<div class="scrim" id="scrim">${html}</div>`;
+    const dlg = root.querySelector(".dialog");
+    const close = (value) => {
+      root.innerHTML = ""; S.dialog = null;
+      document.removeEventListener("keydown", onKey, true);
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
+      resolve(value);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); close({ action: "cancel" }); }
+      if (e.key === "Tab") {
+        const f = $$('button, input, [href], [tabindex]:not([tabindex="-1"])', dlg).filter((x) => !x.disabled);
+        if (!f.length) return;
+        const first = f[0]; const last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    S.dialog = { close };
+    onMount(dlg, close);
+  });
+}
+function approvalDialog(tool, code) {
+  return openDialog(`
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-t" aria-describedby="dlg-d">
+      <div class="d-top">
+        <span class="eyebrow">${esc(tool)} needs your approval</span>
+        <h2 id="dlg-t">${tool === "shell_exec" ? "Run this command on your machine?" : "Run this code on your machine?"}</h2>
+        <p id="dlg-d">Talos wrote it to answer your question. It runs as you, with your file access, and stops after 10 seconds.</p>
+      </div>
+      <pre>${esc(code)}</pre>
+      <div class="d-act">
+        <button type="button" class="pill ghost lg" data-d="no">Don't run</button>
+        <button type="button" class="pill solid lg" data-d="yes">${tool === "shell_exec" ? "Run command" : "Run code"}</button>
+      </div>
+      <p class="d-foot">To stop asking, turn off <a href="#settings" data-d="settings">Ask before running code</a> in Settings, or set <span class="mono">TALOS_AUTO_APPROVE_EXEC=true</span> in .env.</p>
+    </div>`, (dlg, close) => {
+    dlg.querySelector('[data-d="no"]').focus();
+    dlg.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-d]"); if (!b) return;
+      if (b.dataset.d === "settings") { close({ action: "no" }); return; }
+      close({ action: b.dataset.d });
+    });
+  });
+}
+function keyDialog(toolName, envVar, service) {
+  return openDialog(`
+    <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-t" novalidate>
+      <div class="d-top">
+        <span class="eyebrow">Human check</span>
+        <h2 id="dlg-t">This tool needs an ${esc(service)} key</h2>
+        <p><span class="mono" style="font-size:14px;color:var(--bone)">${esc(toolName)}</span> reads its key from an environment variable. Talos saves what you paste to .env, so it only asks once.</p>
+      </div>
+      <div class="field">
+        <label for="dlg-key">${esc(envVar)}</label>
+        <input id="dlg-key" type="password" autocomplete="off" placeholder="Paste the key" aria-describedby="dlg-err">
+        <span class="err" id="dlg-err" aria-live="polite"></span>
+      </div>
+      <div class="d-act">
+        <button type="button" class="pill ghost lg" data-d="skip">Skip</button>
+        <button type="submit" class="pill solid lg">Save key</button>
+      </div>
+      <p class="d-foot">If you skip, the tool is still saved to the vault, but it fails when it runs until the key is set. This demo keeps the key in memory only.</p>
+    </form>`, (dlg, close) => {
+    const input = dlg.querySelector("#dlg-key");
+    input.focus();
+    dlg.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = input.value.trim();
+      if (!v) { dlg.querySelector("#dlg-err").textContent = "Paste the key first, or choose Skip."; input.focus(); return; }
+      close({ action: "save", value: v });
+    });
+    dlg.querySelector('[data-d="skip"]').addEventListener("click", () => close({ action: "skip" }));
+  });
+}
+
+/* ===================== query routing ===================== */
+function parseCaesar(text) {
+  const quoted = text.match(/["“]([^"”]+)["”]/);
+  const before = quoted ? text.slice(0, quoted.index) : text;
+  const verbs = [...before.matchAll(/\b(en|de)(?:crypt|code)/gi)];
+  const mode = verbs.length ? (verbs[verbs.length - 1][1].toLowerCase() === "de" ? "decrypt" : "encrypt") : "encrypt";
+  let shift = 7; let shiftWord = null;
+  const num = text.match(/shift(?:\s+of)?\s*(?:=|:)?\s*(-?\d+)/i);
+  const word = text.match(/shift(?:\s+of)?\s+([a-z]+)/i);
+  if (num) shift = parseInt(num[1], 10);
+  else if (word && !/^(of|to|by)$/i.test(word[1])) { shiftWord = word[1].toLowerCase(); }
+  const input = quoted ? quoted[1] : (mode === "decrypt" ? "AHSVZ HNLUA" : "TALOS AGENT");
+  return { text: input, shift, shiftWord, mode };
+}
+function classify(q) {
+  if (/\b(what can you do|who are you|help me understand|how do you work)\b/i.test(q)) return "chat";
+  if (/(caesar|cipher|\bencrypt|\bdecrypt)/i.test(q)) return "caesar";
+  if (/(python|print\s*\(|run this code|run the code)/i.test(q)) return "python";
+  if (/(openweather|weather|temperature)/i.test(q)) return "weather";
+  if (/(how many tools|list (all )?(your|the) tools|in (your|the) (skill )?vault)/i.test(q)) return "vaultlist";
+  return "unknown";
+}
+
+/* ===================== run lifecycle ===================== */
+function newRun(query) {
+  S.allRuns += 1;
+  return { n: S.allRuns, query, tab: "log", title: "Reading your request", status: "running", cancelled: false, timers: [], log: [], nodes: {}, links: {}, tabs: [] };
+}
+async function submit(query) {
+  query = query.trim();
+  if (!query || S.busy || S.viewSession) return;
+  if (S.view !== "workbench") location.hash = "workbench";
+  if (msgs.querySelector(".empty-convo")) msgs.innerHTML = "";
+  $$(".msg", msgs).forEach((m) => m.classList.add("past"));
+  addYou(query);
+  const run = newRun(query);
+  S.current = run; S.viewing = run; S.busy = true; S.cur.runs.push(run);
+  setBusy(true);
+  const kind = classify(query);
+  if (S.cur.runs.length === 1) { S.cur.name = sessionName(kind, query); setTitle(S.cur.name, true); }
+  const talos = addTalos();
+  run.talos = talos;
+  initStrip(run, { caesar: "forge", weather: "forge", python: "primitive", vaultlist: "primitive", chat: "chat", unknown: "chat" }[kind]);
+  run.label = "Planning";
+  renderBench(run); renderSide(run);
+  try {
+    await typeCmd(run, query);
+    if (kind === "caesar") await flowCaesar(run, parseCaesar(query));
+    else if (kind === "python") await flowPython(run, query);
+    else if (kind === "weather") await flowWeather(run, query);
+    else if (kind === "vaultlist") await flowVaultList(run);
+    else if (kind === "chat") await flowChat(run);
+    else await flowUnknown(run);
+    if (run.status === "running") run.status = "done";
+  } catch (e) {
+    if (e !== STOP) { console.error(e); run.status = "failed"; }
+  } finally {
+    S.busy = false; setBusy(false);
+    setActions(run); updateRail(run);
+    if (run.talos) { const b = document.createElement("button"); b.type = "button"; b.className = "run-link"; b.dataset.run = run.n; b.textContent = "View this run"; run.talos.append(b); markRunLinks(); }
+    if (isShown(run)) renderSide(run);
+  }
+}
+function stopRun() {
+  const run = S.current;
+  if (!run || !S.busy) return;
+  run.cancelled = true;
+  run.timers.forEach(clearTimeout);
+  if (S.dialog) S.dialog.close({ action: "cancel" });
+  Object.entries(run.nodes).forEach(([k, n]) => { if (n.state === "active") setNode(run, k, "stopped", n.label.replace(/, .*$/, "") + ", stopped"); });
+  retrying(run, false);
+  run.status = "stopped";
+  log(run, "stop", "stopped by you", "w");
+  logStatus(run, "Stopped");
+  setCaption(run, "You stopped this run. Nothing was saved to the vault.");
+  run.summary = "Stopped";
+  run.talos.stop("Stopped. Ask again whenever you're ready.");
+  setActions(run);
+}
+function setBusy(on) {
+  $("#send").textContent = on ? "Working" : "Send";
+  $("#brand").classList.toggle("busy", on);
+  updateComposer();
+  if (!on && window.matchMedia("(min-width: 821px)").matches) $("#ask").focus({ preventScroll: true });
+}
+function updateComposer() {
+  const past = !!S.viewSession;
+  $("#new-session").hidden = past; $("#back-session").hidden = !past;
+  $("#ask").disabled = S.busy || past; $("#send").disabled = S.busy || past;
+  $("#new-session").disabled = S.busy;
+  $("#composer-hint").textContent = past ? `Viewing an old session. Go back to ${S.cur.name} to ask something.`
+    : S.busy ? "Stop the run to ask something else" : "Enter to send, Shift+Enter for a new line";
+}
+
+/* ===================== flows ===================== */
+async function planner(run, caption, logText) {
+  setNode(run, "planner", "active");
+  setCaption(run, "The Planner is splitting your request into sub-tasks and checking the vault.");
+  run.talos.status("Planning");
+  await wait(run, 900);
+  setNode(run, "planner", "done");
+  log(run, "plan", logText);
+  setCaption(run, caption);
+}
+
+async function forgeTool(run, spec) {
+  // spec: meta, attempts: [{lines, changed?, note?}], tests, failIdx, failWhy, smoke
+  const meta = spec.meta;
+  setLabel(run, "Sub-task 1 of 1, needs a new tool");
+  setSig(run, { name: meta.name, args: meta.args, ret: meta.ret });
+  log(run, "vault", "no match");
+  await wait(run, 400);
+  flow(run, "planner", "forger");
+  run.tabs = [{ id: "code", label: "Code" }, { id: "tests", label: "Tests", count: spec.tests.length }, { id: "attempts", label: "Attempts", count: 0 }];
+  run.attempts = [];
+  run.talos.status(`Writing ${meta.name}`);
+  for (let a = 0; a < spec.attempts.length; a++) {
+    const att = spec.attempts[a];
+    const n = a + 1;
+    setNode(run, "forger", "active");
+    if (a > 0) { setNode(run, "tester", "forge"); retrying(run, true); }
+    setCaption(run, a === 0
+      ? `The Forger is writing <span class="mono">${esc(meta.name)}</span> and its tests in one structured call.`
+      : `<span class="gold">Attempt ${n} of 3.</span> The failing test and its traceback went back to the Forger.`);
+    log(run, "forge", a === 0 ? `${meta.name}()` : `attempt ${n}`, "g");
+    run.attempts.push({ n, ok: null, detail: "" });
+    run.tabs[2].count = run.attempts.length;
+    if (a === 0) {
+      await revealCode(run, att.lines, { file: `${meta.name}.py`, cap: `${att.lines.length} lines, attempt 1` });
+    } else {
+      run.code = { ...run.code, lines: att.lines, cap: `${att.lines.length} lines, attempt ${n}`, changed: att.changed, flash: true, note: att.note || "", shown: att.lines.length };
+      run.codeScroll = att.changed;
+      setTab(run, "code");
+      await wait(run, 1300);
+      run.code.flash = false;
+    }
+    retrying(run, false);
+    setNode(run, "forger", "forge");
+    flow(run, "forger", "tester");
+    setNode(run, "tester", "active");
+    setCaption(run, `<span class="gold">Attempt ${n} of 3.</span> Running ${spec.tests.length} tests in a subprocess, 10-second limit.`);
+    log(run, "test", "running", "g", { caret: true });
+    const fail = a === 0 && spec.failIdx >= 0 && spec.attempts.length > 1;
+    const passed = await runTests(run, spec.tests, fail ? spec.failIdx : -1, spec.failWhy, n);
+    run.log.pop();
+    if (fail) {
+      log(run, "test", `${passed} of ${spec.tests.length} passed, retrying`, "g");
+      log(run, "", spec.tests[spec.failIdx], "", { sub: true });
+      run.attempts[a].ok = false;
+      run.attempts[a].detail = `${spec.tests[spec.failIdx]}\n${spec.failWhy}`;
+      run.talos.status("The first attempt failed a test. Trying again");
+      await wait(run, 700);
+    } else {
+      log(run, "test", `${spec.tests.length} of ${spec.tests.length} passed`, "g");
+      run.attempts[a].ok = true;
+      run.attempts[a].detail = `${spec.tests.length} of ${spec.tests.length} tests passed`;
+    }
+    refreshTabs(run);
+  }
+  if (spec.smoke) {
+    setCaption(run, "Smoke test: the tool runs once on a real input before it can be saved.");
+    run.smoke = { call: spec.smoke.call, result: null };
+    renderPanel(run);
+    await wait(run, 800);
+    run.smoke.result = spec.smoke.result;
+    renderPanel(run);
+    log(run, "smoke", spec.smoke.result);
+    await wait(run, 400);
+  }
+  setNode(run, "tester", "forge");
+  flow(run, "tester", "human");
+}
+
+async function humanCheck(run, meta) {
+  if (!meta.env) {
+    setNode(run, "human", "skip");
+    setCaption(run, "No API key needed, so Human check passed straight through.");
+    await wait(run, 450);
+    flow(run, "human", "learn");
+    return true;
+  }
+  if (S.env[meta.env]) {
+    setNode(run, "human", "skip");
+    setCaption(run, `<span class="mono">${esc(meta.env)}</span> is already set, so Human check passed straight through.`);
+    log(run, "check", "key already set");
+    await wait(run, 450);
+    flow(run, "human", "learn");
+    return true;
+  }
+  setNode(run, "human", "active");
+  run.status = "waiting";
+  setCaption(run, `Human check paused the graph. <span class="mono">${esc(meta.name)}</span> needs <span class="mono">${esc(meta.env)}</span>.`);
+  log(run, "check", "waiting for a key", "g", { caret: true });
+  logStatus(run, "Waiting for you", true);
+  run.talos.status("The tool is written and tested. It needs an API key before it can run");
+  await wait(run, 350);
+  const res = await keyDialog(meta.name, meta.env, "OpenWeatherMap");
+  if (run.cancelled) throw STOP;
+  run.status = "running";
+  run.log.pop();
+  if (res.action === "save") {
+    S.env[meta.env] = res.value;
+    log(run, "check", "key saved to .env");
+    setNode(run, "human", "done");
+    setCaption(run, `Saved <span class="mono">${esc(meta.env)}</span> to .env. Talos won't ask again.`);
+  } else {
+    if (res.action === "cancel") { stopRun(); throw STOP; }
+    log(run, "check", "skipped by you");
+    setNode(run, "human", "done", "Human check, skipped");
+    setCaption(run, "You skipped the key. The tool is still saved, but it will fail until the key is set.");
+  }
+  logStatus(run, "Forging", true);
+  await wait(run, 500);
+  flow(run, "human", "learn");
+  return res.action === "save";
+}
+
+async function learn(run, meta, sub) {
+  setNode(run, "learn", "active");
+  setCaption(run, "Learn is writing the .py file and its manifest entry.");
+  await wait(run, 600);
+  const now = nowIso();
+  S.vault.push({ name: meta.name, args: meta.args, ret: meta.ret, desc: meta.desc, kw: meta.kw, uses: 0, fails: 0, streak: 0, created: now, last: "", lastFail: "", lastFailAt: "", web: !!meta.web, fresh: true, src: meta.src });
+  S.selected = meta.name;
+  $("#vault-badge").hidden = false;
+  setNode(run, "learn", "done");
+  log(run, "learn", "saved to the vault");
+  setBanner(run, { kind: "saved", name: meta.name, sub });
+  flow(run, "learn", "executor");
+  await wait(run, 900);
+}
+
+async function flowCaesar(run, p) {
+  let tool = findTool(CAESAR.name);
+  if (!tool) {
+    await planner(run, "1 sub-task. Nothing in the vault matches, so it needs a new tool.", "1 sub-task, needs a new tool");
+    logStatus(run, "Forging", true);
+    const src = getSource(CAESAR.src);
+    const bad = src.slice(); bad[47] = "    effective_shift = shift";
+    await forgeTool(run, {
+      meta: CAESAR,
+      attempts: [{ lines: bad }, { lines: src, changed: 48, note: "Line 48 is new in attempt 2. Decrypt now shifts backwards instead of forwards." }],
+      tests: ["test_encrypt_shifts_forward", "test_decrypt_reverses_encrypt", "test_preserves_case_and_spaces", "test_wraps_past_z", "test_rejects_unknown_mode"],
+      failIdx: 1, failWhy: "AssertionError: 'HOZCG OUSBH' != 'TALOS AGENT'",
+      smoke: { call: 'caesar_cipher(text="TALOS AGENT", shift=7, mode="encrypt")', result: "'AHSVZ HNLUA'" },
+    });
+    await humanCheck(run, CAESAR);
+    await learn(run, CAESAR, "Next time a request needs a Caesar cipher, Talos skips forging and goes straight to Execute.");
+    run.forged = true;
+    tool = findTool(CAESAR.name);
+    run.tabs = [{ id: "code", label: "Code" }, { id: "tests", label: "Tests", count: 5 }, { id: "attempts", label: "Attempts", count: run.attempts.length }, { id: "call", label: "Call" }];
+    refreshTabs(run);
+    await executeCaesar(run, tool, p, true);
+  } else {
+    initStrip(run, "vault");
+    renderBench(run);
+    await planner(run, `The Planner matched <span class="mono">caesar_cipher</span> on the keywords caesar, cipher and ${p.mode}. Nothing will be written or tested this time.`, "1 sub-task, in the vault");
+    setLabel(run, "Sub-task 1 of 1, found in the vault");
+    setSig(run, { name: CAESAR.name, args: CAESAR.args, ret: CAESAR.ret });
+    flow(run, "planner", "vault");
+    setNode(run, "vault", "done");
+    log(run, "vault", CAESAR.name);
+    logTone(run, "warm");
+    logStatus(run, "0 tools forged");
+    run.talos.status("Found caesar_cipher in the vault");
+    await wait(run, 500);
+    flow(run, "vault", "skip");
+    await wait(run, 350);
+    flow(run, "skip", "executor");
+    run.tabs = [{ id: "call", label: "Call" }, { id: "code", label: "Code" }, { id: "history", label: "History" }];
+    run.toolName = CAESAR.name;
+    run.code = { file: "caesar_cipher.py", cap: "63 lines", lines: getSource(CAESAR.src), shown: 63 };
+    await executeCaesar(run, tool, p, false);
+  }
+}
+
+async function executeCaesar(run, tool, p, afterForge) {
+  run.toolUsed = tool.name;
+  setNode(run, "executor", "active");
+  setCaption(run, "The Executor is reading your message and filling in the arguments.");
+  run.talos.status("Running caesar_cipher");
+  const shiftVal = p.shiftWord ? JSON.stringify(p.shiftWord) : String(p.shift);
+  run.call = { args: [["text", JSON.stringify(p.text)], ["shift", shiftVal, !!p.shiftWord], ["mode", JSON.stringify(p.mode)]], shownArgs: 0 };
+  setTab(run, "call");
+  for (let i = 1; i <= 3; i++) { await wait(run, 260); run.call.shownArgs = i; renderPanel(run); }
+  await wait(run, 450);
+  const now = nowIso();
+  if (p.shiftWord) {
+    const err = "TypeError: shift must be an int, got str";
+    tool.fails += 1; tool.streak += 1; tool.lastFail = err; tool.lastFailAt = now;
+    const pruned = tool.streak >= PRUNE_AT;
+    run.call.error = err; run.call.when = fmtTime(now); run.failed = true;
+    setNode(run, "executor", "fail", "Executor failed");
+    log(run, "execute", "failed, TypeError", "w");
+    logTone(run, "alert"); logStatus(run, "1 step failed");
+    const digit = NUM_WORDS[p.shiftWord];
+    const retryQ = digit != null ? run.query.replace(new RegExp(`shift(\\s+of)?\\s+${p.shiftWord}`, "i"), `shift ${digit}`) : null;
+    if (pruned) {
+      S.vault = S.vault.filter((t) => t !== tool);
+      log(run, "vault", `removed after ${PRUNE_AT} failures in a row`);
+      setBanner(run, { kind: "removed", name: tool.name, sub: `It failed ${PRUNE_AT} times in a row, so the next Caesar request will forge a fresh one. The .py file stays on disk.` });
+    } else {
+      log(run, "vault", `${tool.streak} failure in a row`);
+    }
+    run.call.health = {
+      streak: Math.min(tool.streak, PRUNE_AT), tool: tool.name,
+      text: pruned
+        ? `That was ${PRUNE_AT} failures with no success in between, so Talos took <span class="mono">caesar_cipher</span> out of the vault.`
+        : `If <span class="mono">caesar_cipher</span> fails again before it next succeeds, Talos takes it out of the vault and forges a fresh one next time. One success resets the count. The .py file stays on disk either way.`,
+      retry: retryQ ? { q: retryQ, label: `Ask again with shift ${digit}` } : null,
+    };
+    renderPanel(run);
+    flow(run, "executor", "answer");
+    setNode(run, "answer", "answer");
+    setCaption(run, "The run still finished. Talos explained the failure instead of guessing a result.");
+    run.summary = pruned ? "Failed, removed from the vault" : "Failed, 1 failure in a row";
+    await run.talos.say(run, `I couldn't ${p.mode} that. <span class="mono">caesar_cipher</span> needs the shift as a number, and it was given the word "${esc(p.shiftWord)}".`, digit != null ? `Ask again with "shift ${digit}" and it should work.` : "Ask again with the shift as a number.");
+    run.talos.chip("failed", "caesar_cipher raised a TypeError");
+    return;
+  }
+  const out = caesar(p.text, p.shift, p.mode);
+  tool.uses += 1; tool.streak = 0; tool.last = now;
+  run.call.result = pyStr(out); run.call.resultType = "str";
+  if (!afterForge) run.call.record = { forged: fmtTime(tool.created), uses: `${tool.uses}, including this one`, fails: tool.fails ? `${tool.fails} in total` : "None yet" };
+  renderPanel(run);
+  setNode(run, "executor", "done");
+  log(run, "execute", "done", "w");
+  flow(run, "executor", "answer");
+  setNode(run, "answer", "answer");
+  if (afterForge) {
+    logStatus(run, "1 tool forged", true);
+    setCaption(run, `Done in ${run.attempts.length} attempts. No API key was needed, so Human check passed straight through.`);
+    run.summary = `1 tool forged, ${run.attempts.length} attempts`; run.summaryGold = true;
+  } else {
+    setCaption(run, "Done from the vault. The forge sub-graph never ran.");
+    run.summary = "0 tools forged";
+  }
+  const html = p.mode === "encrypt"
+    ? `"${esc(p.text)}" encrypted with a shift of ${p.shift} is <span class="mono">${esc(out)}</span>.`
+    : `It decrypts to <span class="mono">${esc(out)}</span>.`;
+  await run.talos.say(run, html, afterForge ? (p.mode === "encrypt" ? 'The same tool decrypts too. Ask with "decrypt" and the same shift.' : 'The same tool encrypts too. Ask with "encrypt" and the same shift.') : "");
+  run.talos.chip(afterForge ? "forged" : "reused", afterForge ? "Forged caesar_cipher" : "Reused caesar_cipher from the vault");
+}
+
+function runPython(code) {
+  const m = code.trim().match(/^print\((.*)\)$/s);
+  if (!m) return null;
+  const inner = m[1].trim();
+  const sr = inner.match(/^sum\(range\((-?\d+)\s*,\s*(-?\d+)\)\)$/);
+  if (sr) { let s = 0; for (let i = +sr[1]; i < +sr[2]; i++) s += i; return String(s); }
+  const lit = inner.match(/^(["'])(.*)\1$/);
+  if (lit) return lit[2];
+  if (/^[\d\s+\-*/().%]+$/.test(inner)) {
+    try { const v = Function(`"use strict"; return (${inner.replace(/\*\*/g, "**")});`)(); if (Number.isFinite(v)) return String(v); } catch (e) { return null; }
+  }
+  return null;
+}
+async function flowPython(run, q) {
+  const code = (q.match(/`([^`]+)`/) || q.match(/:\s*(.+)$/) || [null, "print(sum(range(1, 101)))"])[1].trim();
+  await planner(run, "1 sub-task, a built-in primitive. Nothing needs forging.", "1 sub-task, primitive");
+  setLabel(run, "Sub-task 1 of 1, built-in primitive");
+  setSig(run, { name: "python_exec", args: "code: str, timeout: int | None = None", ret: "dict" });
+  flow(run, "planner", "primitive");
+  setNode(run, "primitive", "done");
+  flow(run, "primitive", "executor");
+  run.tabs = [{ id: "call", label: "Call" }];
+  run.call = { args: [["code", JSON.stringify(code)]], argsCap: "Written by the Executor", shownArgs: 1, resultCap: "Output", pending: "Waiting for your approval" };
+  setTab(run, "call");
+  let approved = true;
+  if (S.askExec) {
+    setNode(run, "executor", "active", "Executor, waiting for you");
+    setCaption(run, "The Executor paused. <span class=\"mono\">python_exec</span> runs code on your machine, so it asks first.");
+    log(run, "execute", "paused for approval", "g", { caret: true });
+    logStatus(run, "Waiting for you", true);
+    run.status = "waiting"; setActions(run);
+    run.talos.status("Waiting for you to approve the code");
+    await wait(run, 350);
+    const res = await approvalDialog("python_exec", code);
+    if (run.cancelled) throw STOP;
+    if (res.action === "cancel") { stopRun(); throw STOP; }
+    run.status = "running"; setActions(run);
+    run.log.pop();
+    approved = res.action === "yes";
+  } else {
+    setNode(run, "executor", "active");
+    setCaption(run, 'Ran without asking, because "Ask before running code" is off in Settings.');
+  }
+  if (!approved) {
+    setNode(run, "executor", "fail", "Executor, declined");
+    log(run, "execute", "declined by you", "w");
+    logStatus(run, "Not run");
+    run.call.error = "declined by user"; run.call.when = "You chose Don't run";
+    renderPanel(run);
+    flow(run, "executor", "answer"); setNode(run, "answer", "answer");
+    setCaption(run, "Nothing ran. The sub-task is recorded as declined.");
+    run.summary = "Declined, nothing ran";
+    await run.talos.say(run, "I didn't run the code, so I don't have its output.", "Approve it next time, or turn off the prompt in Settings.");
+    return;
+  }
+  log(run, "execute", "running", "g", { caret: true });
+  run.call.pending = 'running<span class="caret" aria-hidden="true"></span>';
+  renderPanel(run);
+  await wait(run, 700);
+  run.log.pop();
+  const out = runPython(code);
+  if (out == null) {
+    run.call.result = "The demo only runs simple print() calls."; run.call.smallResult = true;
+  } else { run.call.result = out; run.call.resultType = "stdout"; }
+  renderPanel(run);
+  setNode(run, "executor", "done", "Executor");
+  log(run, "execute", "done", "w");
+  logStatus(run, "0 tools forged");
+  flow(run, "executor", "answer"); setNode(run, "answer", "answer");
+  setCaption(run, "Done. Primitives go straight to the Executor, so nothing was forged.");
+  run.summary = "Built-in, approved";
+  await run.talos.say(run, out == null ? "This demo can only run simple <span class=\"mono\">print()</span> calls, so there's no output to show." : `The code prints <span class="mono">${esc(out)}</span>.`);
+}
+
+async function flowWeather(run, q) {
+  const cityM = q.match(/\bin ([A-Z][A-Za-z .'-]+?)(?:[.?!]|$)/);
+  const city = cityM ? cityM[1].trim() : "Mumbai";
+  let tool = findTool(WEATHER.name);
+  let hasKey = !!S.env[WEATHER.env];
+  if (!tool) {
+    await planner(run, "1 sub-task. Nothing in the vault fetches weather, so it needs a new tool.", "1 sub-task, needs a new tool");
+    logStatus(run, "Forging", true);
+    await forgeTool(run, {
+      meta: WEATHER, attempts: [{ lines: getSource(WEATHER.src) }],
+      tests: ["test_reads_temperature_from_response", "test_raises_when_key_missing", "test_raises_on_unknown_city"],
+      failIdx: -1, failWhy: "", smoke: null,
+    });
+    hasKey = await humanCheck(run, WEATHER);
+    await learn(run, WEATHER, "Next time you ask about the weather, Talos reuses it. It reads the key from .env.");
+    run.forged = true;
+    tool = findTool(WEATHER.name);
+    run.tabs = [{ id: "code", label: "Code" }, { id: "tests", label: "Tests", count: 3 }, { id: "attempts", label: "Attempts", count: 1 }, { id: "call", label: "Call" }];
+    refreshTabs(run);
+  } else {
+    initStrip(run, "vault"); renderBench(run);
+    await planner(run, `The Planner matched <span class="mono">${WEATHER.name}</span> in the vault.`, "1 sub-task, in the vault");
+    setLabel(run, "Sub-task 1 of 1, found in the vault");
+    setSig(run, { name: WEATHER.name, args: WEATHER.args, ret: WEATHER.ret });
+    flow(run, "planner", "vault"); setNode(run, "vault", "done"); log(run, "vault", WEATHER.name);
+    logTone(run, "warm"); logStatus(run, "0 tools forged");
+    await wait(run, 400); flow(run, "vault", "skip"); await wait(run, 300); flow(run, "skip", "executor");
+    run.tabs = [{ id: "call", label: "Call" }, { id: "code", label: "Code" }, { id: "history", label: "History" }];
+    run.toolName = WEATHER.name;
+    run.code = { file: `${WEATHER.name}.py`, cap: "34 lines", lines: getSource(WEATHER.src), shown: 999 };
+  }
+  run.toolUsed = WEATHER.name;
+  setNode(run, "executor", "active");
+  setCaption(run, "The Executor is filling in the arguments.");
+  run.call = { args: [["city", JSON.stringify(city)]], shownArgs: 0 };
+  setTab(run, "call");
+  await wait(run, 350); run.call.shownArgs = 1; renderPanel(run); await wait(run, 500);
+  const now = nowIso();
+  if (!hasKey) {
+    const err = "RuntimeError: OPENWEATHERMAP_API_KEY is not set";
+    tool.fails += 1; tool.streak += 1; tool.lastFail = err; tool.lastFailAt = now;
+    run.call.error = err; run.call.when = fmtTime(now); run.failed = true;
+    const pruned = tool.streak >= PRUNE_AT;
+    if (pruned) { S.vault = S.vault.filter((t) => t !== tool); setBanner(run, { kind: "removed", name: tool.name, sub: `It failed ${PRUNE_AT} times in a row. The next weather request forges a fresh one.` }); }
+    run.call.health = { streak: Math.min(tool.streak, PRUNE_AT), tool: tool.name, text: pruned ? "Removed after two failures in a row." : "Set the key and ask again. One success resets the count.", retry: null };
+    renderPanel(run);
+    setNode(run, "executor", "fail", "Executor failed");
+    log(run, "execute", "failed, RuntimeError", "w");
+    logTone(run, "alert"); logStatus(run, "1 step failed");
+    flow(run, "executor", "answer"); setNode(run, "answer", "answer");
+    setCaption(run, "The tool ran without its key and raised an error.");
+    run.summary = run.forged ? "1 tool forged, failed without a key" : "Failed without a key"; run.summaryGold = !!run.forged;
+    await run.talos.say(run, `I couldn't get the temperature. <span class="mono">${WEATHER.name}</span> needs <span class="mono">${WEATHER.env}</span>, and it isn't set.`, "Ask again and paste the key when Human check asks for it.");
+    run.talos.chip("failed", `${WEATHER.name} raised a RuntimeError`);
+    return;
+  }
+  tool.uses += 1; tool.streak = 0; tool.last = now;
+  run.call.result = "Not called in this demo"; run.call.smallResult = true; run.call.resultCap = "Result";
+  renderPanel(run);
+  setNode(run, "executor", "done");
+  log(run, "execute", "done (demo stops before the API)", "w");
+  flow(run, "executor", "answer"); setNode(run, "answer", "answer");
+  if (run.forged) { logStatus(run, "1 tool forged", true); run.summary = "1 tool forged, key saved"; run.summaryGold = true; }
+  else run.summary = "0 tools forged";
+  setCaption(run, "Done. In Talos the Executor would call OpenWeatherMap here with your key.");
+  await run.talos.say(run, `The tool is ready and your key is saved. This demo can't reach the internet, so it stops before calling OpenWeatherMap.`, `In Talos, you'd get the current temperature in ${esc(city)} here.`);
+  run.talos.chip(run.forged ? "forged" : "reused", run.forged ? `Forged ${WEATHER.name}` : `Reused ${WEATHER.name} from the vault`);
+}
+
+async function flowVaultList(run) {
+  await planner(run, "1 sub-task, a built-in primitive: <span class=\"mono\">vault_list</span>.", "1 sub-task, primitive");
+  setLabel(run, "Sub-task 1 of 1, built-in primitive");
+  setSig(run, { name: "vault_list", args: "", ret: "list[dict]" });
+  flow(run, "planner", "primitive"); setNode(run, "primitive", "done"); flow(run, "primitive", "executor");
+  setNode(run, "executor", "active");
+  run.tabs = [{ id: "call", label: "Call" }];
+  run.call = { args: [], noArgs: true, argsCap: "Takes no arguments", resultCap: "Output" };
+  setTab(run, "call");
+  await wait(run, 700);
+  const n = S.vault.length;
+  const top = S.vault.slice().sort((a, b) => b.uses - a.uses).slice(0, 2);
+  run.call.result = `${n} tools`; run.call.resultType = "list[dict]";
+  renderPanel(run);
+  setNode(run, "executor", "done"); log(run, "execute", "done", "w"); logStatus(run, "0 tools forged");
+  flow(run, "executor", "answer"); setNode(run, "answer", "answer");
+  setCaption(run, "Done. Talos read its own manifest.");
+  run.summary = "Built-in";
+  await run.talos.say(run, `There are ${n} tools in the vault. The most used are <span class="mono">${esc(top[0].name)}</span> and <span class="mono">${esc(top[1].name)}</span>, with ${top[0].uses} uses each.`, 'Open <a href="#vault">the Vault</a> to see all of them.');
+}
+
+async function flowChat(run) {
+  await planner(run, "The Planner returned an empty plan. There's nothing to run, so Talos answers directly.", "no sub-tasks, answering directly");
+  run.title = "No tools needed";
+  if (isShown(run)) $("#b-sig").textContent = run.title;
+  setLabel(run, "Conversational");
+  flow(run, "planner", "answer"); setNode(run, "answer", "answer");
+  logStatus(run, "0 tools forged");
+  run.summary = "Answered directly";
+  await run.talos.say(run, `I split your request into steps, then use a built-in tool, reuse one from my vault, or write and test a new Python tool for whatever's missing. The vault holds ${S.vault.length} tools right now.`, "Try asking me to build a Caesar cipher.");
+}
+async function flowUnknown(run) {
+  await planner(run, "This demo only replays a few scripted runs, so the Planner stops here.", "not in this demo");
+  run.title = "Not in this demo";
+  if (isShown(run)) $("#b-sig").textContent = run.title;
+  setLabel(run, "Scripted demo");
+  flow(run, "planner", "answer"); setNode(run, "answer", "answer");
+  logStatus(run, "Nothing ran");
+  run.summary = "Not in this demo";
+  await run.talos.say(run, "This demo can't plan that one. It replays a few scripted runs over the real vault. Try one of these:");
+  const box = document.createElement("div");
+  box.className = "suggest-inline";
+  box.innerHTML = SUGGESTIONS.map((s, i) => `<button type="button" data-suggest="${i}">${esc(s.q)}</button>`).join("");
+  run.talos.append(box);
+}
+
+/* ===================== vault view ===================== */
+function vaultRows() {
+  const q = S.query.toLowerCase();
+  return S.vault
+    .filter((t) => S.filter === "all" || (S.filter === "web" ? t.web : t.fails > 0))
+    .filter((t) => !q || t.name.toLowerCase().includes(q) || t.kw.some((k) => k.includes(q)) || t.desc.toLowerCase().includes(q))
+    .sort((a, b) => (b.last || b.created).localeCompare(a.last || a.created));
+}
+function renderVault(opts = {}) {
+  const all = S.vault.length;
+  $("#v-lede").textContent = `${all} tools, every one written and tested by Talos. Stored as .py files and a manifest.json.`;
+  $("#c-all").textContent = all;
+  $("#c-web").textContent = S.vault.filter((t) => t.web).length;
+  $("#c-failed").textContent = S.vault.filter((t) => t.fails > 0).length;
+  $$(".filters .pill").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.filter === S.filter)));
+  const rows = vaultRows();
+  if (!findTool(S.selected)) S.selected = rows[0] ? rows[0].name : null;
+  $("#v-rows").innerHTML = rows.length ? rows.map((t, i) => `
+    <tr data-tool="${esc(t.name)}" aria-selected="${t.name === S.selected}" class="${t.fresh ? "fresh" : ""}${opts.stagger ? " in" : ""}" style="${opts.stagger ? `animation-delay:${Math.min(i, 14) * 22}ms` : ""}">
+      <td><button type="button" data-tool-btn="${esc(t.name)}"><span class="nm${t.web ? " web" : ""}">${esc(t.name)}</span><span class="ar">(${esc(argNames(t.args))})</span></button>${t.fresh ? '<span class="newtag">New this session</span>' : ""}</td>
+      <td class="num">${t.uses}</td>
+      <td class="num${t.fails ? "" : " zero"}">${t.fails}</td>
+      <td class="num when">${t.last ? esc(sameDay(t.last) ? fmtClock(t.last) : fmtShort(t.last)) : "Not yet"}</td>
+    </tr>`).join("") : `<tr><td colspan="4" class="v-empty">No tools match. Try another word, or clear the filter.</td></tr>`;
+  $("#v-count").textContent = `Showing ${rows.length} of ${all}`;
+  renderDetail();
+}
+const sameDay = (iso) => new Date(iso).toDateString() === new Date().toDateString();
+const fmtShort = (iso) => { const d = new Date(iso); return `${d.getDate()} ${MONTHS[d.getMonth()]}, ${fmtClock(iso)}`; };
+function renderDetail() {
+  const el = $("#v-detail");
+  const t = findTool(S.selected);
+  const changed = S.detailShown !== S.selected; S.detailShown = S.selected;
+  if (!t) { el.innerHTML = `<p class="muted">Pick a tool to see its record.</p>`; return; }
+  if (changed) { el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); }
+  const src = t.src ? getSource(t.src) : null;
+  el.innerHTML = `
+    <div class="stack" style="gap:8px"><h2>${esc(t.name)}</h2><p class="desc">${esc(t.desc)}</p></div>
+    <div class="sigbox">${esc(t.name)}(${esc(t.args)})${t.ret ? " -&gt; " + esc(t.ret) : ""}</div>
+    <ul class="kws" aria-label="Keywords">${t.kw.map((k) => `<li>${esc(k)}</li>`).join("")}</ul>
+    <dl class="dl">
+      <div><dt>Forged</dt><dd>${esc(fmtTime(t.created))}</dd></div>
+      <div><dt>Last used</dt><dd>${t.last ? esc(fmtTime(t.last)) : "Not yet"}</dd></div>
+      <div><dt>Uses</dt><dd>${t.uses}</dd></div>
+      <div><dt>Failures</dt><dd>${t.fails ? `${t.fails} in total, ${t.streak} in a row` : "None"}</dd></div>
+      ${t.lastFail ? `<div class="full"><dt>Last failure${t.lastFailAt ? ", " + esc(fmtTime(t.lastFailAt)) : ""}</dt><dd class="mono">${esc(t.lastFail)}</dd></div>` : ""}
+      <div class="full"><dt>File</dt><dd class="mono">talos/vault/tools/${esc(t.name)}.py</dd></div>
+      <div class="full"><dt>Reaches the web</dt><dd>${t.web ? "Yes, through a free API it found itself" : "No"}</dd></div>
+    </dl>
+    <section class="health" aria-label="Vault health">
+      <div class="row"><div class="meter" role="img" aria-label="${t.streak} of ${PRUNE_AT} failures in a row">${Array.from({ length: PRUNE_AT }, (_, i) => `<span class="${i < t.streak ? "on" : ""}"></span>`).join("")}</div><span style="font-size:14px">${t.streak ? "One more failure in a row removes it" : "Healthy. No failures in a row"}</span></div>
+      <p style="font-size:13px">A success resets the count. Removing a tool only drops it from manifest.json; the .py file stays for you to read.</p>
+    </section>
+    ${src ? `<figure class="fig code-read"><figcaption class="fig-cap"><span class="meta"><span class="mono">${esc(t.name)}.py</span><span>${src.length} lines, written by the Forger</span></span><button type="button" class="pill ghost sm" data-read-src="${esc(t.name)}">Read full file</button></figcaption><div class="code-fade"><div class="code-body" tabindex="0" aria-label="Source code preview">${codeRows(src)}</div></div></figure>` : `<p class="muted" style="margin:0;font-size:13px">Source lives at talos/vault/tools/${esc(t.name)}.py. This demo only bundles the source of tools it forges.</p>`}
+    <div class="actions">
+      <button type="button" class="pill solid" data-use-tool="${esc(t.name)}">Use in a question</button>
+      <button type="button" class="pill ghost" data-remove-tool="${esc(t.name)}">Remove from vault</button>
+    </div>`;
+}
+
+const codeRows = (lines) => highlight(lines).map((h, i) => `<div class="code-row"><span class="ln">${i + 1}</span><span class="tx">${h || " "}</span></div>`).join("");
+function readerDialog(t) {
+  const src = getSource(t.src);
+  const text = src.join("\n");
+  return openDialog(`
+    <div class="dialog reader" role="dialog" aria-modal="true" aria-labelledby="rd-t">
+      <div class="r-head">
+        <div style="min-width:0"><h2 id="rd-t">talos/vault/tools/${esc(t.name)}.py</h2><p>${src.length} lines. Forged, tested and saved by Talos.</p></div>
+        <div class="r-act"><button type="button" class="pill ghost sm" data-r="copy">Copy</button><button type="button" class="pill solid sm" data-r="close">Close</button></div>
+      </div>
+      <div class="code-body" tabindex="0" aria-label="Full source">${codeRows(src)}</div>
+    </div>`, (dlg, close) => {
+    dlg.querySelector('[data-r="close"]').focus();
+    dlg.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-r]"); if (!b) return;
+      if (b.dataset.r === "close") { close({ action: "close" }); return; }
+      try { await navigator.clipboard.writeText(text); b.textContent = "Copied"; }
+      catch (err) {
+        const body = dlg.querySelector(".code-body"); const range = document.createRange(); range.selectNodeContents(body);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); b.textContent = "Selected, press Ctrl+C";
+      }
+      setTimeout(() => { b.textContent = "Copy"; }, 1800);
+    });
+    dlg.parentElement.addEventListener("click", (e) => { if (e.target === dlg.parentElement) close({ action: "close" }); });
+  });
+}
+
+/* ===================== settings view ===================== */
+function renderSettings() {
+  const keys = [
+    ["OPENROUTER_API_KEY", true, "Required. Every model call goes through OpenRouter."],
+    ["TAVILY_API_KEY", true, "Needed for web search."],
+    ["JINA_API_KEY", false, "Optional. Raises web-reading limits."],
+    ["LANGSMITH_API_KEY", false, "Optional. Traces every node in LangSmith."],
+    ["OPENWEATHERMAP_API_KEY", !!S.env.OPENWEATHERMAP_API_KEY, S.env.OPENWEATHERMAP_API_KEY ? "Saved by Human check this session." : "Asked for when a tool needs it."],
+  ];
+  $("#settings-in").innerHTML = `
+    <h1>Settings</h1>
+    <section aria-labelledby="set-safety">
+      <h2 id="set-safety">Safety</h2>
+      <div class="switch-row">
+        <div><span id="ask-lbl">Ask before running code</span><p>Talos shows you every <span class="mono">python_exec</span> and <span class="mono">shell_exec</span> call and waits for you. Turning this off is the same as <span class="mono">TALOS_AUTO_APPROVE_EXEC=true</span>.</p></div>
+        <button type="button" class="switch" role="switch" aria-checked="${S.askExec}" aria-labelledby="ask-lbl" id="ask-switch"></button>
+      </div>
+    </section>
+    <section aria-labelledby="set-keys" class="setup">
+      <h2 id="set-keys">Keys</h2>
+      <ul>${keys.map(([k, ok, d]) => `<li><div><span class="mono" style="font-size:13px">${k}</span><span class="d">${d}</span></div><span class="${ok ? "" : "muted"}">${ok ? "Set" : "Not set"}</span></li>`).join("")}</ul>
+    </section>
+    <section aria-labelledby="set-forge">
+      <h2 id="set-forge">Forging</h2>
+      <dl class="facts">
+        <div><dt>Model</dt><dd class="mono" style="font-size:13px">deepseek/deepseek-v4.1-flash</dd></div>
+        <div><dt>Forge retries</dt><dd>3</dd></div>
+        <div><dt>Test time limit</dt><dd>10 seconds</dd></div>
+        <div><dt>Model call time limit</dt><dd>120 seconds</dd></div>
+        <div><dt>Removed from the vault after</dt><dd>${PRUNE_AT} failures in a row</dd></div>
+      </dl>
+      <p class="side-note">These come from .env. Change them there and restart Talos.</p>
+    </section>`;
+}
+
+/* ===================== views and events ===================== */
+function showView(v) {
+  if (!["workbench", "vault", "sessions", "settings"].includes(v)) v = "workbench";
+  const changed = S.view !== v;
+  S.view = v;
+  $$(".view").forEach((el) => { el.hidden = el.id !== `view-${v}`; });
+  if (changed) { const cur = $(`#view-${v}`); cur.classList.remove("enter"); void cur.offsetWidth; cur.classList.add("enter"); }
+  $$(".nav a").forEach((a) => { if (a.dataset.view === v) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
+  if (v === "vault") { $("#vault-badge").hidden = true; renderVault({ stagger: changed }); }
+  if (v === "sessions") renderSessions();
+  if (v === "settings") renderSettings();
+  if (v === "workbench" && !S.busy && !S.viewing) renderSideIdle();
+}
+window.addEventListener("hashchange", () => showView(location.hash.slice(1)));
+
+$("#composer").addEventListener("submit", (e) => { e.preventDefault(); const v = $("#ask").value; $("#ask").value = ""; submit(v); });
+$("#ask").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#composer").requestSubmit(); } });
+
+document.addEventListener("click", (e) => {
+  const sug = e.target.closest("[data-suggest]");
+  if (sug) { submit(SUGGESTIONS[+sug.dataset.suggest].q); return; }
+  const ask = e.target.closest("[data-ask]");
+  if (ask) { submit(ask.dataset.ask); return; }
+  if (e.target.closest('[data-action="stop"]')) { stopRun(); return; }
+  const tab = e.target.closest("[data-tab]");
+  if (tab && S.viewing) { S.viewing.codeScroll = null; setTab(S.viewing, tab.dataset.tab); return; }
+  const open = e.target.closest("[data-open-tool]");
+  if (open) { S.selected = open.dataset.openTool; return; }
+  const past = e.target.closest("[data-run]");
+  if (past) {
+    const run = (S.viewSession || S.cur).runs.find((r) => r.n === +past.dataset.run);
+    if (run && !S.busy) { S.viewing = run; renderBench(run); bench.scrollTop = 0; markRunLinks(); }
+    return;
+  }
+  const row = e.target.closest("[data-tool]");
+  if (row) { S.selected = row.dataset.tool; renderVault(); const b = $(`[data-tool-btn="${CSS.escape(S.selected)}"]`); if (b) b.focus(); return; }
+  const rd = e.target.closest("[data-read-src]");
+  if (rd) { const t = findTool(rd.dataset.readSrc); if (t && t.src) readerDialog(t); return; }
+  const use = e.target.closest("[data-use-tool]");
+  if (use) {
+    const name = use.dataset.useTool;
+    location.hash = "workbench";
+    const presets = { caesar_cipher: 'Decrypt this Caesar cipher message with shift 7: "AHSVZ HNLUA"', get_current_temperature: "Use the OpenWeatherMap API to get the current temperature in Mumbai." };
+    $("#ask").value = presets[name] || `Use ${name} on `;
+    setTimeout(() => { const ta = $("#ask"); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 30);
+    return;
+  }
+  const rm = e.target.closest("[data-remove-tool]");
+  if (rm) {
+    const name = rm.dataset.removeTool;
+    if (rm.dataset.confirm !== "1") { rm.dataset.confirm = "1"; rm.textContent = `Remove ${name}?`; return; }
+    S.vault = S.vault.filter((t) => t.name !== name);
+    S.selected = null; renderVault(); return;
+  }
+  if (e.target.closest("#ask-switch")) { S.askExec = !S.askExec; renderSettings(); $("#ask-switch").focus(); return; }
+  if (e.target.closest("#demo-toggle")) { togglePop(); return; }
+  const sp = e.target.closest("[data-speed]");
+  if (sp) { speed = +sp.dataset.speed; $$("[data-speed]").forEach((b) => b.setAttribute("aria-pressed", String(b === sp))); return; }
+  if (e.target.closest("#demo-reset")) { resetDemo(); togglePop(false); return; }
+  if (!e.target.closest("#demo-pop")) togglePop(false);
+});
+$("#v-search").addEventListener("input", (e) => { S.query = e.target.value; renderVault(); });
+document.addEventListener("click", (e) => {
+  const f = e.target.closest("[data-filter]"); if (f) { S.filter = f.dataset.filter; renderVault({ stagger: true }); return; }
+  const o = e.target.closest("[data-open-session]"); if (o) openSession(o.dataset.openSession);
+});
+$("#new-session").addEventListener("click", () => { if (S.busy) return; newSession(); });
+$("#back-session").addEventListener("click", () => backToNow());
+document.addEventListener("pointermove", (e) => {
+  const t = e.target.closest && e.target.closest(".try"); if (!t) return;
+  const b = t.getBoundingClientRect();
+  t.style.setProperty("--mx", `${e.clientX - b.left}px`); t.style.setProperty("--my", `${e.clientY - b.top}px`);
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#demo-pop").hidden) togglePop(false); });
+
+function togglePop(force) {
+  const pop = $("#demo-pop"); const btn = $("#demo-toggle");
+  const open = force == null ? pop.hidden : force;
+  pop.hidden = !open; btn.setAttribute("aria-expanded", String(open));
+}
+function newSession() {
+  if (S.viewSession) backToNow();
+  if (S.cur && S.cur.runs.length) { S.cur.msgsHtml = msgs.innerHTML; S.cur.live = false; }
+  else if (S.cur) S.sessions = S.sessions.filter((x) => x !== S.cur);
+  S.sessionCount += 1;
+  S.cur = { id: `s${S.sessionCount}-${Date.now()}`, name: `Session ${S.sessionCount}`, started: nowIso(), runs: [], live: true };
+  S.sessions.push(S.cur);
+  S.current = null; S.viewing = null; S.viewSession = null;
+  setTitle(S.cur.name, !!S.booted);
+  renderEmptyConvo(); renderIdle(); renderSideIdle(); updateComposer();
+}
+function setTitle(name, animate) { const el = $("#session-title"); if (animate) scramble(el, name, 600); else el.textContent = name; }
+function sessionName(kind, q) {
+  if (kind === "caesar") return "Caesar cipher";
+  if (kind === "python") return "Running Python";
+  if (kind === "weather") { const m = q.match(/\bin ([A-Z][A-Za-z .'-]+?)(?:[.?!]|$)/); return `Weather in ${m ? m[1].trim() : "Mumbai"}`; }
+  if (kind === "chat") return "Getting to know Talos";
+  if (kind === "vaultlist") return "What's in the vault";
+  const w = q.split(/\s+/).slice(0, 4).join(" ");
+  return w.charAt(0).toUpperCase() + w.slice(1);
+}
+function openSession(id) {
+  if (S.busy) return;
+  const sess = S.sessions.find((x) => x.id === id); if (!sess) return;
+  location.hash = "workbench";
+  if (sess === S.cur) { backToNow(); return; }
+  if (!S.viewSession) S.cur.msgsHtml = msgs.innerHTML;
+  S.viewSession = sess;
+  msgs.innerHTML = `<p class="viewing-note"><span>${esc(sess.name)}, ${esc(fmtTime(sess.started))}. Read only.</span></p>` + (sess.msgsHtml || "");
+  $$(".msg", msgs).forEach((m) => m.classList.remove("past"));
+  setTitle(sess.name, true);
+  const last = sess.runs[sess.runs.length - 1];
+  if (last) { S.viewing = last; renderBench(last); renderSide(last); } else { S.viewing = null; renderIdle(); renderSideIdle(); }
+  updateComposer(); markRunLinks();
+  msgs.scrollTop = 0;
+}
+function backToNow() {
+  if (!S.viewSession) return;
+  S.viewSession = null;
+  msgs.innerHTML = S.cur.msgsHtml || "";
+  if (!S.cur.runs.length) renderEmptyConvo();
+  setTitle(S.cur.name, true);
+  const last = S.cur.runs[S.cur.runs.length - 1];
+  if (last) { S.viewing = last; renderBench(last); renderSide(last); } else { S.viewing = null; renderIdle(); renderSideIdle(); }
+  updateComposer(); markRunLinks(); scrollMsgs();
+}
+
+/* seeded history: real runs from the vault on 28 Sep 2026 */
+function staticRun(o) {
+  S.allRuns += 1;
+  const t = findTool(o.tool) || { args: "", ret: "" };
+  const run = { n: S.allRuns, query: o.query, tab: "call", status: "done", cancelled: false, timers: [], log: [], nodes: {}, links: {}, seeded: true, answer: o.answer, toolUsed: o.tool, forged: !!o.forge };
+  initStrip(run, o.forge ? "forge" : "vault");
+  const st = o.forge
+    ? { planner: "done", forger: "forge", tester: "forge", human: "skip", learn: "done", executor: "done", answer: "answer" }
+    : { planner: "done", vault: "done", skip: "skip", executor: "done", answer: "answer" };
+  Object.entries(st).forEach(([k, v]) => { run.nodes[k].state = v; });
+  const keys = STRIPS[run.strip].map((x) => x[0]);
+  for (let i = 0; i < keys.length - 1; i++) run.links[`${keys[i]}-${keys[i + 1]}`] = true;
+  run.label = o.label || (o.forge ? "Sub-task 1 of 1, forged" : "Sub-task 1 of 1, found in the vault");
+  run.sig = { name: o.tool, args: t.args, ret: t.ret };
+  run.caption = o.forge ? "Forged, tested and saved to the vault in this run." : "Done from the vault. The forge sub-graph never ran.";
+  run.tabs = [{ id: "call", label: "Call" }]; run.tab = "call";
+  run.call = { args: o.args, result: o.result, resultType: o.type };
+  const L = (label, text, tone) => ({ label, text, tone, kind: "ln" });
+  run.log = [{ kind: "cmd", text: o.query }, ...(o.log ? o.log.map((x) => L(...x)) : o.forge
+    ? [L("plan", "1 sub-task, needs a new tool"), L("vault", "no match"), L("forge", `${o.tool}()`, "g"), L("test", "passed", "g"), L("learn", "saved to the vault"), L("execute", "done", "w")]
+    : [L("plan", "1 sub-task, in the vault"), L("vault", o.tool), L("execute", "done", "w")])];
+  run.logStatus = o.forge ? "1 tool forged" : "0 tools forged"; run.logStatusGold = !!o.forge; run.logTone = o.forge ? "" : "warm";
+  run.summary = run.logStatus; run.summaryGold = !!o.forge;
+  return run;
+}
+function sessionHtml(runs) {
+  return runs.map((r) => `<div class="msg you"><span class="who">You</span><p>${esc(r.query)}</p></div><div class="msg talos"><span class="who">Talos</span><p>${r.answer}</p><span class="chip ${r.forged ? "forged" : "reused"}"><i aria-hidden="true"></i>${r.forged ? "Forged" : "Reused"} ${esc(r.toolUsed)}${r.forged ? "" : " from the vault"}</span><button type="button" class="run-link" data-run="${r.n}">View this run</button></div>`).join("");
+}
+function markRunLinks() {
+  $$(".run-link", msgs).forEach((b) => b.setAttribute("aria-current", String(!!S.viewing && +b.dataset.run === S.viewing.n)));
+}
+function seedSessions() {
+  const b64 = "VGFsb3MgZm9yZ2VzIHRvb2xzIGF0IHJ1bnRpbWU=";
+  const seeds = [
+    { id: "seed-fib", name: "Fibonacci tools", started: "2026-09-28T14:20", runs: [
+      staticRun({ forge: true, tool: "nth_fibonacci", query: "Build me a tool that returns the Nth Fibonacci number. Then use it to get the 20th Fibonacci number.", args: [["n", "20"]], result: "6765", type: "int", answer: "The 20th Fibonacci number is 6765." }),
+      staticRun({ tool: "nth_fibonacci", query: "What is the 30th Fibonacci number?", args: [["n", "30"]], result: "832040", type: "int", answer: "It's 832040." }),
+    ] },
+    { id: "seed-lev", name: "Edit distance", started: "2026-09-28T14:23", runs: [
+      staticRun({ forge: true, tool: "levenshtein_distance", query: 'Forge a tool that computes the Levenshtein edit distance between two strings. What\'s the distance between "kitten" and "sitting"?', args: [["s1", '"kitten"'], ["s2", '"sitting"']], result: "3", type: "int", answer: 'The edit distance between "kitten" and "sitting" is 3.' }),
+      staticRun({ tool: "levenshtein_distance", query: 'How similar are the words "algorithm" and "altruistic"? Use edit distance.', args: [["s1", '"algorithm"'], ["s2", '"altruistic"']], result: "6", type: "int", answer: "They're 6 edits apart, so not very similar." }),
+    ] },
+    { id: "seed-b64", name: "Base64 round trip", started: "2026-09-28T14:29", runs: [
+      staticRun({ forge: true, tool: "base64_codec", label: "Sub-task 2 of 2, decode", query: 'Build a tool that base64-encodes and decodes strings. Encode "Talos forges tools at runtime" and then decode the result to verify.', args: [["text", `"${b64}"`], ["mode", '"decode"']], result: "'Talos forges tools at runtime'", type: "str",
+        answer: `Encoded, it's <span class="mono">${b64}</span>. Decoding that gives back "Talos forges tools at runtime", so the round trip works.`,
+        log: [["plan", "2 sub-tasks, 1 needs a new tool"], ["vault", "no match"], ["forge", "base64_codec()", "g"], ["test", "passed", "g"], ["learn", "saved to the vault"], ["execute", "encode, done", "w"], ["vault", "base64_codec"], ["execute", "decode, done", "w"]] }),
+    ] },
+  ];
+  seeds.forEach((x) => { x.live = false; x.msgsHtml = sessionHtml(x.runs); S.sessions.push(x); });
+}
+
+/* sessions view */
+const fmtDay = (iso) => { const d = new Date(iso); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+function renderSessions() {
+  const list = S.sessions.filter((x) => x.runs.length || x === S.cur).slice().sort((a, b) => b.started.localeCompare(a.started));
+  const groups = [];
+  list.forEach((x) => {
+    const label = sameDay(x.started) ? "Today" : fmtDay(x.started);
+    let g = groups.find((y) => y.label === label);
+    if (!g) { g = { label, items: [] }; groups.push(g); }
+    g.items.push(x);
+  });
+  let k = 0;
+  $("#sessions-in").innerHTML = `<div><h1>Sessions</h1><p class="lede">Every conversation, and what it forged or reused. Sessions end; the vault they build is shared by all of them.</p></div>`
+    + groups.map((g) => `<section class="day" aria-label="${esc(g.label)}"><h2>${esc(g.label)}</h2>${g.items.map((x) => sessCard(x, k++)).join("")}</section>`).join("");
+}
+function sessCard(x, i) {
+  const forged = [...new Set(x.runs.filter((r) => r.forged).map((r) => r.toolUsed))];
+  const reused = [...new Set(x.runs.filter((r) => !r.forged && r.toolUsed && !r.failed).map((r) => r.toolUsed))].filter((n) => !forged.includes(n));
+  const qs = x.runs.slice(0, 3).map((r) => `<li><i class="${r.failed ? "failed" : r.forged ? "forged" : r.toolUsed ? "reused" : ""}" aria-hidden="true"></i><span>${esc(r.query)}</span></li>`).join("");
+  const more = x.runs.length > 3 ? `<li class="muted" style="padding-left:17px">and ${x.runs.length - 3} more</li>` : "";
+  const isCur = x === S.cur;
+  const stats = `${x.runs.length} ${x.runs.length === 1 ? "run" : "runs"}${forged.length ? `, ${forged.length} forged` : ""}`;
+  const tools = forged.length || reused.length ? `<div class="tools">${forged.map((n) => `<span class="forged">${esc(n)}</span>`).join("")}${reused.map((n) => `<span>${esc(n)}</span>`).join("")}</div>` : "";
+  return `<article class="sess" style="animation-delay:${i * 60}ms"><div class="when"><b>${esc(fmtClock(x.started))}</b><span>${esc(stats)}</span>${isCur ? '<span class="live">Now</span>' : ""}</div><div class="body"><h3>${esc(x.name)}</h3>${x.runs.length ? `<ol>${qs}${more}</ol>` : '<p class="sess-empty" style="margin:0">Nothing asked yet.</p>'}${tools}</div><button type="button" class="pill ghost sm" data-open-session="${esc(x.id)}">${isCur ? "Continue" : "Open"}</button></article>`;
+}
+function resetDemo() {
+  if (S.busy) stopRun();
+  S.vault = freshVault(); S.env = {}; S.askExec = true; S.sessions = []; S.cur = null; S.viewSession = null; S.sessionCount = 0; S.allRuns = 0; S.selected = "caesar_cipher"; S.filter = "all"; S.query = "";
+  seedSessions();
+  $("#v-search").value = ""; $("#vault-badge").hidden = true;
+  newSession();
+  if (S.view === "vault") renderVault();
+  if (S.view === "settings") renderSettings();
+  if (S.view === "sessions") renderSessions();
+}
+
+/* boot */
+document.body.classList.add("booting");
+setTimeout(() => document.body.classList.remove("booting"), 1400);
+seedSessions();
+newSession();
+S.booted = true;
+showView(location.hash.slice(1) || "workbench");
+</script>

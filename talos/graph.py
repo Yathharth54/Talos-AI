@@ -48,9 +48,11 @@ StateGraph. We add it directly with `add_node("forge_subgraph", forge_app)`
 
 from __future__ import annotations
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from talos.agents.executor import executor_node
 from talos.agents.forge_subgraph import forge_app
@@ -150,8 +152,9 @@ def build_graph() -> StateGraph:
 # (PydanticAI analogue: passing `message_history=[...]` into Agent.run.
 #  Same idea — here it's automatic per thread.)
 #
-# MemorySaver is in-process only. Swap to SqliteSaver / PostgresSaver later
-# for cross-process persistence (Phase 9 may want this for HITL resume).
+# MemorySaver is in-process only. The web app passes an AsyncPostgresSaver
+# (talos.persistence.checkpoint.open_postgres_saver) to build_app() so
+# paused runs survive restarts.
 #
 # pickle_fallback: the default msgpack serde rejects ints beyond 64 bits,
 # sets, and arbitrary objects — all legitimate tool outputs (e.g. 2**100).
@@ -160,5 +163,19 @@ def make_checkpointer() -> MemorySaver:
     return MemorySaver(serde=JsonPlusSerializer(pickle_fallback=True))
 
 
+def build_app(checkpointer: BaseCheckpointSaver | None = None) -> CompiledStateGraph:
+    """Compile the graph. None → the default in-memory saver (CLI, tests).
+
+    Args:
+        checkpointer: Any LangGraph saver, e.g. the web app's AsyncPostgresSaver.
+
+    Returns:
+        The compiled Talos graph.
+    """
+    return build_graph().compile(
+        checkpointer=checkpointer if checkpointer is not None else make_checkpointer()
+    )
+
+
 checkpointer = make_checkpointer()
-app = build_graph().compile(checkpointer=checkpointer)
+app = build_app(checkpointer)  # unchanged behaviour for `talos.main` and every existing test

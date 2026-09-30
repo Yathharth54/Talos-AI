@@ -90,3 +90,30 @@ def test_learn_idempotent_overwrites(vault):
     assert len(entries) == 1
     assert entries[0]["description"] == "v2"
     assert vault.load("reverse_string")("abc") == "abc"
+
+
+def _learn_graph():
+    from langgraph.graph import END, START, StateGraph
+
+    from talos.state import TalosState
+
+    g: StateGraph = StateGraph(TalosState)
+    g.add_node("learn", learn_node)
+    g.add_edge(START, "learn")
+    g.add_edge("learn", END)
+    return g.compile()
+
+
+def test_learn_emits_vault_saved_with_the_manifest_entry(vault):
+    state = {"forged_tool": _good_forged(), "test_result": {"passed": True}}
+
+    [event] = list(_learn_graph().stream(state, stream_mode="custom"))
+
+    assert event["type"] == "vault.saved"
+    assert event["data"]["sub"] is None
+    assert event["data"]["tool"] == vault.get("reverse_string")
+
+
+def test_learn_emits_nothing_when_tests_failed(vault):
+    state = {"forged_tool": _good_forged(), "test_result": {"passed": False}}
+    assert list(_learn_graph().stream(state, stream_mode="custom")) == []

@@ -8,7 +8,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-load_dotenv(PROJECT_ROOT / ".env")
+
+# Where HITL writes API keys, and the .env we load at startup. Read before
+# load_dotenv so the file itself can't redirect where it is read from.
+DOTENV_PATH = Path(os.environ.get("TALOS_DOTENV_PATH") or PROJECT_ROOT / ".env")
+load_dotenv(DOTENV_PATH)
 
 # All LLM calls go through OpenRouter's OpenAI-compatible endpoint.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -38,13 +42,23 @@ def auto_approve_exec() -> bool:
     return os.environ.get("TALOS_AUTO_APPROVE_EXEC", "false").lower() in {"1", "true", "yes"}
 
 
-VAULT_DIR = PROJECT_ROOT / "talos" / "vault"
+# Vault location. TALOS_VAULT_DIR lets Docker mount the vault elsewhere.
+VAULT_DIR = Path(os.environ.get("TALOS_VAULT_DIR") or PROJECT_ROOT / "talos" / "vault")
 VAULT_TOOLS_DIR = VAULT_DIR / "tools"
 VAULT_MANIFEST_PATH = VAULT_DIR / "manifest.json"
 
 # Where Talos writes files when the user doesn't specify an absolute path.
 # All relative paths in file_read/file_write get anchored here. Gitignored.
-WORKSPACE_DIR = PROJECT_ROOT / "workspace"
+WORKSPACE_DIR = Path(os.environ.get("TALOS_WORKSPACE_DIR") or PROJECT_ROOT / "workspace")
+
+# Persistence. Empty DATABASE_URL means no database (the CLI default).
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+CHECKPOINTER_KINDS = frozenset({"memory", "postgres"})
+CHECKPOINTER = os.environ.get("TALOS_CHECKPOINTER", "memory").strip().lower() or "memory"
+if CHECKPOINTER not in CHECKPOINTER_KINDS:
+    raise ValueError(
+        f"TALOS_CHECKPOINTER must be one of {sorted(CHECKPOINTER_KINDS)}, got {CHECKPOINTER!r}"
+    )
 
 
 def key_status() -> dict[str, bool]:

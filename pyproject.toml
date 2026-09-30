@@ -26,6 +26,10 @@ dependencies = [
     "tavily-python>=0.5.0",
     "python-dotenv>=1.0.0",
     "requests>=2.32.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "alembic>=1.13",
+    "psycopg[binary,pool]>=3.2",
+    "langgraph-checkpoint-postgres>=2.0",
 ]
 
 [project.urls]
@@ -57,6 +61,10 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP"]
 
+[tool.ruff.lint.isort]
+# The repo-root alembic/ folder holds migrations, not the alembic package.
+known-third-party = ["alembic"]
+
 [tool.ruff.lint.per-file-ignores]
 # Prompt text is sent to the LLM verbatim; don't reflow it for a line limit.
 "talos/prompts/*" = ["E501"]
@@ -67,3 +75,9 @@ pythonpath = ["."]
 # Default `python_functions = test` matches anything prefixed "test", which
 # accidentally collects helpers like `tester_node`. Require an underscore.
 python_functions = ["test_*"]
+# Async tests (persistence, event streams) run without per-test markers.
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: needs a real Postgres; run with `-m integration` and DATABASE_URL set",
+]

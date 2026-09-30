@@ -140,3 +140,58 @@ def test_smoke_parses_upstream_json_string_for_dict_param():
     out = smoke_node(_state(code, "count_keys", sub_task, prior=prior))
     assert out["smoke_result"]["passed"] is True, out["smoke_result"]
     assert out["smoke_result"]["output"] == 1
+
+
+# ---- forge.smoke events (overview §4.4) --------------------------------------
+
+
+def _smoke_events(state: dict) -> list[dict]:
+    from langgraph.graph import END, START, StateGraph
+
+    from talos.state import TalosState
+
+    g: StateGraph = StateGraph(TalosState)
+    g.add_node("smoke", smoke_node)
+    g.add_edge(START, "smoke")
+    g.add_edge("smoke", END)
+    return list(g.compile().stream(state, stream_mode="custom"))
+
+
+_ADD_TASK = {
+    "id": 1,
+    "needs": "forge",
+    "input_schema": {"a": "int", "b": "int"},
+    "output_schema": "int",
+    "param_bindings": {"a": 2, "b": 3},
+}
+
+
+def test_smoke_emits_call_and_result_on_success():
+    events = _smoke_events(_state("def add(a, b):\n    return a + b\n", "add", _ADD_TASK))
+    assert events == [
+        {"type": "forge.smoke", "data": {"call": "add(a=2, b=3)", "result": "5", "passed": True}}
+    ]
+
+
+def test_smoke_emits_failure_with_the_call():
+    code = "def add(a, b):\n    raise ValueError('nope')\n"
+    [event] = _smoke_events(_state(code, "add", _ADD_TASK))
+    assert event["data"] == {"call": "add(a=2, b=3)", "result": None, "passed": False}
+
+
+def test_smoke_emits_nothing_when_skipped():
+    state = _state("def f():\n    return 1\n", "f", {}, env_vars=["SOME_KEY"])
+    assert _smoke_events(state) == []
+
+
+def test_smoke_emits_no_call_when_the_tool_cannot_load():
+    [event] = _smoke_events(_state("def add(:\n", "add", _ADD_TASK))
+    assert event["data"] == {"call": None, "result": None, "passed": False}
+
+
+def test_smoke_result_repr_is_capped():
+    from talos.agents.smoke import short_repr
+
+    text = short_repr("x" * 1000)
+    assert len(text) == 200
+    assert text.endswith("…")

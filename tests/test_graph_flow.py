@@ -38,3 +38,29 @@ def test_checkpointer_saves_values_msgpack_cannot():
     value = {"big": 2**100, "set": {1, 2}}
     for saver in (checkpointer, make_checkpointer()):
         assert saver.serde.loads_typed(saver.serde.dumps_typed(value)) == value
+
+
+def test_build_app_defaults_to_a_pickle_fallback_memory_saver():
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from talos.graph import build_app
+
+    compiled = build_app()
+    assert isinstance(compiled.checkpointer, MemorySaver)
+    serde = compiled.checkpointer.serde
+    assert serde.loads_typed(serde.dumps_typed(2**100)) == 2**100
+
+
+def test_build_app_uses_the_given_checkpointer():
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from talos.graph import build_app
+
+    saver = MemorySaver()
+    assert build_app(saver).checkpointer is saver
+
+
+def test_module_app_keeps_the_module_checkpointer():
+    from talos.graph import checkpointer
+
+    assert app.checkpointer is checkpointer

@@ -23,7 +23,24 @@ from talos.agents.executor import (
     _validate_kwargs,
     coerce_to_schema,
 )
+from talos.events import emit
 from talos.state import TalosState
+
+# Longest `call` / `result` string sent in a forge.smoke event.
+_SMOKE_REPR_LIMIT = 200
+
+
+def short_repr(value: Any, limit: int = _SMOKE_REPR_LIMIT) -> str:
+    """repr() capped at `limit` characters, with an ellipsis when cut."""
+    text = repr(value)
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _call_text(name: str, kwargs: dict[str, Any]) -> str:
+    """Render a call like `caesar_cipher(text='abc', shift=3)` for the UI."""
+    args = ", ".join(f"{k}={v!r}" for k, v in kwargs.items())
+    text = f"{name}({args})"
+    return text if len(text) <= _SMOKE_REPR_LIMIT else text[: _SMOKE_REPR_LIMIT - 1] + "…"
 
 
 def _load_forged_function(forged: dict) -> Any:
@@ -66,6 +83,9 @@ def smoke_node(state: TalosState) -> dict:
     Reads:  forged_tool, current_sub_task (input_schema, param_bindings),
             sub_task_results (for upstream output substitution)
     Writes: smoke_result {passed, error, output, skipped}
+    Emits:  forge.smoke {call, result, passed} whenever the gate did not skip.
+            `call` is None when the tool could not be loaded or its
+            arguments could not be built.
     """
     forged = state.get("forged_tool") or {}
     sub_task = state.get("current_sub_task") or {}
@@ -84,6 +104,7 @@ def smoke_node(state: TalosState) -> dict:
     try:
         fn = _load_forged_function(forged)
     except (SyntaxError, ValueError) as e:
+        emit("forge.smoke", call=None, result=None, passed=False)
         return {
             "smoke_result": {
                 "passed": False,
@@ -115,13 +136,16 @@ def smoke_node(state: TalosState) -> dict:
         )
         _validate_kwargs(fn, kwargs)
     except (ValueError, TypeError) as e:
+        emit("forge.smoke", call=None, result=None, passed=False)
         return {
             "smoke_result": {"passed": False, "skipped": False, "error": f"contract violation: {e}"}
         }
 
+    call = _call_text(forged.get("name") or "tool", kwargs)
     try:
         out = fn(**kwargs)
     except Exception as e:  # noqa: BLE001 — smoke is meant to surface anything
+        emit("forge.smoke", call=call, result=None, passed=False)
         return {
             "smoke_result": {
                 "passed": False,
@@ -130,4 +154,5 @@ def smoke_node(state: TalosState) -> dict:
             }
         }
 
+    emit("forge.smoke", call=call, result=short_repr(out), passed=True)
     return {"smoke_result": {"passed": True, "skipped": False, "output": out}}
