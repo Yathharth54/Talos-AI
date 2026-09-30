@@ -6,6 +6,7 @@ string → name/args/ret, an interrupt value → its browser-safe payload.
 
 from __future__ import annotations
 
+import ast
 import re
 import uuid
 from collections.abc import Mapping
@@ -199,7 +200,9 @@ class HealthOut(BaseModel):
 # ---- converters ----------------------------------------------------------------------
 
 _SIGNATURE = re.compile(r"^\s*[\w.]*\s*\((?P<args>.*)\)\s*(?:->\s*(?P<ret>.+?))?\s*$", re.S)
-_WEB_IMPORT = re.compile(r"^\s*(?:import|from)\s+(?:requests|urllib|httpx)\b", re.M)
+_WEB_MODULES = frozenset({"requests", "urllib", "httpx"})
+_IMPORT_LINE = re.compile(r"^\s*import\s+(.+)$")
+_FROM_LINE = re.compile(r"^\s*from\s+([\w.]+)\s+import\b")
 
 
 def split_signature(signature: str) -> tuple[str, str]:
@@ -213,9 +216,47 @@ def split_signature(signature: str) -> tuple[str, str]:
     return match.group("args").strip(), (match.group("ret") or "").strip()
 
 
+def imported_modules(source: str) -> set[str]:
+    """Top-level names of every module `source` imports (`import a.b, c` → {"a", "c"}).
+
+    Uses the AST; source that doesn't parse falls back to reading import lines.
+
+    Args:
+        source: Python source code.
+
+    Returns:
+        Top-level module names, excluding relative imports.
+    """
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return _imported_modules_by_line(source)
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            found.add(node.module.split(".")[0])
+    return found
+
+
+def _imported_modules_by_line(source: str) -> set[str]:
+    found: set[str] = set()
+    for line in source.splitlines():
+        for statement in line.split("#", 1)[0].split(";"):
+            if match := _FROM_LINE.match(statement):
+                found.add(match.group(1).split(".")[0])
+            elif match := _IMPORT_LINE.match(statement):
+                for part in match.group(1).split(","):
+                    name = part.strip().split(" ")[0]
+                    if name:
+                        found.add(name.split(".")[0])
+    return found
+
+
 def is_web_source(source: str | None) -> bool:
-    """True when a tool's source imports requests, urllib or httpx."""
-    return bool(source) and _WEB_IMPORT.search(source) is not None
+    """True when a tool's source imports requests, urllib or httpx anywhere."""
+    return bool(source) and not _WEB_MODULES.isdisjoint(imported_modules(source))
 
 
 def vault_entry(entry: Mapping[str, Any], source: str | None) -> VaultEntry:

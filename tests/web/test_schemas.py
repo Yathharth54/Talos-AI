@@ -46,6 +46,35 @@ def test_web_means_it_imports_an_http_library():
     assert not is_web_source(None)
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import os, requests\n",
+        "import json, urllib.request as ur\n",
+        "import os as o, httpx\n",
+        "import os; import requests\n",
+        "from urllib import parse\n",
+        "import urllib.parse\n",
+        "def broken(:\n    import os, requests  # unparsable: read line by line\n",
+    ],
+)
+def test_web_imports_anywhere_in_an_import_line(source):
+    assert is_web_source(source)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import os, requestsish\n",
+        "from mylib import requests\n",
+        "x = 'import requests'\n",
+        "import os  # uses requests later\n",
+    ],
+)
+def test_non_web_imports_stay_local(source):
+    assert not is_web_source(source)
+
+
 def test_vault_entry_maps_manifest_fields():
     entry = {
         "name": "slugify",
