@@ -24,6 +24,7 @@ test.describe.serial("Approvals and the Ask before running code switch", () => {
     await expect(dialog).toHaveCount(0);
     await expect(page.locator("#b-panel .fig:not(.alert) .result")).toHaveText("5050");
     await expect(page.locator(".msg.talos").last()).toContainText("5050");
+    await expect(page.locator("#b-panel .result.small")).toHaveCount(0);
   });
 
   test("decline: nothing runs", async ({ app, page }) => {

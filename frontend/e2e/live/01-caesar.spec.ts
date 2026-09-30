@@ -25,6 +25,12 @@ test.describe.serial("Caesar: forge, reuse, failure and prune", () => {
     const talos = page.locator(".msg.talos").last();
     await expect(talos).toContainText("It decrypts to TALOS AGENT.");
     await expect(talos.locator(".chip.reused")).toHaveText("Reused caesar_cipher from the vault");
+    // The reference's reuse Call tab (inventory item 14): a full-size result and the tool's record row.
+    await page.locator('[data-tab="call"]').click();
+    await expect(page.locator("#b-panel .fig:not(.alert) .result")).toHaveText("'TALOS AGENT'");
+    await expect(page.locator("#b-panel .result.small")).toHaveCount(0);
+    await expect(page.locator("#b-panel .record")).toBeVisible();
+    await expect(page.locator("#b-panel .record")).toContainText("including this one");
     await page.locator('[data-tab="log"]').click();
     await expect(page.locator("#term")).toHaveClass(/\bwarm\b/);
     await expect(page.locator("#term-status")).toHaveText("0 tools forged");

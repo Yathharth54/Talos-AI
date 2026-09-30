@@ -845,7 +845,8 @@ def test_executor_emits_result_for_a_successful_call(vault, monkeypatch):
     events = _exec_events(_state(current_sub_task=sub_task))
 
     assert [e["type"] for e in events] == ["call.args", "call.result"]
-    assert events[1]["data"] == {"repr": "5", "type": "int", "small": True}
+    # `small` means placeholder text (the reference's smallResult): a real result never is.
+    assert events[1]["data"] == {"repr": "5", "type": "int", "small": False}
 
 
 def test_executor_emits_vault_failure_with_streak_and_prune(vault, monkeypatch):
@@ -930,9 +931,12 @@ def test_is_suspicious(declared, value, expected):
     assert exec_mod.is_suspicious(declared, value) is expected
 
 
-def test_describe_result_marks_long_output_as_not_small_and_caps_it():
-    assert exec_mod.describe_result("x" * 100)["small"] is False
-    assert exec_mod.describe_result("a\nb")["small"] is True  # repr escapes the newline
+@pytest.mark.parametrize("output", [5, "ok", "x" * 100, "a\nb", None, "", {"stdout": "5050\n"}])
+def test_describe_result_never_marks_a_real_result_small(output):
+    assert exec_mod.describe_result(output)["small"] is False
+
+
+def test_describe_result_caps_long_output():
     big = exec_mod.describe_result(list(range(1000)))["repr"]
     assert big.endswith("…") and len(big) == 2000
 

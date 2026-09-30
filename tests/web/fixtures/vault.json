@@ -188,7 +188,7 @@
    "data": {
     "repr": "'TALOS AGENT'",
     "type": "str",
-    "small": true
+    "small": false
    }
   }
  ],

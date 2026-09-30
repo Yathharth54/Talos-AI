@@ -73,6 +73,8 @@ async def test_caesar_forge_then_reuse(driver):
     ]
     assert data(events, "vault.saved")[0]["sub"] == fake_graph.CAESAR_SAVED_SUB
     assert driver.vault.get("caesar_cipher") is not None
+    # `small` means placeholder text (the reference's smallResult), never a short real result.
+    assert data(events, "call.result") == [{"repr": "'AHSVZ HNLUA'", "type": "str", "small": False}]
     assert data(events, "answer.done")[0] == {
         "html": (
             '"TALOS AGENT" encrypted with a shift of 7 is <span class="mono">AHSVZ HNLUA</span>.'
@@ -93,6 +95,7 @@ async def test_caesar_forge_then_reuse(driver):
 
     _, events, _ = await drive(driver, DECRYPT_Q)
     assert data(events, "strip.set")[0]["variant"] == "vault"
+    assert data(events, "call.result") == [{"repr": "'TALOS AGENT'", "type": "str", "small": False}]
     assert data(events, "answer.done")[0]["html"] == (
         'It decrypts to <span class="mono">TALOS AGENT</span>.'
     )
@@ -134,7 +137,7 @@ async def test_python_pauses_for_approval_then_runs(driver):
     approve = Resume("confirm_exec", "approve", {"approved": True})
     _, events, pause = await drive(driver, PYTHON_Q, state, approve)
     assert pause is None
-    assert data(events, "call.result")[0] == {"repr": "5050", "type": "stdout", "small": True}
+    assert data(events, "call.result")[0] == {"repr": "5050", "type": "stdout", "small": False}
     assert data(events, "answer.done")[0]["html"] == (
         'The code prints <span class="mono">5050</span>.'
     )
@@ -166,7 +169,11 @@ async def test_weather_key_save_then_reuse(driver):
     assert pause.value["env_var"] == "OPENWEATHERMAP_API_KEY"
     save = Resume("missing_api_key", "save", None)  # the fake never sees the value
     _, events, _ = await drive(driver, WEATHER_Q, state, save)
-    assert data(events, "call.result")[0]["repr"] == "Not called in this demo"
+    assert data(events, "call.result")[0] == {
+        "repr": "Not called in this demo",
+        "type": "",
+        "small": True,
+    }
     assert events[-1][1]["summary"] == "1 tool forged, key saved"
     assert driver.saved_keys == {"OPENWEATHERMAP_API_KEY"}
 

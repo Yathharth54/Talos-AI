@@ -559,7 +559,7 @@ class FakeDriver:
             return
         out = caesar(p["text"], p["shift"], p["mode"])
         self.vault.record_usage(tool)
-        b.emit("call.result", repr=py_str(out), type="str", small=True)
+        b.emit("call.result", repr=py_str(out), type="str", small=False)
         b.finish("executor", "done", "Executor")
         b.log(copy.LOG_EXEC_DONE, "w")
         b.flow("executor", "answer")
@@ -648,7 +648,7 @@ class FakeDriver:
         if out is None:
             b.emit("call.result", repr=copy.RESULT_PYTHON_UNSUPPORTED, type="", small=True)
         else:
-            b.emit("call.result", repr=out, type="stdout", small=True)
+            b.emit("call.result", repr=out, type="stdout", small=False)
         b.finish("executor", "done", "Executor")
         b.log(copy.LOG_EXEC_DONE, "w")
         b.flow("executor", "answer")

@@ -563,8 +563,6 @@ def _record_failure(state: TalosState, sub_task: dict, reason: str, *, when: str
 # Longest repr sent for one argument / for a result in call.* events.
 _ARG_REPR_LIMIT = 200
 _RESULT_REPR_LIMIT = 2000
-# A result repr at most this long, on one line, is shown inline ("small").
-_SMALL_RESULT = 60
 
 # Declared type name → the Python types a value may have without looking wrong.
 _EXPECTED_TYPES: dict[str, tuple[type, ...]] = {
@@ -641,12 +639,15 @@ def describe_args(
 
 
 def describe_result(output: Any) -> dict[str, Any]:
-    """Data for the `call.result` event: `{repr, type, small}`."""
-    text = _short_repr(output, _RESULT_REPR_LIMIT)
+    """Data for the `call.result` event: `{repr, type, small}`.
+
+    `small` is the reference's placeholder style (`smallResult`), used only
+    for text that stands in for a result. A tool's real output never is.
+    """
     return {
-        "repr": text,
+        "repr": _short_repr(output, _RESULT_REPR_LIMIT),
         "type": type(output).__name__,
-        "small": len(text) <= _SMALL_RESULT and "\n" not in text,
+        "small": False,
     }
 
 
