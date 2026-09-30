@@ -17,10 +17,12 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
+    // Order matters: with workers: 1 and fullyParallel: false, Playwright runs projects in the order declared here.
     // The mobile a11y pass runs first, on the fresh database: its key dialog only shows while no key is saved,
-    // and 09-keys (desktop) saves one.
+    // and 09-keys (desktop) saves one. This is deliberately not a `dependencies` link, which would skip every
+    // desktop spec whenever a mobile one fails.
     { name: "live-mobile", testMatch: /07-a11y\.spec\.ts/, use: { viewport: { width: 390, height: 844 } } },
-    { name: "live-desktop", testIgnore: /mobile/, dependencies: ["live-mobile"] },
+    { name: "live-desktop", testIgnore: /mobile/ },
   ],
   webServer: {
     command: "uv run python frontend/e2e/serve_backend.py",

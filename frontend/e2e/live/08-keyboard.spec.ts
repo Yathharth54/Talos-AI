@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, expectCaesarForged } from "./fixtures";
 import { Q } from "../support/queries";
 import { tabTo } from "../support/keyboard";
 
@@ -16,6 +16,9 @@ test.describe.serial("Keyboard only", () => {
     const before = await page.locator(".run-link").count();
     await page.keyboard.press("Enter");
     await expect(page.locator(".run-link")).toHaveCount(before + 1);
+    // The run is finished when the strip is in its final state and the composer is free again.
+    await expectCaesarForged(page);
+    await expect(page.locator("#ask")).toBeEnabled();
     const link = page.locator(".run-link").last();
     const n = (await link.getAttribute("data-run")) ?? "";
     await tabTo(page, `.run-link[data-run="${n}"]`);
@@ -33,6 +36,7 @@ test.describe.serial("Keyboard only", () => {
     await page.keyboard.press("Enter");
     await expect(page.locator(".run-link")).toHaveCount(before + 2);
     await expect(page.locator(".msg.talos").last()).toContainText("It decrypts to TALOS AGENT.");
+    await expect(page.locator("#ask")).toBeEnabled();
   });
 
   test("approval dialog by keyboard", async ({ app, page }) => {
