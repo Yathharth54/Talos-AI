@@ -63,6 +63,13 @@ test.each(["idle/default", "idle/key-set-ask-off"])("%s (renderIdle)", (id) => {
   expectParity(ssr(<Idle count={s.count} weatherKeySet={!!s.env.OPENWEATHERMAP_API_KEY} askExec={s.askExec} onSuggest={noop} />), c.html!);
 });
 
+test("the idle bench keeps what renderIdle() wrote until it's drawn again (python-no-ask flow)", () => {
+  const { container, rerender } = render(<Idle count={40} weatherKeySet={false} askExec onSuggest={noop} />);
+  rerender(<Idle count={39} weatherKeySet askExec={false} onSuggest={noop} />);
+  expect(container.querySelector(".setup-line")?.textContent).toBe("2 of 4 keys set in .env. Ask before running code is on. Settings");
+  expect(container.querySelector("#idle-count")?.textContent).toBe("40");
+});
+
 test("tabs select, stop and suggestions call back", () => {
   const onTab = vi.fn();
   const run = asRun(fixtureCase("tabs/forge").state.run);

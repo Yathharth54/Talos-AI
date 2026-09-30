@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { SUGGESTIONS } from "../../demo/data";
 import { useCountUp } from "../../hooks/useCountUp";
 import { useScramble } from "../../hooks/useScramble";
@@ -7,8 +7,15 @@ import { esc } from "../../lib/format";
 
 export type IdleProps = { count: number; weatherKeySet: boolean; askExec: boolean; onSuggest(i: number): void };
 
-/** The idle bench (renderIdle, lines 1060–1078). */
-export function Idle({ count, weatherKeySet, askExec, onSuggest }: IdleProps) {
+/**
+ * The idle bench (renderIdle, lines 1060–1078). The reference writes it once per renderIdle() and
+ * never updates it in place (showView's renderSideIdle() is empty), so a change made in Settings or
+ * the Vault shows only when the idle bench is next drawn. The parent keys this component by that
+ * draw, so the values are taken at mount.
+ */
+export function Idle(props: IdleProps) {
+  const [{ count, weatherKeySet, askExec }] = useState(() => props);
+  const { onSuggest } = props;
   const headRef = useRef<HTMLHeadingElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
   useScramble(headRef, COPY.idle.heading, 1000, { onMount: true });
