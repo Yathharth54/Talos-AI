@@ -83,7 +83,7 @@ if CHECKPOINTER not in CHECKPOINTER_KINDS:
 # Web app (talos-web). One uvicorn worker only: runs and the vault are
 # single-process state, and startup recovery fails every `running` run.
 WEB_HOST = os.environ.get("TALOS_WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
-WEB_PORT = int(os.environ.get("TALOS_WEB_PORT", "8000"))
+WEB_PORT = int(os.environ.get("TALOS_WEB_PORT", "").strip() or "8000")
 FAKE_GRAPH = os.environ.get("TALOS_FAKE_GRAPH", "").strip().lower() in {"1", "true", "yes"}
 WEB_DEV = os.environ.get("TALOS_WEB_DEV", "").strip().lower() in {"1", "true", "yes"}
 

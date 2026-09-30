@@ -130,3 +130,8 @@ def test_auto_approve_override_wins_over_the_env(monkeypatch):
     finally:
         settings.set_auto_approve_override(None)
     assert settings.auto_approve_exec() is False  # back to the env var
+
+
+@pytest.mark.parametrize("value", ["", "  "])
+def test_empty_web_port_falls_back_to_8000(reload_settings, value):
+    assert reload_settings(TALOS_WEB_PORT=value).WEB_PORT == 8000
