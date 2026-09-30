@@ -17,8 +17,10 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "live-desktop", testIgnore: /mobile/ },
+    // The mobile a11y pass runs first, on the fresh database: its key dialog only shows while no key is saved,
+    // and 09-keys (desktop) saves one.
     { name: "live-mobile", testMatch: /07-a11y\.spec\.ts/, use: { viewport: { width: 390, height: 844 } } },
+    { name: "live-desktop", testIgnore: /mobile/, dependencies: ["live-mobile"] },
   ],
   webServer: {
     command: "uv run python frontend/e2e/serve_backend.py",
