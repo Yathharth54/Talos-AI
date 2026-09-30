@@ -28,7 +28,7 @@ from langgraph.types import interrupt
 from talos.config import settings
 from talos.state import TalosState
 
-DOTENV_PATH: Path = settings.PROJECT_ROOT / ".env"
+DOTENV_PATH: Path = settings.DOTENV_PATH
 
 
 def _persist_env_var(name: str, value: str) -> None:

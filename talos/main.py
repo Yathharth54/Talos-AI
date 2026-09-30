@@ -5,13 +5,35 @@ Run with: `uv run python -m talos.main`
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command
 
+from talos.config import settings
 from talos.config.logging import setup_logging
 from talos.graph import app
+
+log = logging.getLogger(__name__)
+
+
+def warn_if_postgres_checkpointer() -> bool:
+    """Log a warning when TALOS_CHECKPOINTER asks the CLI for Postgres.
+
+    The REPL is synchronous and starts a fresh thread per process, so it
+    always keeps the in-memory checkpointer. Postgres is for the web app.
+
+    Returns:
+        True if a warning was logged.
+    """
+    if settings.CHECKPOINTER == "memory":
+        return False
+    log.warning(
+        "TALOS_CHECKPOINTER=%s applies to the web app; the CLI keeps its in-memory checkpointer.",
+        settings.CHECKPOINTER,
+    )
+    return True
 
 
 def _drain_interrupts(final_state, config) -> dict:
@@ -58,6 +80,7 @@ def _ask_exec_approval(payload: dict) -> dict:
 
 def main() -> None:
     setup_logging()
+    warn_if_postgres_checkpointer()
     print("Talos AI — type a query or 'exit'.")
     thread_id = f"repl-{uuid.uuid4()}"
     config = {"configurable": {"thread_id": thread_id}}
