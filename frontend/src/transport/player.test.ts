@@ -269,6 +269,16 @@ test("catch-up: a caught-up interrupt opens no dialog, a later one does", async 
   expect(run(s).status).toBe("waiting");
 });
 
+test("an interrupt that arrives after Stop opens no dialog", async () => {
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: true });
+  await p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  // Stop while the page is still playing the forge: the server had already paused on the key.
+  p.abort();
+  await p.push(ev("interrupt", { kind: "missing_api_key", payload: { tool_name: "get_current_temperature", env_var: "OPENWEATHERMAP_API_KEY", service: "OpenWeatherMap" } }));
+  expect(s.ui.get().dialog).toBeNull();
+});
+
 describe.each([
   ["replay", { replay: true }],
   ["catch-up", { catchUpUntil: CUTOFF }],

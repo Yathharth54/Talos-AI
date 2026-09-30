@@ -279,7 +279,8 @@ export class Player {
         const runId = this.opts.runId;
         this.up((r) => R.patch(r, { status: "waiting" }));
         // A caught-up interrupt's dialog comes from GET /api/runs/{id}.pending (the Workbench's reattach).
-        if (this.opts.replay || this.catching) return;
+        // After Stop the run is being stopped on the server, so its interrupt asks nothing (stopRun, line 1485).
+        if (this.opts.replay || this.catching || this.aborted) return;
         this.stores.ui.set({
           dialog:
             d.kind === "confirm_exec"
