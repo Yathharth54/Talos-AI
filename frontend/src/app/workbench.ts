@@ -115,6 +115,7 @@ export class Workbench {
     this.rebench(id);
     const bench = document.getElementById("bench");
     if (bench) bench.scrollTop = 0;
+    this.markRunLinks();
   }
 
   async newSession(): Promise<void> {
@@ -135,6 +136,7 @@ export class Workbench {
     if (id === ss.curId) return this.backToNow();
     this.stores.session.set({ viewId: id });
     this.rebench(sess.runIds.at(-1) ?? null, this.titleAnimated());
+    this.markRunLinks();
     // msgs.scrollTop = 0 (line 2191), also when this session was already the one being read.
     const msgs = document.getElementById("msgs");
     if (msgs) msgs.scrollTop = 0;
@@ -145,6 +147,13 @@ export class Workbench {
     if (!ss.viewId) return;
     this.stores.session.set({ viewId: null });
     this.rebench(curSession(ss).runIds.at(-1) ?? null, this.titleAnimated());
+    this.markRunLinks();
+  }
+
+  /** markRunLinks() (line 2232): marks the link of the run on the bench, if any. */
+  private markRunLinks(): void {
+    const id = this.stores.ui.get().viewingRunId;
+    this.ui({ markedRunN: id ? (this.stores.runs.get().byId[id]?.n ?? null) : null });
   }
 
   showView(hash: string): void {

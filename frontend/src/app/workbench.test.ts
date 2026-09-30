@@ -189,3 +189,23 @@ test("every title change the reference animates bumps titleSeq, even to the same
   expect(seq()).toBe(s0 + 5);
   await settle(stores);
 });
+
+test("run links are marked only where the reference calls markRunLinks() (run end, View this run, open, back)", async () => {
+  const { stores, wb } = await boot();
+  expect(stores.ui.get().markedRunN).toBeNull();
+  await wb.submit("What can you do?");
+  expect(stores.ui.get().markedRunN).toBeNull(); // submit() never marks
+  await settle(stores);
+  expect(stores.ui.get().markedRunN).toBe(6); // the finally (line 1481)
+  void wb.submit("What can you do?");
+  await vi.advanceTimersToNextTimerAsync();
+  expect(stores.ui.get().markedRunN).toBe(6); // stale while run 7 goes, as in the reference
+  await settle(stores);
+  expect(stores.ui.get().markedRunN).toBe(7);
+  wb.viewRun(6);
+  expect(stores.ui.get().markedRunN).toBe(6);
+  wb.openSession("seed-fib");
+  expect(stores.ui.get().markedRunN).toBe(2);
+  wb.backToNow();
+  expect(stores.ui.get().markedRunN).toBe(7);
+});

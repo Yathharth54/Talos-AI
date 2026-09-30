@@ -475,8 +475,9 @@ export class Player {
 
   private finished(e: EventOf<"run.finished">): void {
     const d = e.data;
+    // The run's finally (line 1482) calls renderSide(run), which redraws the Log tab and drops `fresh`.
     this.up((r) => ({
-      ...r,
+      ...(r.tab === "log" ? R.clearFresh(r) : r),
       status: r.status === "running" || r.status === "waiting" ? d.status : r.status,
       summary: d.summary,
       summaryGold: d.summary_gold,
@@ -491,6 +492,8 @@ export class Player {
       ...(stopped ? { status: null, wordsOn: wordCount(m.html), stopNote: COPY.convo.stopped } : {}),
       runLink: true,
     }));
-    this.stores.ui.set({ busy: false });
+    // The new link is followed by markRunLinks() (line 1481), which marks the run on the bench.
+    const viewing = this.stores.ui.get().viewingRunId;
+    this.stores.ui.set({ busy: false, markedRunN: viewing ? (this.stores.runs.get().byId[viewing]?.n ?? null) : null });
   }
 }

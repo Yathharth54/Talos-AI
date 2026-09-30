@@ -239,4 +239,10 @@ export interface UiState {
   titleAnimate: boolean;
   /** Bumped on every setTitle(name, true): the title decodes again even when the name is unchanged (openSession, backToNow, newSession). */
   titleSeq: number;
+  /**
+   * The run whose "View this run" link has aria-current="true". The reference sets it only in
+   * markRunLinks() (run end, View this run, openSession, backToNow), so it lags S.viewing while a new
+   * run goes: the previous run's link stays marked (line 2232).
+   */
+  markedRunN: number | null;
 }

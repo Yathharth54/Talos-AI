@@ -125,17 +125,16 @@ function HeaderC({ wb }: { wb: Workbench }) {
 
 function ConversationC({ wb }: { wb: Workbench }) {
   const ss = useSession((s) => s);
-  const byId = useRuns((s) => s.byId);
   const busy = useUi((u) => u.busy);
   const draft = useUi((u) => u.draft);
   const live = useUi((u) => u.live);
   const titleAnimate = useUi((u) => u.titleAnimate);
   const titleSeq = useUi((u) => u.titleSeq);
-  const viewingRunId = useUi((u) => u.viewingRunId);
+  // markRunLinks() state, not S.viewing: the reference leaves the old run's link marked while a run goes.
+  const viewingN = useUi((u) => u.markedRunN);
   const shown = shownSession(ss);
   const cur = curSession(ss);
   const readOnly = useMemo(() => (ss.viewId ? { name: shown.name, started: shown.started } : null), [ss.viewId, shown.name, shown.started]);
-  const viewingN = viewingRunId ? (byId[viewingRunId]?.n ?? null) : null;
   const hint = ss.viewId ? fill(COPY.convo.hintPast, { name: cur.name }) : busy ? COPY.convo.hintBusy : COPY.convo.hintIdle;
 
   // setBusy(false) refocuses the composer on wide screens (line 1505).

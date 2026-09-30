@@ -23,6 +23,7 @@ export const initialUi = (): UiState => ({
   view: "workbench", viewEnter: 0, dialog: null, busy: false, currentRunId: null, viewingRunId: null,
   selected: "caesar_cipher", filter: "all", query: "", stagger: false, vaultRender: 0, popOpen: false, speed: 1, badge: false,
   booted: false, live: "", confirmRemove: null, draft: "", benchKey: 0, titleAnimate: false, titleSeq: 0,
+  markedRunN: null,
 });
 
 export function initialStates(d: InitialData) {

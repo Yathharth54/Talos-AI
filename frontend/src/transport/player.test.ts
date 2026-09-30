@@ -1,6 +1,6 @@
 import { freshVault } from "../store/vaultOps";
 import { VAULT_ROWS } from "../demo/data";
-import { createStores, type Stores } from "../store/stores";
+import { createStores, updateRun, type Stores } from "../store/stores";
 import { setReducedMotion } from "../test/media";
 import type { EventData, EventType, RunEvent } from "./types";
 import { dwell, momentAfter, Player, revealPlan, typingPlan, whenText } from "./player";
@@ -202,4 +202,26 @@ test("a log line stops being fresh once the log redraws for a command or the Log
   await vi.advanceTimersByTimeAsync(100);
   await typed;
   expect(run(s).log.filter((l) => l.kind !== "cmd").every((l) => !l.fresh)).toBe(true);
+});
+
+test("run.finished redraws the Log tab, which drops fresh (the finally's renderSide, line 1482)", async () => {
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false });
+  void p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  await p.push(ev("log.line", { label: "plan", text: "one", tone: "plain" }));
+  expect(run(s).tab).toBe("log");
+  expect(run(s).log.at(-1)).toMatchObject({ fresh: true });
+  await p.push(ev("run.finished", { status: "done", summary: "Answered directly", summary_gold: false, forged: [], used: [] }));
+  expect(run(s).log.at(-1)).toMatchObject({ fresh: false });
+});
+
+test("run.finished leaves fresh alone when another tab is showing (renderSide only redraws the Log tab)", async () => {
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false });
+  void p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  await p.push(ev("log.line", { label: "plan", text: "one", tone: "plain" }));
+  updateRun(s, "r", (r) => ({ ...r, tab: "call" }));
+  expect(run(s).tab).toBe("call");
+  await p.push(ev("run.finished", { status: "done", summary: "Done", summary_gold: false, forged: [], used: [] }));
+  expect(run(s).log.at(-1)).toMatchObject({ fresh: true });
 });
