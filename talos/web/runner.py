@@ -38,6 +38,7 @@ from talos.web import copy
 from talos.web.board import Board
 from talos.web.naming import session_name
 from talos.web.schemas import pending_payload
+from talos.web.security import redact
 from talos.web.store import Store
 from talos.web.translator import STREAM_MODES, EventTranslator
 
@@ -457,7 +458,7 @@ class RunManager:
             raise
         except Exception as e:  # noqa: BLE001 - any driver failure ends the run cleanly
             log.exception("run %s failed", run_id)
-            message = f"{type(e).__name__}: {e}"
+            message = redact(f"{type(e).__name__}: {e}")  # a key must not reach events or the DB
             forged, used = list(state.get("forged") or []), list(state.get("used") or [])
             if not finish_published:
                 await self._publish(run_id, "error", message=message)

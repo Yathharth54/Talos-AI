@@ -221,6 +221,30 @@ async def test_an_exception_fails_the_run(manager, store):
     assert (run.status, run.error, run.failed) == ("failed", "RuntimeError: kaboom", True)
 
 
+class SecretBoomDriver(ScriptDriver):
+    """Fails with an error whose text contains a remembered key."""
+
+    async def run(self, state, *, query, thread_id, resume):
+        raise RuntimeError(f"401 for key {SECRET}")
+        yield  # pragma: no cover - makes this an async generator
+
+
+SECRET = "sk-" + "leaky0123456789"
+
+
+async def test_a_failure_message_is_redacted(store):
+    from talos.web import security
+
+    security.remember_secret(SECRET)
+    manager = RunManager(store, SecretBoomDriver())
+    session = await store.create_session()
+    run_id = (await manager.start(session.id, "x")).run.id
+    await manager.join(run_id)
+    error = next(e.data for e in await store.events_after(run_id) if e.type == "error")
+    assert error == {"message": "RuntimeError: 401 for key [redacted]"}
+    assert (await store.get_run(run_id)).error == "RuntimeError: 401 for key [redacted]"
+
+
 async def test_subscribe_replays_then_goes_live_then_closes(manager, store):
     session = await store.create_session()
     run_id = (await manager.start(session.id, "pause")).run.id
