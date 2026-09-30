@@ -1247,7 +1247,6 @@
      "title": "Reading your request",
      "status": "running",
      "cancelled": false,
-     "timers": [],
      "log": [],
      "nodes": {
       "planner": {
@@ -1301,8 +1300,7 @@
        {
         "name": "test_decrypt_reverses_encrypt",
         "state": "failed",
-        "why": "AssertionError: 'HOZCG OUSBH' != 'TALOS AGENT'",
-        "flashed": true
+        "why": "AssertionError: 'HOZCG OUSBH' != 'TALOS AGENT'"
        },
        {
         "name": "test_preserves_case_and_spaces",
@@ -1329,7 +1327,6 @@
      "title": "Reading your request",
      "status": "running",
      "cancelled": false,
-     "timers": [],
      "log": [],
      "nodes": {
       "planner": {
@@ -1377,8 +1374,7 @@
        {
         "name": "test_a",
         "state": "passed",
-        "why": "",
-        "drawn": true
+        "why": ""
        },
        {
         "name": "test_b",
