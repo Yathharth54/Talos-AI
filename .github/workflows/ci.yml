@@ -32,3 +32,38 @@ jobs:
       - run: uv sync --extra dev
       # Mocked suite only: no API keys needed. Live tests stay behind RUN_LIVE=1.
       - run: uv run pytest -q
+
+  # Postgres integration suite (spec 03 §6). The conftest gate runs these only
+  # with DATABASE_URL exported and `-m integration`.
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: talos
+          POSTGRES_PASSWORD: talos
+          POSTGRES_DB: talos
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U talos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://talos:talos@localhost:5432/talos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --extra dev
+      - run: uv run alembic upgrade head
+      - run: uv run pytest -q -m integration
+
+  # Proves the image builds (spec 03 §6). Nothing is pushed.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker build .
+      - run: cp .env.example .env && docker compose -f compose.yml -f compose.dev.yml -f compose.test.yml config --quiet

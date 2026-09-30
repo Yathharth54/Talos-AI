@@ -1,0 +1,36 @@
+# Talos web app: `docker compose up` (or `make up`), then http://127.0.0.1:8000.
+# Spec 03 §4. Needs a filled .env next to this file (cp .env.example .env).
+services:
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: talos, POSTGRES_PASSWORD: talos, POSTGRES_DB: talos }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U talos"], interval: 5s, retries: 10 }
+  app:
+    build: .
+    # PID 1 must reap sandbox grandchildren that a timeout kill orphans.
+    init: true
+    depends_on: { db: { condition: service_healthy } }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://talos:talos@db:5432/talos
+      TALOS_CHECKPOINTER: postgres
+      # Pinned here so a host path in .env can't point the container elsewhere.
+      TALOS_VAULT_DIR: /data/vault
+      TALOS_WORKSPACE_DIR: /data/workspace
+      TALOS_DOTENV_PATH: /data/.env
+      TALOS_WEB_HOST: 0.0.0.0
+      TALOS_WEB_PORT: "8000"
+    ports: ["127.0.0.1:8000:8000"]
+    volumes:
+      - ./talos/vault:/data/vault
+      - ./workspace:/data/workspace
+      - ./.env:/data/.env
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 2g
+    pids_limit: 256
+volumes:
+  pgdata:

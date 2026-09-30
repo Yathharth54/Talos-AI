@@ -141,8 +141,33 @@ class SkillManager:
         self._write_manifest(manifest)
         return finalised
 
+    def locate(self, name: str) -> tuple[Path, str]:
+        """Return the tool's file and the function to call in it.
+
+        This is how the executor finds a tool to run in the sandbox
+        (`talos.sandbox`); it reads nothing but the manifest.
+
+        Args:
+            name: The tool's name.
+
+        Returns:
+            `(path to the .py file, function name)`.
+
+        Raises:
+            KeyError: If the tool isn't in the manifest.
+        """
+        entry = self._find(name)
+        if entry is None:
+            raise KeyError(f"No skill named {name!r} in manifest")
+        file_path = self.vault_dir / entry.get("file", f"tools/{name}.py")
+        return file_path, entry.get("function") or name
+
     def load(self, name: str) -> Callable[..., Any]:
         """Return the callable for a registered tool.
+
+        Not used by the executor any more: it runs vault tools in a
+        subprocess through `talos.sandbox`. Kept for backward compatibility
+        and tests. This runs the tool's code in the current process.
 
         Reads the source file as text and `exec()`s it into a fresh dict.
         We deliberately avoid the import system entirely because Python's

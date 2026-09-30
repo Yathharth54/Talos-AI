@@ -1,0 +1,5 @@
+# Publishes Postgres on 127.0.0.1:5432 for running the app and tests outside
+# Docker: `make db` (docker compose -f compose.yml -f compose.dev.yml up -d db).
+services:
+  db:
+    ports: ["127.0.0.1:5432:5432"]
