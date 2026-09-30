@@ -101,3 +101,19 @@ test("a title change without animation shows the new title, even mid-decode", ()
   expect(container.querySelector("#session-title")!.textContent).toBe("Session 2");
   vi.useRealTimers();
 });
+
+test("a titleSeq bump decodes the title again even when the name is unchanged (openSession on the same session)", () => {
+  setReducedMotion(false);
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+  const { container, rerender } = render(<Conversation {...convo({ title: "Fibonacci tools", animateTitle: true, titleSeq: 1 })} />);
+  const el = container.querySelector("#session-title")!;
+  rerender(<Conversation {...convo({ title: "Fibonacci tools", animateTitle: true, titleSeq: 1 })} />);
+  act(() => void vi.advanceTimersByTime(100));
+  expect(el.textContent).toBe("Fibonacci tools");
+  rerender(<Conversation {...convo({ title: "Fibonacci tools", animateTitle: true, titleSeq: 2 })} />);
+  act(() => void vi.advanceTimersByTime(100));
+  expect(el.textContent).not.toBe("Fibonacci tools");
+  act(() => void vi.advanceTimersByTime(1000));
+  expect(el.textContent).toBe("Fibonacci tools");
+  vi.useRealTimers();
+});

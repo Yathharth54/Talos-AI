@@ -9,6 +9,8 @@ import { Message } from "./Message";
 export interface ConversationProps {
   title: string;
   animateTitle: boolean;
+  /** A change re-runs the title's decode even when the name is the same (setTitle(name, true), line 2168). */
+  titleSeq?: number;
   readOnly: { name: string; started: string } | null;
   messages: Msg[];
   empty: boolean;
@@ -31,11 +33,11 @@ function contentSig(m: Msg | undefined): string {
 
 /** The conversation column (lines 630–646; renderEmptyConvo 987–989, openSession 2178–2192, updateComposer 1507–1514). */
 export function Conversation(props: ConversationProps) {
-  const { title, animateTitle, readOnly, messages, empty, busy, viewingN, live, composer } = props;
+  const { title, animateTitle, titleSeq, readOnly, messages, empty, busy, viewingN, live, composer } = props;
   const titleRef = useRef<HTMLSpanElement>(null);
   const msgsRef = useRef<HTMLDivElement>(null);
 
-  // setTitle(name, animate) (line 2168): only a title change decodes, and only when asked. The effect
+  // setTitle(name, animate) (line 2168): a title change or a `titleSeq` bump decodes, only when asked. The effect
   // returns no cleanup, because a cancelled decode restores its own text after React has set the new one.
   const titleMounted = useRef(false);
   const cancelTitle = useRef<(() => void) | null>(null);
@@ -50,7 +52,7 @@ export function Conversation(props: ConversationProps) {
     el.textContent = title;
     if (animateTitle) cancelTitle.current = scramble(el, title, 600);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title]);
+  }, [title, titleSeq]);
   useLayoutEffect(() => () => cancelTitle.current?.(), []);
 
   // scrollMsgs() (line 971) runs only when content is added (addYou, addTalos, status, say, chip, append)

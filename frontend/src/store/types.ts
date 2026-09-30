@@ -237,4 +237,6 @@ export interface UiState {
   benchKey: number;
   /** The next session-title change decodes into place (setTitle(name, true)). */
   titleAnimate: boolean;
+  /** Bumped on every setTitle(name, true): the title decodes again even when the name is unchanged (openSession, backToNow, newSession). */
+  titleSeq: number;
 }
