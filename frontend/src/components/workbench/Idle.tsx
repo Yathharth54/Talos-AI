@@ -5,7 +5,14 @@ import { useScramble } from "../../hooks/useScramble";
 import { COPY, fill } from "../../lib/copy";
 import { esc } from "../../lib/format";
 
-export type IdleProps = { count: number; weatherKeySet: boolean; askExec: boolean; onSuggest(i: number): void };
+export type IdleProps = {
+  count: number;
+  weatherKeySet: boolean;
+  askExec: boolean;
+  onSuggest(i: number): void;
+  /** Live mode: how many of the server's keys are set. Absent in demo mode. */
+  keys?: { set: number; total: number };
+};
 
 /**
  * The idle bench (renderIdle, lines 1060–1078). The reference writes it once per renderIdle() and
@@ -14,7 +21,7 @@ export type IdleProps = { count: number; weatherKeySet: boolean; askExec: boolea
  * draw, so the values are taken at mount.
  */
 export function Idle(props: IdleProps) {
-  const [{ count, weatherKeySet, askExec }] = useState(() => props);
+  const [{ count, weatherKeySet, askExec, keys }] = useState(() => props);
   const { onSuggest } = props;
   const headRef = useRef<HTMLHeadingElement>(null);
   const countRef = useRef<HTMLSpanElement>(null);
@@ -48,7 +55,7 @@ export function Idle(props: IdleProps) {
         </div>
         <p className="setup-line">
           {fill(COPY.idle.setup, {
-            keys: weatherKeySet ? COPY.idle.keysWithWeather : COPY.idle.keysWithout,
+            keys: keys ? `${keys.set} of ${keys.total}` : weatherKeySet ? COPY.idle.keysWithWeather : COPY.idle.keysWithout,
             state: askExec ? COPY.idle.on : COPY.idle.off,
           })}
           <a href="#settings">{COPY.idle.settings}</a>

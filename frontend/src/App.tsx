@@ -179,6 +179,7 @@ function BenchC({ wb }: { wb: Workbench }) {
   const byId = useRuns((s) => s.byId);
   const tools = useVault((v) => v.tools);
   const env = useSettings((s) => s.env);
+  const liveSettings = useSettings((s) => s.live);
   const askExec = useSettings((s) => s.askExec);
   const busy = useUi((u) => u.busy);
   const benchKey = useUi((u) => u.benchKey);
@@ -194,6 +195,7 @@ function BenchC({ wb }: { wb: Workbench }) {
           count={tools.length}
           weatherKeySet={!!env.OPENWEATHERMAP_API_KEY}
           askExec={askExec}
+          keys={liveSettings ? { set: liveSettings.keys.filter((k) => k.set).length, total: liveSettings.keys.length } : undefined}
           onSuggest={(i) => void wb.submit(SUGGESTIONS[i]!.q)}
         />
       ) : (
@@ -244,6 +246,7 @@ function VaultC({ wb }: { wb: Workbench }) {
       renderKey={vaultRender}
       confirmRemove={confirmRemove}
       source={selected ? (sources[selected] ?? null) : null}
+      demo={wb.mode === "demo"}
       onQuery={(q) => wb.setQuery(q)}
       onFilter={(f: UiState["filter"]) => wb.setFilter(f)}
       onSelect={(n) => wb.selectTool(n)}
@@ -267,7 +270,8 @@ function SettingsC({ wb }: { wb: Workbench }) {
   const askExec = useSettings((s) => s.askExec);
   const env = useSettings((s) => s.env);
   const model = useSettings((s) => s.model);
-  return <SettingsView askExec={askExec} env={env} model={model} onToggleAsk={() => wb.toggleAskExec()} />;
+  const live = useSettings((s) => s.live);
+  return <SettingsView askExec={askExec} env={env} model={model} live={live} onToggleAsk={() => wb.toggleAskExec()} />;
 }
 
 function ModalC({ wb }: { wb: Workbench }) {
