@@ -17,6 +17,7 @@ import sys
 import tempfile
 
 from talos.config import settings
+from talos.events import emit
 from talos.state import TalosState
 
 # A small runner appended to the forged code. It discovers test_* functions,
@@ -95,6 +96,7 @@ def run_tests(code: str, test_code: str, timeout: int | None = None) -> dict:
             "n_failed": 0,
             "n_total": 0,
             "failures": [],
+            "results": [],
             "stdout": result["stdout"],
             "stderr": result["stderr"],
             "timed_out": True,
@@ -128,52 +130,75 @@ def run_tests(code: str, test_code: str, timeout: int | None = None) -> dict:
 def tester_node(state: TalosState) -> dict:
     """LangGraph node: run the forged_tool through tests.
 
-    Reads:  forged_tool {code, test_code}
-    Writes: test_result {passed, ...full run_tests output}
+    Reads:  forged_tool {name, code, test_code}, retry_count (the attempt number)
+    Writes: test_result {passed, results, ...full run_tests output}
+    Emits:  forge.tests {tool, attempt, results}
     """
     forged = state.get("forged_tool") or {}
     code = forged.get("code", "")
     test_code = forged.get("test_code", "")
     if not code or not test_code:
-        return {
-            "test_result": {
-                "passed": False,
-                "n_passed": 0,
-                "n_failed": 0,
-                "n_total": 0,
-                "failures": [],
-                "stdout": "",
-                "stderr": "",
-                "timed_out": False,
-                "error": "Forger produced no code or no test_code.",
-            }
+        result = {
+            "passed": False,
+            "n_passed": 0,
+            "n_failed": 0,
+            "n_total": 0,
+            "failures": [],
+            "results": [],
+            "stdout": "",
+            "stderr": "",
+            "timed_out": False,
+            "error": "Forger produced no code or no test_code.",
         }
-    return {"test_result": run_tests(code, test_code)}
+    else:
+        result = run_tests(code, test_code)
+    emit(
+        "forge.tests",
+        tool=forged.get("name") or "",
+        attempt=state.get("retry_count", 0),
+        results=result["results"],
+    )
+    return {"test_result": result}
 
 
 # ---- internal -------------------------------------------------------------
 
 
 def _parse_runner_output(stdout: str) -> dict:
-    """Parse our TALOS_TEST markers out of subprocess stdout."""
+    """Parse our TALOS_TEST markers out of subprocess stdout.
+
+    `results` lists every test in run order as `{name, passed, why}`. `why`
+    is the last non-empty line of a failing test's traceback (e.g.
+    "AssertionError: expected 'cba'"), and None for a passing test.
+    """
     n_passed = 0
     n_failed = 0
     n_total = 0
     failures: list[dict] = []
+    results: list[dict] = []
+    by_name: dict[str, dict] = {}
     in_trace_for: str | None = None
     trace_buf: list[str] = []
 
     for line in stdout.splitlines():
         if line.startswith("TALOS_TEST PASS "):
             n_passed += 1
+            name = line[len("TALOS_TEST PASS ") :].strip()
+            results.append({"name": name, "passed": True, "why": None})
         elif line.startswith("TALOS_TEST FAIL "):
             n_failed += 1
+            name = line[len("TALOS_TEST FAIL ") :].strip()
+            record = {"name": name, "passed": False, "why": None}
+            results.append(record)
+            by_name[name] = record
         elif line.startswith("TALOS_TEST TRACE_START "):
             in_trace_for = line[len("TALOS_TEST TRACE_START ") :].strip()
             trace_buf = []
         elif line.startswith("TALOS_TEST TRACE_END "):
             if in_trace_for is not None:
                 failures.append({"name": in_trace_for, "trace": "\n".join(trace_buf)})
+                if in_trace_for in by_name:
+                    by_name[in_trace_for]["why"] = _last_line(trace_buf)
             in_trace_for = None
             trace_buf = []
         elif line.startswith("TALOS_TEST SUMMARY "):
@@ -190,7 +215,16 @@ def _parse_runner_output(stdout: str) -> dict:
         "n_failed": n_failed,
         "n_total": n_total,
         "failures": failures,
+        "results": results,
     }
+
+
+def _last_line(lines: list[str]) -> str | None:
+    """Last non-empty line of a traceback, stripped; None if there is none."""
+    for line in reversed(lines):
+        if line.strip():
+            return line.strip()
+    return None
 
 
 def _coerce_io(x: object) -> str:

@@ -15,6 +15,7 @@ PydanticAI analogue: `Agent(..., result_type=ForgedTool)`.
 
 from __future__ import annotations
 
+import difflib
 import logging
 from typing import Any
 
@@ -23,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from talos.agents.researcher import research, should_research
 from talos.config.llm import make_structured_model
+from talos.events import emit
 from talos.prompts.forger import FORGER_SYSTEM_PROMPT, build_retry_context
 from talos.state import TalosState
 
@@ -138,10 +140,52 @@ def forger_node(state: TalosState) -> dict:
             "needs_env_vars": [],
         }
 
+    attempt = retry_count + 1
+    new_code = forged_dump.get("code") or ""
+    old_code: str | None = None
+    if retry_count > 0:
+        old_code = (previous or {}).get("code") or ""
+    emit(
+        "forge.code",
+        tool=forged_dump.get("name") or "",
+        attempt=attempt,
+        file=f"{forged_dump.get('name') or 'tool'}.py",
+        lines=new_code.splitlines(),
+        changed=first_changed_line(old_code, new_code),
+        note=None,
+    )
+
     return {
         "forged_tool": forged_dump,
-        "retry_count": retry_count + 1,
+        "retry_count": attempt,
     }
+
+
+def first_changed_line(previous: str | None, current: str) -> int | None:
+    """First 1-based line of `current` that differs from `previous`.
+
+    Args:
+        previous: The previous attempt's code, or None on attempt 1.
+        current: This attempt's code.
+
+    Returns:
+        The line number in `current`, or None on attempt 1 or when the code
+        is unchanged. If `current` only drops lines from the end, the last
+        line of `current` is returned (the first line with a changed context).
+
+    Example:
+        >>> first_changed_line("a\\nb\\nc", "a\\nB\\nc")
+        2
+    """
+    if previous is None:
+        return None
+    old_lines = previous.splitlines()
+    new_lines = current.splitlines()
+    matcher = difflib.SequenceMatcher(a=old_lines, b=new_lines, autojunk=False)
+    for tag, _i1, _i2, j1, _j2 in matcher.get_opcodes():
+        if tag != "equal":
+            return max(1, min(j1 + 1, len(new_lines)))
+    return None
 
 
 def _format_contract(sub_task: dict) -> str:

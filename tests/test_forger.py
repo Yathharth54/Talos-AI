@@ -191,3 +191,68 @@ def test_forger_failure_counts_as_a_failed_attempt(monkeypatch):
     assert out["retry_count"] == 1
     assert out["forged_tool"]["code"] == ""
     assert "no ForgedTool" in out["forged_tool"]["description"]
+
+
+# ---- forge.code event and `changed` (spec 01 §9.3) --------------------------
+
+
+@pytest.mark.parametrize(
+    ("previous", "current", "expected"),
+    [
+        (None, "a\nb\n", None),
+        ("a\nb\nc\n", "a\nb\nc\n", None),
+        ("a\nb\nc\n", "a\nB\nc\n", 2),
+        ("a\nb\n", "a\nb\nc\n", 3),
+        ("x\n", "y\n", 1),
+        ("a\nb\nc\n", "a\nb\n", 2),
+        ("", "a\n", 1),
+        ("a\n", "", 1),
+    ],
+)
+def test_first_changed_line(previous, current, expected):
+    from talos.agents.forger import first_changed_line
+
+    assert first_changed_line(previous, current) == expected
+
+
+def _forge_events(state: dict) -> list[dict]:
+    from langgraph.graph import END, START, StateGraph
+
+    from talos.state import TalosState
+
+    g: StateGraph = StateGraph(TalosState)
+    g.add_node("forge", forger_node)
+    g.add_edge(START, "forge")
+    g.add_edge("forge", END)
+    return list(g.compile().stream(state, stream_mode="custom"))
+
+
+def test_forger_emits_code_with_no_changed_on_attempt_one(monkeypatch):
+    monkeypatch.setattr(forger_mod, "_make_llm", lambda: _FakeLLM([_good_tool()]))
+    events = _forge_events({"current_sub_task": {"action": "reverse a string"}})
+    assert events == [
+        {
+            "type": "forge.code",
+            "data": {
+                "tool": "reverse_string",
+                "attempt": 1,
+                "file": "reverse_string.py",
+                "lines": ["def reverse_string(s: str) -> str:", "    return s[::-1]"],
+                "changed": None,
+                "note": None,
+            },
+        }
+    ]
+
+
+def test_forger_emits_first_changed_line_on_retry(monkeypatch):
+    monkeypatch.setattr(forger_mod, "_make_llm", lambda: _FakeLLM([_good_tool()]))
+    state = {
+        "current_sub_task": {"action": "reverse a string"},
+        "retry_count": 1,
+        "forged_tool": _broken_tool().model_dump(),
+        "test_result": {"passed": False, "error": "test_basic failed", "timed_out": False},
+    }
+    [event] = _forge_events(state)
+    assert event["data"]["attempt"] == 2
+    assert event["data"]["changed"] == 2  # `return s` → `return s[::-1]`
