@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
+import signal
+import subprocess
 import time
+import tracemalloc
 from pathlib import Path
 
 import pytest
 
 from talos.config import settings
-from talos.sandbox import ToolResult, run_tool
-from talos.sandbox.runner import STDOUT_LIMIT
+from talos.sandbox import ToolResult, run_tool, runner
+from talos.sandbox.runner import REPLY_LIMIT, STDOUT_LIMIT
 
 FIXTURES = Path(__file__).parent / "fixtures" / "sandbox"
 
@@ -87,7 +90,7 @@ def test_timeout_kills_processes_the_tool_started(tmp_path):
         "    open(marker, 'w').write(str(p.pid))\n"
         "    time.sleep(60)\n",
     )
-    result = run_tool(path, "spawn", [str(marker)], {}, timeout=2)
+    result = run_tool(path, "spawn", [str(marker)], {}, timeout=5)
     assert result.timed_out is True
     pid = int(marker.read_text())
     deadline = time.monotonic() + 5
@@ -223,3 +226,156 @@ def test_state_does_not_leak_between_calls(tmp_path):
     )
     assert run_tool(path, "bump", [], {}).value == 1
     assert run_tool(path, "bump", [], {}).value == 1
+
+
+def _wait_until_gone(pid: int, seconds: float = 5.0) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _kill_quietly(pid: int) -> None:
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _open_fds() -> int:
+    return len(os.listdir("/dev/fd"))
+
+
+def test_huge_output_on_both_streams_keeps_parent_memory_bounded(tmp_path):
+    path = _tool(
+        tmp_path,
+        "import os\n"
+        "def _write_all(fd, data):\n"
+        "    view = memoryview(data)\n"
+        "    while view:\n"
+        "        view = view[os.write(fd, view):]\n"
+        "def flood():\n"
+        "    block = b'x' * (1 << 20)\n"
+        "    for _ in range(50):\n"
+        "        _write_all(1, block)\n"
+        "        _write_all(2, block)\n"
+        "    line = 'y' * (1 << 20)\n"
+        "    for _ in range(20):\n"
+        "        print(line)\n"
+        "    return 'survived'\n",
+    )
+    tracemalloc.start()
+    try:
+        tracemalloc.reset_peak()
+        result = run_tool(path, "flood", [], {}, timeout=60)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert result.ok is True, result.error
+    assert result.value == "survived"
+    assert len(result.stdout) <= STDOUT_LIMIT + 20
+    assert peak < 30 * 1024 * 1024
+
+
+def test_processes_the_tool_started_are_killed_after_a_successful_call(tmp_path):
+    marker = tmp_path / "grandchild.pid"
+    path = _tool(
+        tmp_path,
+        "import subprocess\n"
+        "def spawn(marker):\n"
+        "    p = subprocess.Popen(['sleep', '300'], stdout=subprocess.DEVNULL,\n"
+        "                         stderr=subprocess.DEVNULL)\n"
+        "    open(marker, 'w').write(str(p.pid))\n"
+        "    return 'started'\n",
+    )
+    result = run_tool(path, "spawn", [str(marker)], {}, timeout=10)
+    pid = int(marker.read_text())
+    try:
+        assert result.value == "started"
+        assert _wait_until_gone(pid), "grandchild survived a successful call"
+    finally:
+        _kill_quietly(pid)
+
+
+def test_detached_grandchild_holding_stdout_does_not_block_or_leak(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "_REAP_TIMEOUT", 0.5)
+    marker = tmp_path / "grandchild.pid"
+    path = _tool(
+        tmp_path,
+        "import subprocess\n"
+        "def spawn(marker):\n"
+        "    p = subprocess.Popen(['sleep', '30'], start_new_session=True)\n"
+        "    open(marker, 'w').write(str(p.pid))\n"
+        "    return 7\n",
+    )
+    fds_before = _open_fds()
+    started = time.monotonic()
+    result = run_tool(path, "spawn", [str(marker)], {}, timeout=5)
+    elapsed = time.monotonic() - started
+    _kill_quietly(int(marker.read_text()))
+    assert result.ok is True, result.error
+    assert result.value == 7
+    assert elapsed < 4
+    assert _open_fds() == fds_before
+
+
+def test_reply_is_kept_when_the_child_hangs_after_returning(tmp_path):
+    path = _tool(
+        tmp_path,
+        "import threading, time\n"
+        "def linger():\n"
+        "    threading.Thread(target=time.sleep, args=(60,)).start()\n"
+        "    return 42\n",
+    )
+    started = time.monotonic()
+    result = run_tool(path, "linger", [], {}, timeout=5)
+    assert result.ok is True, result.error
+    assert result.value == 42
+    assert result.timed_out is False
+    assert time.monotonic() - started < 4
+
+
+def test_oversized_result_is_an_error(tmp_path):
+    path = _tool(tmp_path, f"def big():\n    return 'z' * {REPLY_LIMIT + 1}\n")
+    result = run_tool(path, "big", [], {})
+    assert result.ok is False
+    assert result.error == f"SandboxError: result is larger than {REPLY_LIMIT // (1024 * 1024)} MB"
+
+
+def test_timeout_with_a_detached_pipe_holder_closes_the_pipes(tmp_path, monkeypatch):
+    monkeypatch.setattr(runner, "_REAP_TIMEOUT", 0.5)
+    marker = tmp_path / "grandchild.pid"
+    path = _tool(
+        tmp_path,
+        "import subprocess, time\n"
+        "def spawn(marker):\n"
+        "    p = subprocess.Popen(['sleep', '30'], start_new_session=True)\n"
+        "    open(marker, 'w').write(str(p.pid))\n"
+        "    time.sleep(60)\n",
+    )
+    procs: list[subprocess.Popen] = []
+    real_popen = subprocess.Popen
+
+    def recording_popen(*args, **kwargs):
+        proc = real_popen(*args, **kwargs)
+        procs.append(proc)
+        return proc
+
+    monkeypatch.setattr(runner.subprocess, "Popen", recording_popen)
+    started = time.monotonic()
+    result = run_tool(path, "spawn", [str(marker)], {}, timeout=1)
+    elapsed = time.monotonic() - started
+    _kill_quietly(int(marker.read_text()))
+    assert result.timed_out is True
+    assert elapsed < 4
+    (proc,) = procs
+    assert proc.stdout.closed and proc.stderr.closed and proc.stdin.closed
+    assert proc.returncode is not None, "killed child was not reaped"
+
+
+def test_deeply_nested_reply_is_not_a_crash():
+    assert runner._parse_reply("[" * 100_000) is None

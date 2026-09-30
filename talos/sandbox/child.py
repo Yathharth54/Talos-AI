@@ -26,6 +26,27 @@ from typing import Any
 
 from talos.sandbox.codec import decode, encode, safe_repr
 
+# Characters of the tool's printed output kept for the reply. The parent keeps
+# 64 KB (runner.STDOUT_LIMIT); one more lets it mark the text as truncated.
+CAPTURE_LIMIT = 64 * 1024 + 1
+
+
+class _CappedStringIO(io.StringIO):
+    """A StringIO that keeps the first `limit` characters and drops the rest,
+    so a tool that prints a lot can't make the reply huge."""
+
+    def __init__(self, limit: int) -> None:
+        super().__init__()
+        self._room = limit
+
+    def write(self, s: str) -> int:
+        """Keep what fits; report the whole string as written."""
+        if self._room > 0:
+            kept = s[: self._room]
+            super().write(kept)
+            self._room -= len(kept)
+        return len(s)
+
 
 def _error_text(exc: BaseException) -> str:
     """Same format the executor has always used: `TypeError: message`."""
@@ -66,7 +87,7 @@ def run_request(request: dict[str, Any]) -> dict[str, Any]:
     Returns:
         `{"ok", "value", "error", "stdout"}` with `value` in tagged form.
     """
-    captured = io.StringIO()
+    captured = _CappedStringIO(CAPTURE_LIMIT)
     reply: dict[str, Any] = {"ok": False, "value": None, "error": None, "stdout": ""}
     real_stdin = sys.stdin
     sys.stdin = io.StringIO("")
