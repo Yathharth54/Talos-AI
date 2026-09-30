@@ -1,0 +1,14 @@
+# Test runner (spec 03 §4): `make test-int`. Always use it with its own
+# project name (`-p talos-test`, as the Makefile does): the integration suite
+# wipes the database, and the project name gives it its own `db` volume, so
+# your real history in the default project is never touched.
+services:
+  tests:
+    build: { context: ., target: test }
+    init: true
+    depends_on: { db: { condition: service_healthy } }
+    environment:
+      DATABASE_URL: postgresql+psycopg://talos:talos@db:5432/talos
+      TALOS_FAKE_GRAPH: "1"
+    # Unit suite, then the integration suite (the gate needs `-m integration`).
+    command: ["sh", "-c", "pytest -q && pytest -q -m integration"]

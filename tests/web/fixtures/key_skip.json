@@ -1,0 +1,622 @@
+[
+ [
+  [],
+  "tasks",
+  {
+   "id": "53b64a5d-6335-597f-de0c-7349ab083219",
+   "name": "hitl_check",
+   "triggers": [
+    "branch:to:hitl_check"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "hitl_check": {
+    "available_integrations": {}
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "53b64a5d-6335-597f-de0c-7349ab083219",
+   "name": "hitl_check",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "548e8468-2cd8-8a50-cb36-a586c045574b",
+   "name": "learn",
+   "triggers": [
+    "branch:to:learn"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "custom",
+  {
+   "type": "vault.saved",
+   "data": {
+    "tool": {
+     "name": "get_current_temperature",
+     "description": "d",
+     "keywords": [
+      "get_current_temperature"
+     ],
+     "function": "get_current_temperature",
+     "signature": "get_current_temperature(city: str) -> float",
+     "file": "tools/get_current_temperature.py",
+     "created_at": "2026-09-30T16:54:00+00:00",
+     "usage_count": 0,
+     "last_used": null
+    },
+    "sub": null
+   }
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "learn": null
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "548e8468-2cd8-8a50-cb36-a586c045574b",
+   "name": "learn",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "f709e776-c8d7-8683-6608-1d2aa4d6814c",
+   "name": "executor",
+   "triggers": [
+    "branch:to:executor"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "custom",
+  {
+   "type": "call.args",
+   "data": {
+    "tool": "get_current_temperature",
+    "args": [
+     [
+      "city",
+      "'Mumbai'",
+      false
+     ]
+    ],
+    "caption": null
+   }
+  }
+ ],
+ [
+  [],
+  "custom",
+  {
+   "type": "call.error",
+   "data": {
+    "error": "RuntimeError: OPENWEATHERMAP_API_KEY is not set",
+    "when": "run"
+   }
+  }
+ ],
+ [
+  [],
+  "custom",
+  {
+   "type": "vault.failure",
+   "data": {
+    "tool": "get_current_temperature",
+    "streak": 1,
+    "pruned": false,
+    "error": "RuntimeError: OPENWEATHERMAP_API_KEY is not set"
+   }
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "executor": {
+    "execution_result": "RuntimeError: OPENWEATHERMAP_API_KEY is not set",
+    "sub_task_results": [
+     {
+      "sub_task_id": 1,
+      "ok": false,
+      "output": null,
+      "error": "RuntimeError: OPENWEATHERMAP_API_KEY is not set"
+     }
+    ]
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "f709e776-c8d7-8683-6608-1d2aa4d6814c",
+   "name": "executor",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+   "name": "orchestrator_out",
+   "triggers": [
+    "branch:to:orchestrator_out"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "I",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "couldn't",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "get",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "the",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "temperature.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c29e-7372-833e-bc70d5b6acc1",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": "last"
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "ai",
+     "data": {
+      "content": "I couldn't get the temperature.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": "3a7be3bb-db3f-4c2a-9fcb-e6836c1e9b53",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-key_skip",
+    "ls_integration": "langgraph",
+    "langgraph_step": 8,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+    "LANGSMITH_TRACING": "true",
+    "LANGSMITH_PROJECT": "talos-ai",
+    "revision_id": "fa99a83"
+   }
+  ]
+ ],
+ [
+  [],
+  "updates",
+  {
+   "orchestrator_out": {
+    "messages": [
+     {
+      "__message__": {
+       "type": "ai",
+       "data": {
+        "content": "I couldn't get the temperature.",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "ai",
+        "name": null,
+        "id": "3a7be3bb-db3f-4c2a-9fcb-e6836c1e9b53",
+        "tool_calls": [],
+        "invalid_tool_calls": [],
+        "usage_metadata": null
+       }
+      }
+     }
+    ]
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "56bc0c67-8f2f-f6b2-dd6f-e21cc3d67a69",
+   "name": "orchestrator_out",
+   "error": null,
+   "interrupts": []
+  }
+ ]
+]

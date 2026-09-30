@@ -1,0 +1,34 @@
+# Keep the build context small and free of local state and secrets.
+.git
+.github
+.venv
+venv
+.env
+.env.*
+!.env.example
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+.DS_Store
+.superpowers
+workspace/
+talos/vault/tools/*.py
+talos/vault/manifest.json
+talos logos/
+site/
+assets/
+benchmarks/
+benchmarks.txt
+docs/
+# Stage 02's copy test reads the reference demo (test image only).
+!docs/superpowers/specs/reference/
+examples/
+**/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/.e2e-tmp

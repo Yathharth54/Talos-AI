@@ -2,8 +2,12 @@
 
 Three dispatch paths (chosen by the Planner-assigned `needs` label):
 - primitive  → call one of talos.primitives.* directly by name
-- vault      → SkillManager.load(name)(...)
-- forge      → after Learn registers it, vault.load(forged_tool['name'])(...)
+- vault      → the vault tool, run in a subprocess via talos.sandbox
+- forge      → after Learn registers it, the forged tool, same sandbox
+
+Vault and forged tools never run in this process: `SandboxedTool` reads
+their signature from the source (for arg coercion and validation) and each
+call goes through `run_tool`, with a TALOS_TOOL_TIMEOUT limit.
 
 Inside this node we do TWO things:
 1. Resolve concrete args via a small LLM call (ArgResolver). The Planner
@@ -40,6 +44,7 @@ from talos.primitives.vault_list import vault_list
 from talos.primitives.web_read import web_read
 from talos.primitives.web_search import web_search
 from talos.prompts.arg_resolver import ARG_RESOLVER_SYSTEM_PROMPT
+from talos.sandbox import SandboxedTool, error_text
 from talos.state import TalosState
 from talos.vault.manager import SkillManager
 
@@ -322,6 +327,16 @@ def _signature_of(fn: Callable[..., Any]) -> str:
         return f"{getattr(fn, '__name__', 'tool')}(...)"
 
 
+def _sandboxed(mgr: SkillManager, name: str) -> SandboxedTool:
+    """A subprocess-backed callable for the vault tool `name`.
+
+    Raises KeyError if it isn't in the manifest, ValueError if its file is
+    missing, doesn't parse, or doesn't define the function.
+    """
+    path, function = mgr.locate(name)
+    return SandboxedTool(path, function)
+
+
 def _resolve_callable(sub_task: dict, state: TalosState, mgr: SkillManager) -> Callable[..., Any]:
     """Pick the right callable for this sub-task.
 
@@ -337,13 +352,13 @@ def _resolve_callable(sub_task: dict, state: TalosState, mgr: SkillManager) -> C
     if needs == "vault":
         if not hint:
             raise ValueError("vault sub-task missing tool_hint")
-        return mgr.load(hint)
+        return _sandboxed(mgr, hint)
     if needs == "forge":
         forged = state.get("forged_tool") or {}
         name = forged.get("name")
         if not name:
             raise ValueError("forge sub-task has no forged_tool in state")
-        return mgr.load(name)
+        return _sandboxed(mgr, name)
     raise ValueError(f"Unknown needs label: {needs!r}")
 
 
@@ -429,9 +444,11 @@ def executor_node(state: TalosState) -> dict:
         ok = True
         error: str | None = None
     except Exception as e:  # noqa: BLE001 — tool execution may legitimately fail
+        # Sandboxed tools raise ToolFailed carrying the tool's own
+        # "TypeError: …" text (or a timeout); primitives raise directly.
         output = None
         ok = False
-        error = f"{type(e).__name__}: {e}"
+        error = error_text(e)
 
     if ok:
         emit("call.result", **describe_result(output))

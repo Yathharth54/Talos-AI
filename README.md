@@ -29,8 +29,10 @@ Everything is a visible LangGraph node. Every step shows up as a discrete event 
 Talos runs code written by an LLM on your machine.
 
 - **`python_exec` and `shell_exec` ask before running.** The REPL shows you the exact code or command and waits for `y`. Anything else declines. Set `TALOS_AUTO_APPROVE_EXEC=true` to skip the prompt (the unattended benchmark runners do this).
-- **Forged tools are not sandboxed.** They are tested in a subprocess with a timeout, but once registered they run inside the Talos process, with your user's permissions and no timeout.
-- **There is no container isolation.** Run Talos in a VM, container, or throwaway account if you plan to point it at anything you care about.
+- **Forged tools run in a subprocess with a time limit.** Every call to a vault tool (and the smoke test before a tool is saved) runs in its own Python process, killed after `TALOS_TOOL_TIMEOUT` seconds (default 30). Values come back as plain data, never as objects. The subprocess still has your user's permissions, your environment (API keys) and the network: it's a time limit and a crash boundary, not a jail.
+- **The CLI and forged tools run without container isolation.** `uv run talos` and every forged-tool subprocess it starts run directly on your machine as your user. Run the CLI in a VM, container, or throwaway account if you plan to point it at anything you care about. The compose stack runs the server in a locked-down container (see [Web app](#web-app)).
+- **The web app has no login.** `talos-web` binds to `127.0.0.1` and anyone who can reach its port can run code through it. Keep it on localhost. Inside a container it has to bind `TALOS_WEB_HOST=0.0.0.0` to be reachable at all; then publish the port on the host's loopback only (`-p 127.0.0.1:8000:8000`), never as `-p 8000:8000`. Outside a container, don't set `0.0.0.0` on a shared network.
+- **The web app only answers local requests.** It rejects any `Host` header other than `127.0.0.1`, `localhost` and `[::1]` (plus `TALOS_WEB_ALLOWED_HOSTS`) with `400`, so a web page can't reach it through DNS rebinding, and it rejects `POST`/`PATCH`/`DELETE` requests whose `Origin` is another site with `403`, so a page you visit can't start runs or save keys.
 
 ## Quick start
 
@@ -52,6 +54,37 @@ Then type queries at the prompt:
 ```
 
 Relative file paths are written under `workspace/` (gitignored). Forged tools land in `talos/vault/` (also gitignored), so your vault is yours.
+
+## Web app
+
+Talos also runs as a local web app: Postgres keeps sessions and run history, the vault stays as files on disk, and the CLI keeps working next to it.
+
+```bash
+cp .env.example .env    # then set OPENROUTER_API_KEY (and TAVILY_API_KEY for web search)
+make up                 # docker compose up --build: Postgres + the app
+```
+
+Open http://127.0.0.1:8000. `docker compose ps` should show `db` and `app` as healthy. `make down` stops both; your history stays in the `pgdata` volume. The HTTP API is documented under [Web app (API)](#web-app-api) below.
+
+- **No login.** There are no accounts and no authentication. Compose publishes the app on `127.0.0.1` only; don't expose it on a network.
+- **Same vault as the CLI.** `talos/vault/` and `workspace/` are mounted into the container, so tools forged in the browser show up in `uv run talos` and the other way round.
+- **Keys.** `.env` is mounted read-write, so keys saved from the browser's API-key dialog persist, just like the CLI's Human check.
+- **Container limits.** The app runs as a non-root user on a read-only filesystem, with no Linux capabilities, 2 GB of memory and 256 processes. It keeps network access, because web tools need it. Forged tools run in a subprocess inside the container with a `TALOS_TOOL_TIMEOUT` limit (see [Safety](#safety-read-this-first)).
+- **Bind-mount ownership.** The container runs as uid 1000. On Linux, `talos/vault/`, `workspace/` and `.env` must be writable by that uid: `sudo chown -R 1000:1000 talos/vault workspace .env`, or run as your own uid if it is 1000. Docker Desktop on macOS maps ownership for you.
+- **Plain `docker run`.** Compose starts the app with `init: true`, so an init process reaps the forged-tool subprocesses. If you run the image without compose, pass `--init` as well (for example `docker run --init -p 127.0.0.1:8000:8000 …`).
+
+Developer commands (see the `Makefile`):
+
+| Command | What it does |
+|---|---|
+| `make up` / `make down` | Start or stop the whole stack in Docker |
+| `make db` | Only Postgres, published on `127.0.0.1:5432` (set `DATABASE_URL=postgresql+psycopg://talos:talos@localhost:5432/talos` in your shell or `.env`) |
+| `make migrate` | `uv run alembic upgrade head` against `DATABASE_URL` |
+| `make web` | Run the app outside Docker (needs `make db`) |
+| `make fake` | Same, with `TALOS_FAKE_GRAPH=1`: scripted runs, no model calls, no keys |
+| `make test` | Unit suite, no Docker |
+| `make test-int` | Unit and integration suites in Docker against a throwaway Postgres |
+| `make fe` | Frontend dev server (from stage 04) |
 
 ## Architecture
 
@@ -140,6 +173,8 @@ Talos-AI/
 │   │   ├── orchestrator.py
 │   │   └── hitl.py
 │   ├── primitives/          # Built-in tools
+│   ├── persistence/         # Postgres models, repo, migrations (web app only)
+│   ├── web/                 # Web app API (`uv run talos-web`): FastAPI, runs, SSE
 │   ├── prompts/             # System prompts
 │   ├── vault/               # Forged tools live here (gitignored)
 │   │   ├── manager.py
@@ -171,6 +206,52 @@ Measured on the end-to-end suite in `benchmarks/talos_test_suite/` (62 queries, 
 
 Run it yourself with `uv run python -m benchmarks.talos_test_suite.run_suite` (live API calls; costs a little).
 
+## Web app (API)
+
+`talos-web` serves a local HTTP API with the same graph behind it: it starts runs, streams their events to the browser over Server-Sent Events, pauses for approvals and API keys, and serves sessions, the vault and settings. The frontend (stage 4) will be served from the same port.
+
+It needs Postgres (history and paused runs live there; tools stay on disk in the vault):
+
+```bash
+docker run -d --name talos-pg -e POSTGRES_USER=talos -e POSTGRES_PASSWORD=talos \
+  -e POSTGRES_DB=talos -p 5432:5432 postgres:16-alpine
+export DATABASE_URL=postgresql+psycopg://talos:talos@localhost:5432/talos
+uv run talos-web                       # http://127.0.0.1:8000, migrations run at startup
+TALOS_FAKE_GRAPH=1 uv run talos-web    # the demo's scripted runs: no model calls, no keys
+```
+
+| Method and path | What it does |
+|---|---|
+| `POST /api/sessions` | New session (an empty one is reused) |
+| `GET /api/sessions` | Sessions with runs, newest first |
+| `GET /api/sessions/{id}` / `PATCH` `{name}` | A session with its messages and runs / rename it |
+| `POST /api/sessions/{id}/messages` `{text}` | Start a run. `409 run_active` while any run is running or waiting |
+| `GET /api/runs/{id}` | Run summary, plus the pending approval or key request |
+| `GET /api/runs/{id}/events` | SSE event stream; resume with `Last-Event-ID` or `?after=N` |
+| `POST /api/runs/{id}/resume` | `{decision: "approve" \| "decline"}` or `{decision: "save", value}` / `{decision: "skip"}` |
+| `POST /api/runs/{id}/stop` | Stop a run, also while it waits |
+| `GET /api/vault`, `GET` / `DELETE /api/vault/{name}` | Tools, one tool with its source, remove from the manifest |
+| `GET` / `PATCH /api/settings` | Model and limits, which keys are set, the "Ask before running code" switch |
+| `GET /api/health` | `{ok, db, fake_graph, version}` |
+
+Try a run from the terminal:
+
+```bash
+B=http://127.0.0.1:8000/api
+SID=$(curl -s -X POST $B/sessions | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+RID=$(curl -s -X POST -H 'content-type: application/json' \
+  -d '{"text":"Encrypt \"TALOS AGENT\" with a Caesar cipher, shift of 7."}' \
+  $B/sessions/$SID/messages | python3 -c 'import sys,json;print(json.load(sys.stdin)["run"]["id"])')
+curl -N $B/runs/$RID/events
+```
+
+Notes:
+
+- Run one worker only (the default). Runs and the vault are per process, and at startup every run still marked `running` is failed, since the process that owned it is gone. Runs that were waiting for you stay waiting and can be resumed after a restart.
+- Every event is stored before it is sent, so a dropped connection resumes from `Last-Event-ID` with nothing missing.
+- Fake mode works on a temporary copy of the vault, so the demo runs never touch your real tools, and a key you "save" is only remembered in memory.
+- API key values sent to `/resume` are never logged, stored in the event history, or returned by any endpoint.
+
 ## Configuration
 
 All via `.env` (see `.env.example`):
@@ -187,12 +268,18 @@ All via `.env` (see `.env.example`):
 | `TALOS_SUBPROCESS_TIMEOUT` | no | Default 10 (seconds) |
 | `TALOS_FORGE_MAX_RETRIES` | no | Default 3 |
 | `TALOS_LLM_TIMEOUT` | no | Per-request LLM timeout, default 120 (seconds) |
+| `TALOS_TOOL_TIMEOUT` | no | Per-call limit for forged tools in the sandbox, default 30 (seconds) |
 | `TALOS_LOG_LEVEL` | no | Default WARNING |
 | `DATABASE_URL` | web app only | Postgres URL, e.g. `postgresql+psycopg://talos:talos@localhost:5432/talos`. Empty means no database; the CLI never needs one |
 | `TALOS_CHECKPOINTER` | no | `memory` (default) or `postgres`. The web app always uses Postgres; the CLI stays in memory and logs a warning if this is `postgres` |
 | `TALOS_VAULT_DIR` | no | Vault folder (`manifest.json` + `tools/`). Default `talos/vault` |
 | `TALOS_WORKSPACE_DIR` | no | Where relative `file_read`/`file_write` paths land. Default `workspace/` |
 | `TALOS_DOTENV_PATH` | no | The `.env` Talos loads and where Human check saves keys. Default `.env` in the repo. Must be set in the shell environment: it is read before `.env` is loaded |
+| `TALOS_WEB_HOST` | no | Web app bind address. Default `127.0.0.1`. There is no login: keep it local. In a container use `0.0.0.0` and publish as `127.0.0.1:8000:8000` |
+| `TALOS_WEB_PORT` | no | Web app port. Default `8000` |
+| `TALOS_WEB_ALLOWED_HOSTS` | no | Comma-separated extra `Host` names the web app answers, besides `127.0.0.1`, `localhost` and `[::1]`. Default empty. Writes from those hosts' pages are allowed too |
+| `TALOS_FAKE_GRAPH` | no | `1` runs the web app with the demo's scripted runs: no model calls, no keys, a temporary vault copy |
+| `TALOS_WEB_DEV` | no | `1` allows CORS from Vite's dev server at `http://127.0.0.1:5173` |
 
 ## Tests
 
@@ -214,14 +301,18 @@ docker run -d --name talos-pg-test -e POSTGRES_USER=talos -e POSTGRES_PASSWORD=t
 DATABASE_URL=postgresql+psycopg://talos:talos@localhost:55432/talos uv run pytest -m integration
 ```
 
+`make test-int` runs the unit and integration suites inside Docker against a throwaway Postgres (compose project `talos-test`, removed afterwards). CI runs lint, the unit suite on 3.11 and 3.12, the integration suite against a `postgres:16` service, and `docker build .`.
+
+The web app's route, SSE and runner tests run in the default suite against an in-memory store and the fake graph; the same store contract, a full fake-graph run, and a restart mid-pause run against Postgres under `-m integration`. The translator's chunk fixtures are recorded from the real graph with mocked LLMs; regenerate them after a LangGraph upgrade with `uv run python -m tests.web.chunks`.
+
 ## Known limits (POC)
 
-- Forged tools run in-process after registration: no sandbox, no timeout (see [Safety](#safety-read-this-first)).
-- Subprocess isolation only for tests and exec primitives, not Docker/E2B.
+- Forged tools run in a subprocess with a time limit, not a jail: same user, same environment, network on (see [Safety](#safety-read-this-first)). No container-per-tool or E2B isolation.
 - Keyword vault search; no semantic search yet (deferred until the vault grows).
 - Single provider (OpenRouter): one model for every node, set via `TALOS_MODEL`.
 - OAuth-style API auth is out of scope; only env-var-keyed APIs are supported via HITL.
 - The CLI uses an in-memory checkpointer (`MemorySaver`); its conversation state is lost on exit. The vault persists.
+- Stopping a web run ends it right away (the run is marked `stopped` and its stream closes), but a graph node already running in a worker thread (an LLM call, a tool, a test subprocess) can't be interrupted: its thread runs to completion in the background. Its result is discarded, but its side effects (a file written, a tool saved to the vault) can still happen.
 
 ## Acknowledgements
 

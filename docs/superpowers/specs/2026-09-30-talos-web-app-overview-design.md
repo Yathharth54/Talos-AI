@@ -135,14 +135,14 @@ Graph node to UI step mapping, done by `EventTranslator`:
 | `strip.set` | `{variant, subtask: {index, total, label}, sig: {name, args, ret} \| null}` | a sub-task begins, before its first `node.started` |
 | `subtask.started` | `{index, total}` | `advance` moves to the next sub-task |
 | `node.started` | `{step, label?}` | step becomes active. `label` overrides the step label, e.g. `"Executor, waiting for you"` |
-| `node.finished` | `{step, status: "done"\|"forge"\|"skip"\|"fail"\|"answer", label?}` | step ends. `forge` = gold done state for forger/tester |
+| `node.finished` | `{step, status: "done"\|"forge"\|"skip"\|"fail"\|"answer"\|"stopped", label?}` | step ends. `forge` = gold done state for forger/tester. `stopped` = the step was active when the user pressed Stop |
 | `link.flow` | `{from, to}` | a gold packet should travel between two steps |
 | `caption` | `{html}` | narration under the strip (server builds it from the fixed caption table in §4.5) |
 | `log.line` | `{label, text, tone: "plain"\|"g"\|"w"\|"sub", caret?: bool}` | one run-log line. `g` gold, `w` bone |
 | `log.pop` | `{}` | remove the last log line (replaces a transient "running" line) |
 | `log.status` | `{text, gold: bool, tone: ""\|"warm"\|"alert"}` | run-log caption and frame tone |
 | `talos.status` | `{text}` | the "working on it" status next to the orbit spinner |
-| `forge.code` | `{tool, attempt, file, lines: [str], changed: int \| null, note: str \| null}` | forger produced code for an attempt. `changed` = the first line that differs from the previous attempt |
+| `forge.code` | `{tool, attempt, file, lines: [str], changed: int \| null, note: str \| null, tests?: int}` | forger produced code for an attempt. `changed` = the first line that differs from the previous attempt. `tests` = how many tests that attempt wrote (the `def test_` count in its `test_code`); the translator sends the event once the forge node's update carries it |
 | `forge.tests` | `{tool, attempt, results: [{name, passed, why: str \| null}]}` | tester finished an attempt |
 | `forge.attempt` | `{attempt, ok, detail}` | an attempt is decided |
 | `forge.smoke` | `{call, result \| null, passed}` | smoke gate ran |

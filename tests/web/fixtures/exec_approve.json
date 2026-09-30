@@ -1,0 +1,451 @@
+[
+ [
+  [],
+  "tasks",
+  {
+   "id": "f7caea62-b394-36d7-e040-40e659c03a87",
+   "name": "executor",
+   "triggers": [
+    "branch:to:executor"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "custom",
+  {
+   "type": "call.args",
+   "data": {
+    "tool": "python_exec",
+    "args": [
+     [
+      "code",
+      "'print(sum(range(1, 101)))'",
+      false
+     ]
+    ],
+    "caption": null
+   }
+  }
+ ],
+ [
+  [],
+  "custom",
+  {
+   "type": "call.result",
+   "data": {
+    "repr": "{'ok': True, 'returncode': 0, 'stdout': '5050\\n', 'stderr': '', 'timed_out': False}",
+    "type": "dict",
+    "small": false
+   }
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "executor": {
+    "execution_result": "{'ok': True, 'returncode': 0, 'stdout': '5050\\n', 'stderr': '', 'timed_out': False}",
+    "sub_task_results": [
+     {
+      "sub_task_id": 1,
+      "ok": true,
+      "output": {
+       "ok": true,
+       "returncode": 0,
+       "stdout": "5050\n",
+       "stderr": "",
+       "timed_out": false
+      },
+      "error": null
+     }
+    ]
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "f7caea62-b394-36d7-e040-40e659c03a87",
+   "name": "executor",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+   "name": "orchestrator_out",
+   "triggers": [
+    "branch:to:orchestrator_out"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "The",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c213-7e92-9578-4929292a3069",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-exec_approve",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c213-7e92-9578-4929292a3069",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-exec_approve",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "code",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c213-7e92-9578-4929292a3069",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-exec_approve",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c213-7e92-9578-4929292a3069",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-exec_approve",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "prints",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c213-7e92-9578-4929292a3069",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-exec_approve",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c213-7e92-9578-4929292a3069",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-exec_approve",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "5050.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c213-7e92-9578-4929292a3069",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": "last"
+     }
+    }
+   },
+   {
+    "thread_id": "capture-exec_approve",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "ai",
+     "data": {
+      "content": "The code prints 5050.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": "12eb347c-48d4-476d-8d7b-0c35ec248565",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-exec_approve",
+    "ls_integration": "langgraph",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+    "LANGSMITH_TRACING": "true",
+    "LANGSMITH_PROJECT": "talos-ai",
+    "revision_id": "fa99a83"
+   }
+  ]
+ ],
+ [
+  [],
+  "updates",
+  {
+   "orchestrator_out": {
+    "messages": [
+     {
+      "__message__": {
+       "type": "ai",
+       "data": {
+        "content": "The code prints 5050.",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "ai",
+        "name": null,
+        "id": "12eb347c-48d4-476d-8d7b-0c35ec248565",
+        "tool_calls": [],
+        "invalid_tool_calls": [],
+        "usage_metadata": null
+       }
+      }
+     }
+    ]
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "65a4da1f-5416-dd84-58ea-d6cb0c4e6942",
+   "name": "orchestrator_out",
+   "error": null,
+   "interrupts": []
+  }
+ ]
+]

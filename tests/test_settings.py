@@ -16,6 +16,11 @@ _VARS = (
     "TALOS_DOTENV_PATH",
     "DATABASE_URL",
     "TALOS_CHECKPOINTER",
+    "TALOS_WEB_HOST",
+    "TALOS_WEB_PORT",
+    "TALOS_FAKE_GRAPH",
+    "TALOS_WEB_DEV",
+    "TALOS_WEB_ALLOWED_HOSTS",
 )
 
 
@@ -100,3 +105,43 @@ def test_cli_warns_but_stays_in_memory_when_postgres_is_asked(monkeypatch, caplo
 
     monkeypatch.setattr(main_mod.settings, "CHECKPOINTER", "memory")
     assert main_mod.warn_if_postgres_checkpointer() is False
+
+
+def test_web_settings_default_to_a_local_real_server(reload_settings):
+    s = reload_settings()
+    assert (s.WEB_HOST, s.WEB_PORT, s.FAKE_GRAPH, s.WEB_DEV) == ("127.0.0.1", 8000, False, False)
+
+
+def test_web_settings_come_from_env(reload_settings):
+    s = reload_settings(
+        TALOS_WEB_HOST="0.0.0.0", TALOS_WEB_PORT="9001", TALOS_FAKE_GRAPH="1", TALOS_WEB_DEV="true"
+    )
+    assert (s.WEB_HOST, s.WEB_PORT, s.FAKE_GRAPH, s.WEB_DEV) == ("0.0.0.0", 9001, True, True)
+
+
+def test_auto_approve_override_wins_over_the_env(monkeypatch):
+    monkeypatch.setenv("TALOS_AUTO_APPROVE_EXEC", "true")
+    assert settings.auto_approve_exec() is True
+    try:
+        settings.set_auto_approve_override(False)
+        assert settings.auto_approve_exec() is False
+        monkeypatch.setenv("TALOS_AUTO_APPROVE_EXEC", "false")
+        settings.set_auto_approve_override(True)
+        assert settings.auto_approve_exec() is True
+    finally:
+        settings.set_auto_approve_override(None)
+    assert settings.auto_approve_exec() is False  # back to the env var
+
+
+@pytest.mark.parametrize("value", ["", "  "])
+def test_empty_web_port_falls_back_to_8000(reload_settings, value):
+    assert reload_settings(TALOS_WEB_PORT=value).WEB_PORT == 8000
+
+
+def test_web_allowed_hosts_default_to_none_extra(reload_settings):
+    assert reload_settings().WEB_ALLOWED_HOSTS == ()
+
+
+def test_web_allowed_hosts_are_comma_separated(reload_settings):
+    s = reload_settings(TALOS_WEB_ALLOWED_HOSTS=" talos.lan, ,box.local ")
+    assert s.WEB_ALLOWED_HOSTS == ("talos.lan", "box.local")

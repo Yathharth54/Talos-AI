@@ -16,6 +16,8 @@ retry, with the runtime error in the same channel as unit-test failures.
 from __future__ import annotations
 
 import inspect
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from talos.agents.executor import (
@@ -24,6 +26,7 @@ from talos.agents.executor import (
     coerce_to_schema,
 )
 from talos.events import emit
+from talos.sandbox import SandboxedTool, error_text
 from talos.state import TalosState
 
 # Longest `call` / `result` string sent in a forge.smoke event.
@@ -43,25 +46,21 @@ def _call_text(name: str, kwargs: dict[str, Any]) -> str:
     return text if len(text) <= _SMOKE_REPR_LIMIT else text[: _SMOKE_REPR_LIMIT - 1] + "…"
 
 
-def _load_forged_function(forged: dict) -> Any:
-    """exec the forged source in an isolated namespace and return the function.
+def _write_forged_tool(forged: dict, directory: Path) -> SandboxedTool:
+    """Write the forged source into `directory` and return a sandboxed
+    callable for it. The code never runs in this process.
 
-    We rely on the Forger's contract (one top-level function whose name equals
-    `forged['name']`). The Tester has already run this code once in subprocess
-    so we know it imports cleanly. In-process exec here is the cheapest way
-    to get a callable; the alternative would be writing it to a temp file
-    and importlib-loading.
+    Raises:
+        ValueError: If the forged tool has no name or code, the code doesn't
+            parse, or it doesn't define a function named `forged['name']`.
     """
     name = forged.get("name")
     code = forged.get("code", "")
     if not name or not code:
         raise ValueError("forged_tool missing name or code")
-    ns: dict[str, Any] = {}
-    exec(compile(code, f"<forged:{name}>", "exec"), ns)
-    fn = ns.get(name)
-    if fn is None or not callable(fn):
-        raise ValueError(f"function {name!r} not defined in forged code")
-    return fn
+    path = directory / "forged_tool.py"
+    path.write_text(code, encoding="utf-8")
+    return SandboxedTool(path, name)
 
 
 def _is_zero_arg(fn: Any) -> bool:
@@ -101,18 +100,20 @@ def smoke_node(state: TalosState) -> dict:
             }
         }
 
-    try:
-        fn = _load_forged_function(forged)
-    except (SyntaxError, ValueError) as e:
-        emit("forge.smoke", call=None, result=None, passed=False)
-        return {
-            "smoke_result": {
-                "passed": False,
-                "skipped": False,
-                "error": f"load error: {type(e).__name__}: {e}",
+    # Unregistered code: write it to a temporary file for the sandbox.
+    with tempfile.TemporaryDirectory(prefix="talos-smoke-") as tmp:
+        try:
+            fn = _write_forged_tool(forged, Path(tmp))
+        except ValueError as e:
+            emit("forge.smoke", call=None, result=None, passed=False)
+            return {
+                "smoke_result": {"passed": False, "skipped": False, "error": f"load error: {e}"}
             }
-        }
+        return _smoke(fn, forged, sub_task, state)
 
+
+def _smoke(fn: SandboxedTool, forged: dict, sub_task: dict, state: TalosState) -> dict:
+    """Build the call from the sub-task contract and run it once in the sandbox."""
     has_contract = bool(sub_task.get("input_schema"))
     if not has_contract and not _is_zero_arg(fn):
         # No typed contract → no deterministic way to invoke. Pass through.
@@ -150,7 +151,7 @@ def smoke_node(state: TalosState) -> dict:
             "smoke_result": {
                 "passed": False,
                 "skipped": False,
-                "error": f"runtime: {type(e).__name__}: {e}",
+                "error": f"runtime: {error_text(e)}",
             }
         }
 
