@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { COPY, fill } from "../../lib/copy";
-import { highlight } from "../../lib/highlight";
+import { CodeRows } from "../vault/CodeRows";
 
 /** The full-source reader (readerDialog, lines 2016–2040; codeRows, line 2015). */
 export function ReaderDialog({ name, lines, onClose }: { name: string; lines: string[]; onClose(): void }) {
@@ -47,12 +47,7 @@ export function ReaderDialog({ name, lines, onClose }: { name: string; lines: st
         </div>
       </div>
       <div className="code-body" tabIndex={0} aria-label={COPY.reader.aria} ref={bodyRef}>
-        {highlight(lines).map((h, i) => (
-          <div key={i} className="code-row">
-            <span className="ln">{i + 1}</span>
-            <span className="tx" dangerouslySetInnerHTML={{ __html: h || " " }} />
-          </div>
-        ))}
+        <CodeRows lines={lines} />
       </div>
     </div>
   );
