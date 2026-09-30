@@ -86,6 +86,41 @@ Developer commands (see the `Makefile`):
 | `make test-int` | Unit and integration suites in Docker against a throwaway Postgres |
 | `make fe` | Frontend dev server (from stage 04) |
 
+### Frontend
+
+The UI lives in `frontend/` (React, TypeScript, Vite). It has two modes.
+
+- **Live.** `http://127.0.0.1:8000` talks to the API and streams real runs over SSE.
+- **Demo.** `/?demo` (or a build with `VITE_DEMO=1`) is the scripted demo. It needs no backend and shows the Demo controls.
+
+Develop it with the fake graph, so no model key is needed:
+
+```bash
+make db     # Postgres (or the talos-pg-test container)
+make fake   # TALOS_FAKE_GRAPH=1 uv run talos-web
+make fe     # cd frontend && npm run dev; Vite proxies /api to 127.0.0.1:8000
+```
+
+Checks, from `frontend/`:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+Playwright needs `npx playwright install chromium` once.
+
+```bash
+npm run e2e:visual   # /?demo against the reference file, 1440x900 and 390x844
+npm run e2e:live     # the live app against an isolated fake-graph server
+```
+
+`e2e:visual` renders its baselines from the reference in the same run. They are never committed.
+
+`e2e:live` starts its own fake-graph server on port 8765. It uses the `talos_e2e` database on `E2E_DATABASE_URL` (default `postgresql+psycopg://talos:talos@localhost:55432/talos_e2e`), and a throwaway vault, workspace and `.env` in `frontend/.e2e-tmp/`. **Warning:** the harness drops and recreates that database. It refuses any name that does not end in `_e2e`.
+
 ## Architecture
 
 ```

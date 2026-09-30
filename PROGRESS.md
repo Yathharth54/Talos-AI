@@ -285,6 +285,35 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-03-docker-sandbox-design.md`.
 - Controller ruling: demo mode shows the reference's literal "34 lines" for the weather tool's reused Code tab; live mode computes the count.
 - Contract addition `forge.code.tests` (the number of tests written) landed in stage 02, so the Tests tab shows its count while the code reveals.
 
+## Web app stage 04 — Frontend ✅
+
+Spec: `docs/superpowers/specs/2026-09-30-talos-web-04-frontend-design.md`. Plans: `docs/superpowers/plans/2026-09-30-talos-web-04a-frontend-demo.md` and `2026-09-30-talos-web-04b-frontend-live.md`.
+
+**Part A (demo mode)** is under stage 04a above.
+
+**Part B (live mode)**:
+- [x] `LiveTransport` (REST + SSE, reconnect with `?after=<last seq>`, stream closed on `run.finished`), `LiveDataSource`, `createServices("live")`; reattach after a reload (backlog applied instantly, the approval dialog from `GET /api/runs/{id}` `pending`)
+- [x] Playwright visual parity: `ref-*` projects render baselines from the reference, `demo-*` compare at 0.1% (39 shot names at 1440x900 and 390x844; 24 tests per side)
+- [x] Live e2e on an isolated fake-graph server (port 8765, `talos_e2e`): boot, Caesar flows, sessions, vault, approval, stop, reload, axe, keyboard-only, keys (54 tests, desktop and mobile)
+- [x] CI `frontend` job: lint, typecheck, Vitest, build, visual, live
+- [x] Backend fixes found by the e2e: vault API `lines` no longer counts a trailing newline; part of the cross-stage event-order and `small` fixes
+- Counts at the last run: Vitest 285 tests in 37 files; visual 24 ref + 24 demo; live 54; pytest 746 passed, 44 skipped.
+
+**Known differences from the reference and open owner decisions**:
+1. Visual shot `21-stopped`: the reference's `stopRun()` clears the paused timer, so the run never finishes and the page hangs on "Working". Our app finishes the stopped run. The demo shot is marked `test.fail()`.
+2. Accessibility findings the reference itself has, filtered by an exact allow-list in `07-a11y` with the UI unchanged: `link-name` on the GitHub pill (mobile); `color-contrast` on the code panel's `.ln` line numbers; `color-contrast` inside dimmed `.past` messages and on the current `.run-link` (amber, 4.11); `scrollable-region-focusable` on `#b-strip` at 390 px.
+3. The reference overflows horizontally at 390 px (a 573 px wide page). This is matched, not fixed.
+4. The vault API `lines` value no longer counts a trailing newline (64 became 63 for the Caesar tool). This changes a stage 02 value.
+5. Settings key descriptions for keys saved by Human check use the reference's `Saved by Human check this session.`, even for keys saved in earlier sessions (word-for-word rule).
+6. Numbers inside frontend copy (the approval dialog's 10 seconds, the Tests panel's 10-second note, the health meter's 2) stay literal and don't follow `.env` changes.
+7. Part A's ruling 1 (`forge.code.tests`) and this stage's `call.error.when` mapping (`"run"`, `"declined"` etc.) are for stage 2 to confirm.
+8. The owner's side-by-side sign-off on live mode (spec 04 §10).
+
+**Notes**:
+- Live e2e has `retries: 0`: the fake graph keeps a saved key in memory, so a retry after "Save key" can't recover. `09-keys` must stay the last live spec.
+- The fake graph is unpaced, so the Stop and mid-run reload e2e cases use the weather run or a replay.
+- Visual baselines are never committed. The visual suite needs Google Fonts to be reachable.
+
 ## Session log
 A short bullet per session — what we did, what's next. Append-only.
 
@@ -343,3 +372,5 @@ A short bullet per session — what we did, what's next. Append-only.
 - **2026-09-30** — Web app stage 03 complete: forged-tool sandbox (`talos/sandbox/`), executor and smoke switched to it, Docker image, compose stack, Makefile, CI `integration` and `docker` jobs. Next: stage 04 (frontend), which replaces the placeholder `frontend/` and adds the CI `frontend` job.
 
 - **2026-09-30** — Web app stage 04a (frontend, demo mode) on branch `feat/web-04-frontend`. The Workbench demo ported to React with DOM, style and copy parity against the reference file, running entirely in demo mode through the real event player. Part B (live transport, visual/e2e/axe, CI) follows on the same branch.
+
+- **2026-10-01** — Web app stage 04b (live frontend) on branch `feat/web-04-frontend`. Live transport and data source, reload reattach, visual parity and live e2e suites (axe, keyboard-only), CI `frontend` job, and the docs. Known differences and owner decisions are listed under stage 04.
