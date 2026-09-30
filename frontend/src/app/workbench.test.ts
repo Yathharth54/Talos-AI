@@ -209,3 +209,56 @@ test("run links are marked only where the reference calls markRunLinks() (run en
   wb.backToNow();
   expect(stores.ui.get().markedRunN).toBe(7);
 });
+
+/* Review round 1. */
+
+test("reset keeps the composer's text (resetDemo only clears the vault search, lines 2280-2289)", async () => {
+  const { stores, wb } = await boot();
+  wb.setDraft("half-typed question");
+  wb.setQuery("hex");
+  await wb.reset();
+  expect(stores.ui.get()).toMatchObject({ draft: "half-typed question", query: "" });
+});
+
+test("reset while a run is going stops it first through the transport (if (S.busy) stopRun())", async () => {
+  const { stores, services, wb } = await boot();
+  const stop = vi.spyOn(services.transport, "stop");
+  await wb.submit(CAESAR);
+  await vi.advanceTimersByTimeAsync(300);
+  const id = stores.ui.get().currentRunId!;
+  await wb.reset();
+  expect(stop).toHaveBeenCalledWith(id);
+  await vi.advanceTimersByTimeAsync(60000);
+  expect(stores.session.get().sessions.at(-1)!.messages).toEqual([]);
+  expect(stores.ui.get()).toMatchObject({ busy: false, currentRunId: null });
+});
+
+test("idle reset doesn't call the transport's stop", async () => {
+  const { services, wb } = await boot();
+  const stop = vi.spyOn(services.transport, "stop");
+  await wb.reset();
+  expect(stop).not.toHaveBeenCalled();
+});
+
+test("a rejected startRun turns busy off again (submit's finally, line 1479)", async () => {
+  const { stores, services, wb } = await boot();
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.spyOn(services.transport, "startRun").mockRejectedValueOnce(new Error("offline"));
+  await wb.submit("What can you do?");
+  expect(stores.ui.get().busy).toBe(false);
+  expect(err).toHaveBeenCalled();
+  err.mockRestore();
+  await wb.submit("What can you do?");
+  await settle(stores);
+  expect(Object.values(stores.runs.get().byId).filter((r) => !r.seeded)).toHaveLength(1);
+});
+
+test("selecting a tool escapes its name for the focus selector when CSS.escape exists", async () => {
+  const { wb } = await boot();
+  const escape = vi.fn((s: string) => s);
+  vi.stubGlobal("CSS", { escape });
+  wb.selectTool("hex_to_rgb");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(escape).toHaveBeenCalledWith("hex_to_rgb");
+  vi.unstubAllGlobals();
+});

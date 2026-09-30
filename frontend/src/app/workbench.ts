@@ -47,21 +47,28 @@ export class Workbench {
     this.ui({ busy: true });
     if (ui.view !== "workbench") window.location.hash = "workbench";
     const sid = this.stores.session.get().curId;
-    const started = await this.services.transport.startRun(sid, text);
-    const name = started.sessionName;
-    if (name) {
-      this.stores.session.update((s) => rename(s, sid, name));
-      this.ui(this.titleAnimated());
+    try {
+      const started = await this.services.transport.startRun(sid, text);
+      const name = started.sessionName;
+      if (name) {
+        this.stores.session.update((s) => rename(s, sid, name));
+        this.ui(this.titleAnimated());
+      }
+      const player = new Player(this.stores, {
+        runId: started.runId,
+        sessionId: sid,
+        // DemoTransport performs the moment dwells itself (ruling 4); any other transport needs the player's.
+        momentDwell: this.services.demo === null,
+        source: (tool) => this.services.data.toolSource(tool),
+      });
+      this.players.set(started.runId, player);
+      this.ui({ benchKey: this.stores.ui.get().benchKey + 1 });
+      this.services.transport.subscribe(started.runId, player.push);
+    } catch (e) {
+      // submit()'s catch and finally (lines 1476-1479): the run couldn't start, so the app isn't busy.
+      console.error(e);
+      this.ui({ busy: false });
     }
-    const player = new Player(this.stores, {
-      runId: started.runId,
-      sessionId: sid,
-      momentDwell: this.services.mode !== "demo",
-      source: (tool) => this.services.data.toolSource(tool),
-    });
-    this.players.set(started.runId, player);
-    this.ui({ benchKey: this.stores.ui.get().benchKey + 1 });
-    this.services.transport.subscribe(started.runId, player.push);
   }
 
   /**
@@ -188,7 +195,8 @@ export class Workbench {
   }
   selectTool(name: string): void {
     this.rerenderVault(false, { selected: name });
-    setTimeout(() => document.querySelector<HTMLElement>(`[data-tool-btn="${name}"]`)?.focus(), 0);
+    const sel = globalThis.CSS?.escape?.(name) ?? name;
+    setTimeout(() => document.querySelector<HTMLElement>(`[data-tool-btn="${sel}"]`)?.focus(), 0);
   }
   fallbackSelect(name: string | null): void {
     this.ui({ selected: name });
@@ -245,6 +253,10 @@ export class Workbench {
 
   /** resetDemo() (line 2280). */
   async reset(): Promise<void> {
+    // if (S.busy) stopRun(). In demo mode the stop's events are dropped by the reset below; in live mode
+    // (part B) this is what tells the server to stop the run before the stores are reloaded.
+    // The demo stop then ends early (its run is silenced), so its rejection is expected and dropped.
+    if (this.stores.ui.get().busy) this.stop().catch(() => {});
     this.services.demo?.reset(this.services.lastRunNumber);
     for (const p of this.players.values()) p.dispose();
     this.players.clear();
@@ -262,7 +274,8 @@ export class Workbench {
     this.stores.ui.dispatch({
       type: "reset",
       state: {
-        ...fresh.ui, view: ui.view, viewEnter: ui.viewEnter, speed: ui.speed, live: ui.live, booted: true,
+        // resetDemo() leaves #ask alone (it only clears #v-search), so the composer keeps its text.
+        ...fresh.ui, view: ui.view, viewEnter: ui.viewEnter, speed: ui.speed, live: ui.live, draft: ui.draft, booted: true,
         titleAnimate: true, titleSeq: ui.titleSeq + 1, benchKey: ui.benchKey + 1, vaultRender: ui.vaultRender + 1,
       },
     });
