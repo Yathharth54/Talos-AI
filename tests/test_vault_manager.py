@@ -289,3 +289,19 @@ def test_remove_unknown_returns_false_and_leaves_manifest(manager: SkillManager,
     before = (tmp_path / "manifest.json").read_text()
     assert manager.remove("missing") is False
     assert (tmp_path / "manifest.json").read_text() == before
+
+
+def test_locate_returns_file_and_function(manager):
+    manager.register(
+        {"name": "adder2", "description": "d", "keywords": ["add"], "function": "adder2"},
+        "def adder2(a, b):\n    return a + b\n",
+    )
+    path, function = manager.locate("adder2")
+    assert path == manager.vault_dir / "tools" / "adder2.py"
+    assert path.is_file()
+    assert function == "adder2"
+
+
+def test_locate_unknown_tool_raises_key_error(manager):
+    with pytest.raises(KeyError, match="No skill named 'nope'"):
+        manager.locate("nope")

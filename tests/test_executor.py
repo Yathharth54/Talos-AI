@@ -935,3 +935,91 @@ def test_describe_result_marks_long_output_as_not_small_and_caps_it():
     assert exec_mod.describe_result("a\nb")["small"] is True  # repr escapes the newline
     big = exec_mod.describe_result(list(range(1000)))["repr"]
     assert big.endswith("…") and len(big) == 2000
+
+
+# ---- sandbox (spec 03 §2.3) -------------------------------------------------
+
+
+def _register(vault: SkillManager, name: str, code: str, signature: str) -> None:
+    vault.register(
+        {
+            "name": name,
+            "description": name,
+            "keywords": [name],
+            "function": name,
+            "signature": signature,
+        },
+        code,
+    )
+
+
+def test_vault_tool_runs_in_another_process(vault, monkeypatch):
+    _register(
+        vault,
+        "whoami",
+        "import os\ndef whoami() -> int:\n    return os.getpid()\n",
+        "whoami() -> int",
+    )
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={}))
+    sub_task = {"id": 1, "needs": "vault", "tool_hint": "whoami", "action": "pid"}
+    rec = executor_node(_state(current_sub_task=sub_task))["sub_task_results"][0]
+    assert rec["ok"] is True
+    assert rec["output"] != os.getpid()
+
+
+def test_vault_tool_timeout_is_a_recorded_failure(vault, monkeypatch):
+    from talos.config import settings
+
+    monkeypatch.setattr(settings, "TOOL_TIMEOUT", 1.0)
+    _register(
+        vault, "sleepy", "import time\ndef sleepy():\n    time.sleep(60)\n", "sleepy() -> None"
+    )
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={}))
+    sub_task = {"id": 1, "needs": "vault", "tool_hint": "sleepy", "action": "sleep"}
+
+    events = _exec_events(_state(current_sub_task=sub_task))
+
+    assert events[1] == {
+        "type": "call.error",
+        "data": {"error": "TimeoutError: tool ran longer than 1s", "when": "run"},
+    }
+    assert events[2]["type"] == "vault.failure"
+    entry = vault.get("sleepy")
+    assert entry["consecutive_failures"] == 1
+    assert entry["last_failure_reason"] == "TimeoutError: tool ran longer than 1s"
+
+
+def test_real_vault_caesar_cipher_word_shift_fails_the_same_way(vault, monkeypatch):
+    source = (Path(__file__).parent / "fixtures" / "sandbox" / "caesar_cipher.py").read_text()
+    _register(
+        vault, "caesar_cipher", source, "caesar_cipher(text: str, shift: int, mode: str) -> str"
+    )
+    _patch_resolver(
+        monkeypatch,
+        ResolvedArgs(args=[], kwargs={"text": "TALOS AGENT", "shift": "seven", "mode": "encrypt"}),
+    )
+    sub_task = {"id": 1, "needs": "vault", "tool_hint": "caesar_cipher", "action": "encrypt"}
+
+    events = _exec_events(_state(current_sub_task=sub_task))
+
+    assert events[0]["data"]["args"][1] == ["shift", "'seven'", True]
+    assert events[-1]["data"]["error"] == "TypeError: shift must be an int, got str"
+
+
+def test_vault_tool_with_missing_file_is_a_dispatch_error(vault, monkeypatch):
+    _register(vault, "gone", "def gone():\n    return 1\n", "gone() -> int")
+    (vault.tools_dir / "gone.py").unlink()
+    sub_task = {"id": 1, "needs": "vault", "tool_hint": "gone", "action": "x"}
+    rec = executor_node(_state(current_sub_task=sub_task))["sub_task_results"][0]
+    assert rec["ok"] is False
+    assert rec["error"].startswith("dispatch error: cannot read tool file")
+
+
+def test_executor_never_calls_skill_manager_load(vault, monkeypatch):
+    _add_tool(vault)
+    monkeypatch.setattr(
+        SkillManager, "load", lambda self, name: pytest.fail("executor must not load in-process")
+    )
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[2, 3], kwargs={}))
+    sub_task = {"id": 1, "needs": "vault", "tool_hint": "add", "action": "add"}
+    assert executor_node(_state(current_sub_task=sub_task))["sub_task_results"][0]["output"] == 5
