@@ -247,3 +247,45 @@ def test_intermittent_failures_do_not_prune(manager: SkillManager):
 def test_record_failure_unknown_is_silent(manager: SkillManager):
     pruned = manager.record_failure("nope", "irrelevant")
     assert pruned is False
+
+
+# --- get / remove (spec 01 §9.4) ------------------------------------------------
+
+
+def _echo(manager: SkillManager, name: str = "echo_tool") -> None:
+    manager.register(
+        {
+            "name": name,
+            "description": "echoes input",
+            "keywords": ["echo"],
+            "function": name,
+            "signature": f"{name}(s: str) -> str",
+        },
+        f"def {name}(s):\n    return s\n",
+    )
+
+
+def test_get_returns_entry_or_none(manager: SkillManager):
+    _echo(manager)
+    assert manager.get("echo_tool")["signature"] == "echo_tool(s: str) -> str"
+    assert manager.get("missing") is None
+
+
+def test_remove_drops_entry_and_keeps_file(manager: SkillManager, tmp_path: Path):
+    _echo(manager)
+    _echo(manager, "other_tool")
+
+    assert manager.remove("echo_tool") is True
+
+    assert [e["name"] for e in manager.all()] == ["other_tool"]
+    assert (tmp_path / "tools" / "echo_tool.py").exists()
+    assert manager.search(["echo"])[0]["name"] == "other_tool"
+    with pytest.raises(KeyError):
+        manager.load("echo_tool")
+
+
+def test_remove_unknown_returns_false_and_leaves_manifest(manager: SkillManager, tmp_path: Path):
+    _echo(manager)
+    before = (tmp_path / "manifest.json").read_text()
+    assert manager.remove("missing") is False
+    assert (tmp_path / "manifest.json").read_text() == before

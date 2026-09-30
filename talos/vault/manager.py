@@ -171,6 +171,29 @@ class SkillManager:
             raise TypeError(f"Skill {name!r}: {fn_name!r} is not callable")
         return fn
 
+    def get(self, name: str) -> SkillEntry | None:
+        """Return the manifest entry for `name`, or None if it isn't there."""
+        return self._find(name)
+
+    def remove(self, name: str) -> bool:
+        """Remove a tool's manifest entry. The .py file stays on disk.
+
+        Same effect as an auto-prune: search and load can no longer find
+        the tool, but its source is kept for reading.
+
+        Args:
+            name: The tool's name.
+
+        Returns:
+            True if an entry was removed, False if there was none.
+        """
+        manifest = self._read_manifest()
+        kept = [e for e in manifest if e.get("name") != name]
+        if len(kept) == len(manifest):
+            return False
+        self._write_manifest(kept)
+        return True
+
     def record_usage(self, name: str) -> None:
         """Bump usage_count, stamp last_used, and reset consecutive_failures.
 

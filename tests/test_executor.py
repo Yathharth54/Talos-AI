@@ -787,3 +787,151 @@ def test_exec_auto_approve_skips_prompt(vault, monkeypatch):
     result = executor_node(_exec_state())
 
     assert result["sub_task_results"][-1]["ok"] is True
+
+
+# ---- call.* and vault.failure events (overview §4.4) ------------------------
+
+
+def _exec_events(state: dict, config: dict | None = None, resume=None) -> list[dict]:
+    """Stream the one-node executor graph and return its custom events."""
+    from langgraph.types import Command
+
+    app = _exec_graph()
+    config = config or {"configurable": {"thread_id": "events"}}
+    events = list(app.stream(state, config=config, stream_mode="custom"))
+    if resume is not None:
+        events += list(app.stream(Command(resume=resume), config=config, stream_mode="custom"))
+    return events
+
+
+def _add_tool(vault: SkillManager, body: str = "return a + b") -> None:
+    vault.register(
+        {
+            "name": "add",
+            "description": "add",
+            "keywords": ["add"],
+            "function": "add",
+            "signature": "add(a: int, b: int) -> int",
+        },
+        f"def add(a: int, b: int) -> int:\n    {body}\n",
+    )
+
+
+def test_executor_emits_args_then_result(vault, monkeypatch):
+    _add_tool(vault)
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[2], kwargs={"b": "three"}))
+    sub_task = {"id": 1, "needs": "vault", "tool_hint": "add", "action": "add"}
+
+    events = _exec_events(_state(current_sub_task=sub_task))
+
+    assert events[0] == {
+        "type": "call.args",
+        "data": {
+            "tool": "add",
+            "args": [["a", "2", False], ["b", "'three'", True]],
+            "caption": None,
+        },
+    }
+    assert events[1]["type"] == "call.error"  # 2 + "three" raises TypeError
+    assert events[1]["data"]["when"] == "run"
+    assert events[1]["data"]["error"].startswith("TypeError")
+
+
+def test_executor_emits_result_for_a_successful_call(vault, monkeypatch):
+    _add_tool(vault)
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[2, 3], kwargs={}))
+    sub_task = {"id": 1, "needs": "vault", "tool_hint": "add", "action": "add"}
+
+    events = _exec_events(_state(current_sub_task=sub_task))
+
+    assert [e["type"] for e in events] == ["call.args", "call.result"]
+    assert events[1]["data"] == {"repr": "5", "type": "int", "small": True}
+
+
+def test_executor_emits_vault_failure_with_streak_and_prune(vault, monkeypatch):
+    _add_tool(vault, body="raise ValueError('kaboom')")
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[1, 2], kwargs={}))
+    sub_task = {"id": 1, "needs": "vault", "tool_hint": "add", "action": "add"}
+
+    first = _exec_events(_state(current_sub_task=sub_task), {"configurable": {"thread_id": "f1"}})
+    second = _exec_events(_state(current_sub_task=sub_task), {"configurable": {"thread_id": "f2"}})
+
+    assert first[-1] == {
+        "type": "vault.failure",
+        "data": {"tool": "add", "streak": 1, "pruned": False, "error": "ValueError: kaboom"},
+    }
+    assert second[-1]["data"]["streak"] == 2
+    assert second[-1]["data"]["pruned"] is True
+
+
+def test_executor_emits_call_error_when_dispatch_fails(vault, monkeypatch):
+    sub_task = {"id": 1, "needs": "primitive", "tool_hint": "nope", "action": "x"}
+    events = _exec_events(_state(current_sub_task=sub_task))
+    assert events == [
+        {
+            "type": "call.error",
+            "data": {"error": "dispatch error: Unknown primitive: 'nope'", "when": "dispatch"},
+        }
+    ]
+
+
+def test_executor_emits_only_approved_args_after_resume(vault, monkeypatch):
+    monkeypatch.delenv("TALOS_AUTO_APPROVE_EXEC", raising=False)
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={"code": "print('shown')"}))
+    monkeypatch.setitem(exec_mod.PRIMITIVES, "python_exec", lambda code: "ok")
+    config = {"configurable": {"thread_id": "approve-events"}}
+    app = _exec_graph()
+
+    paused = list(app.stream(_exec_state(), config=config, stream_mode="custom"))
+    assert paused == []  # nothing emitted before approval
+
+    from langgraph.types import Command
+
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={"code": "print('drifted')"}))
+    resume = {"approved": True, "args": [], "kwargs": {"code": "print('shown')"}}
+    events = list(app.stream(Command(resume=resume), config=config, stream_mode="custom"))
+
+    assert events[0]["data"]["args"] == [["code", "\"print('shown')\"", False]]
+    assert events[1]["type"] == "call.result"
+
+
+def test_executor_emits_declined(vault, monkeypatch):
+    monkeypatch.delenv("TALOS_AUTO_APPROVE_EXEC", raising=False)
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={"code": "print(1)"}))
+    events = _exec_events(
+        _exec_state(), {"configurable": {"thread_id": "decline-events"}}, {"approved": False}
+    )
+    assert events == [
+        {"type": "call.error", "data": {"error": "declined by user", "when": "declined"}}
+    ]
+
+
+@pytest.mark.parametrize(
+    ("declared", "value", "expected"),
+    [
+        ("int", 3, False),
+        ("int", "three", True),
+        ("int", True, True),
+        ("float", 3, False),
+        ("bool", True, False),
+        ("str", 3, True),
+        ("list[str]", ["a"], False),
+        ("list[str]", "a", True),
+        ("int | None", None, False),
+        ("int | None", "x", True),
+        ("dict", {}, False),
+        ("Any", object(), False),
+        ("MyThing", 1, False),
+        (None, 1, False),
+        ("", 1, False),
+    ],
+)
+def test_is_suspicious(declared, value, expected):
+    assert exec_mod.is_suspicious(declared, value) is expected
+
+
+def test_describe_result_marks_long_output_as_not_small_and_caps_it():
+    assert exec_mod.describe_result("x" * 100)["small"] is False
+    assert exec_mod.describe_result("a\nb")["small"] is True  # repr escapes the newline
+    big = exec_mod.describe_result(list(range(1000)))["repr"]
+    assert big.endswith("…") and len(big) == 2000

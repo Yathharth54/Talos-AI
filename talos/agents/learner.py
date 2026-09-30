@@ -15,6 +15,7 @@ guarding every edge.
 from __future__ import annotations
 
 from talos.agents.forger import ForgedTool
+from talos.events import emit
 from talos.state import TalosState
 from talos.vault.manager import SkillManager
 
@@ -43,5 +44,7 @@ def learn_node(state: TalosState) -> dict:
         "signature": validated["signature"],
     }
     mgr = _get_skill_manager()
-    mgr.register(entry, validated["code"])
+    saved = mgr.register(entry, validated["code"])
+    # `sub` (the banner's second line) is filled in by the web layer's copy.
+    emit("vault.saved", tool=dict(saved), sub=None)
     return {}

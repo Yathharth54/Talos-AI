@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 from talos.agents._history import format_recent_history
 from talos.config import settings
 from talos.config.llm import make_structured_model
+from talos.events import emit
 from talos.primitives.file_ops import file_read, file_write
 from talos.primitives.python_exec import python_exec
 from talos.primitives.shell_exec import shell_exec
@@ -359,15 +360,16 @@ def executor_node(state: TalosState) -> dict:
     failed_deps = failed_dependencies(sub_task, state.get("sub_task_results") or [])
     if failed_deps:
         ids = ", ".join(str(i) for i in failed_deps)
-        return _record_failure(state, sub_task, f"skipped: upstream sub-task {ids} failed")
+        return _record_failure(
+            state, sub_task, f"skipped: upstream sub-task {ids} failed", when="skipped"
+        )
 
     mgr = _get_skill_manager()
 
     try:
         fn = _resolve_callable(sub_task, state, mgr)
     except (ValueError, KeyError) as e:
-        result = _record_failure(state, sub_task, f"dispatch error: {e}")
-        return result
+        return _record_failure(state, sub_task, f"dispatch error: {e}", when="dispatch")
 
     user_query = _last_user_text(state)
     prior_results = state.get("sub_task_results") or []
@@ -391,7 +393,7 @@ def executor_node(state: TalosState) -> dict:
             )
             _validate_kwargs(fn, final_kwargs)
         except (ValueError, TypeError) as e:
-            return _record_failure(state, sub_task, f"contract violation: {e}")
+            return _record_failure(state, sub_task, f"contract violation: {e}", when="arguments")
     else:
         # Legacy path: LLM-driven arg resolver (used for primitive + vault).
         try:
@@ -399,7 +401,7 @@ def executor_node(state: TalosState) -> dict:
             if resolved is None:
                 raise ValueError("resolver returned no ResolvedArgs")
         except Exception as e:  # noqa: BLE001 — resolver failure is recoverable
-            return _record_failure(state, sub_task, f"arg resolution failed: {e}")
+            return _record_failure(state, sub_task, f"arg resolution failed: {e}", when="arguments")
         final_args, final_kwargs = _coerce_call_args(
             fn,
             _substitute_placeholders(resolved.args, results_by_id),
@@ -407,10 +409,20 @@ def executor_node(state: TalosState) -> dict:
         )
 
     if _needs_confirmation(sub_task):
+        # call.args is emitted only after approval: on resume LangGraph re-runs
+        # this node and the resolver may drift, so only the approved args are
+        # reported. While paused, the interrupt payload carries the preview.
         approved = _confirm_exec(sub_task, final_args, final_kwargs)
         if approved is None:
-            return _record_failure(state, sub_task, "declined by user")
+            return _record_failure(state, sub_task, "declined by user", when="declined")
         final_args, final_kwargs = approved
+
+    emit(
+        "call.args",
+        tool=_tool_name(sub_task, state, fn),
+        args=describe_args(fn, final_args, final_kwargs),
+        caption=None,  # filled in by the web layer's copy
+    )
 
     try:
         output = fn(*final_args, **final_kwargs)
@@ -421,6 +433,11 @@ def executor_node(state: TalosState) -> dict:
         ok = False
         error = f"{type(e).__name__}: {e}"
 
+    if ok:
+        emit("call.result", **describe_result(output))
+    else:
+        emit("call.error", error=error, when="run")
+
     # Vault/forge usage tracking. Success bumps usage; failure bumps
     # consecutive_failures and may auto-prune (after N failures in a row).
     if sub_task.get("needs") in {"vault", "forge"}:
@@ -429,7 +446,16 @@ def executor_node(state: TalosState) -> dict:
             if ok:
                 mgr.record_usage(name)
             else:
-                mgr.record_failure(name, reason=error or "unknown error")
+                entry = mgr.get(name)
+                pruned = mgr.record_failure(name, reason=error or "unknown error")
+                if entry is not None:
+                    emit(
+                        "vault.failure",
+                        tool=name,
+                        streak=int(entry.get("consecutive_failures", 0)) + 1,
+                        pruned=pruned,
+                        error=error,
+                    )
 
     new_record = {
         "sub_task_id": sub_task.get("id"),
@@ -497,7 +523,13 @@ def _confirm_exec(
     return list(decision.get("args") or []), dict(decision.get("kwargs") or {})
 
 
-def _record_failure(state: TalosState, sub_task: dict, reason: str) -> dict:
+def _record_failure(state: TalosState, sub_task: dict, reason: str, *, when: str) -> dict:
+    """Append a failed result for `sub_task` and emit `call.error`.
+
+    `when` says which stage failed: "skipped", "dispatch", "arguments",
+    "declined" or "run".
+    """
+    emit("call.error", error=reason, when=when)
     prior = state.get("sub_task_results") or []
     new_record = {
         "sub_task_id": sub_task.get("id"),
@@ -509,6 +541,102 @@ def _record_failure(state: TalosState, sub_task: dict, reason: str) -> dict:
         "execution_result": reason,
         "sub_task_results": [*prior, new_record],
     }
+
+
+# Longest repr sent for one argument / for a result in call.* events.
+_ARG_REPR_LIMIT = 200
+_RESULT_REPR_LIMIT = 2000
+# A result repr at most this long, on one line, is shown inline ("small").
+_SMALL_RESULT = 60
+
+# Declared type name → the Python types a value may have without looking wrong.
+_EXPECTED_TYPES: dict[str, tuple[type, ...]] = {
+    "str": (str,),
+    "int": (int,),
+    "float": (int, float),
+    "bool": (bool,),
+    "list": (list, tuple),
+    "dict": (dict,),
+}
+
+
+def _short_repr(value: Any, limit: int) -> str:
+    text = repr(value)
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _fits(value: Any, base: str) -> bool:
+    expected = _EXPECTED_TYPES[base]
+    if isinstance(value, bool) and bool not in expected:
+        return False  # True is an int to Python, not to a reader
+    return isinstance(value, expected)
+
+
+def is_suspicious(declared: str | None, value: Any) -> bool:
+    """True when `value` plainly doesn't fit the declared type.
+
+    Example: `shift` declared `int` but resolved to the string "three".
+    Missing or unknown annotations (Any, custom classes) are never
+    suspicious. Unions are checked part by part, so `int | None` accepts None.
+
+    Args:
+        declared: The annotation text, e.g. "int", "list[str]", "int | None".
+        value: The resolved argument.
+
+    Returns:
+        True only if every part of the annotation is known and rejects the value.
+    """
+    if not declared or not declared.strip():
+        return False
+    for part in re.split(r"\s*\|\s*", declared.strip()):
+        base = part.split("[", 1)[0].strip()
+        if base in {"None", "NoneType"}:
+            if value is None:
+                return False
+        elif base.lower() in _EXPECTED_TYPES:
+            if _fits(value, base.lower()):
+                return False
+        else:
+            return False
+    return True
+
+
+def describe_args(
+    fn: Callable[..., Any], args: list[Any], kwargs: dict[str, Any]
+) -> list[list[Any]]:
+    """Name each call argument for the `call.args` event.
+
+    Returns:
+        `[[name, repr, suspicious], ...]` in call order. Positional args
+        take their parameter names from `fn`'s signature, or `arg{i}`.
+    """
+    schema = schema_from_signature(fn)
+    try:
+        names = list(inspect.signature(fn).parameters)
+    except (TypeError, ValueError):
+        names = []
+    pairs = [(names[i] if i < len(names) else f"arg{i}", v) for i, v in enumerate(args)]
+    pairs += list(kwargs.items())
+    return [
+        [name, _short_repr(value, _ARG_REPR_LIMIT), is_suspicious(schema.get(name), value)]
+        for name, value in pairs
+    ]
+
+
+def describe_result(output: Any) -> dict[str, Any]:
+    """Data for the `call.result` event: `{repr, type, small}`."""
+    text = _short_repr(output, _RESULT_REPR_LIMIT)
+    return {
+        "repr": text,
+        "type": type(output).__name__,
+        "small": len(text) <= _SMALL_RESULT and "\n" not in text,
+    }
+
+
+def _tool_name(sub_task: dict, state: TalosState, fn: Callable[..., Any]) -> str:
+    if sub_task.get("needs") == "forge":
+        return (state.get("forged_tool") or {}).get("name") or getattr(fn, "__name__", "tool")
+    return sub_task.get("tool_hint") or getattr(fn, "__name__", "tool")
 
 
 def _last_user_text(state: TalosState) -> str:
