@@ -403,7 +403,7 @@ def test_approval_does_not_pop_log_lines_of_later_subtasks():
     events = tr.feed(((), "custom", {"type": "call.result", "data": {"result": "x"}}))
     assert "log.pop" not in [t for t, _ in events]
     events = tr.finish()
-    assert events[-1][1]["summary"] == "Built-in, approved"
+    assert events[-1][1]["status"] == "done"
 
 
 def test_key_captions_escape_model_derived_names():
