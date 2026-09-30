@@ -5,6 +5,7 @@ import { useFocusTrap } from "./useFocusTrap";
 import { usePointerGlow } from "./usePointerGlow";
 import { useRestartAnimation } from "./useRestartAnimation";
 import { useScramble } from "./useScramble";
+import { useStaleViewScroll } from "./useStaleViewScroll";
 import { useTabIndicator } from "./useTabIndicator";
 
 afterEach(() => vi.useRealTimers());
@@ -108,4 +109,48 @@ test("usePointerGlow sets --mx and --my on the card under the pointer", () => {
   fireEvent.pointerMove(card.firstChild!, { clientX: 50, clientY: 70 });
   expect(card.style.getPropertyValue("--mx")).toBe("40px");
   expect(card.style.getPropertyValue("--my")).toBe("50px");
+});
+
+function View({ name, view, enter }: { name: string; view: string; enter: number }) {
+  const ref = useRef<HTMLElement>(null);
+  useStaleViewScroll(ref, view === name, enter, name !== "wb");
+  return <section data-testid={name} hidden={view !== name} ref={ref} />;
+}
+
+function Views({ view, enter }: { view: string; enter: number }) {
+  return (
+    <div data-testid="views">
+      <View name="wb" view={view} enter={enter} />
+      <View name="sessions" view={view} enter={enter} />
+    </div>
+  );
+}
+
+test("useStaleViewScroll clamps .views to the height of the view's last render, as showView's reflow does", () => {
+  const { rerender } = render(<Views view="wb" enter={0} />);
+  const views = screen.getByTestId("views");
+  let top = 0;
+  Object.defineProperty(views, "scrollTop", { get: () => top, set: (v: number) => void (top = v), configurable: true });
+  Object.defineProperty(views, "clientHeight", { value: 784, configurable: true });
+  Object.defineProperty(screen.getByTestId("sessions"), "offsetHeight", { value: 1344, configurable: true });
+
+  // First visit: the reflow sees the empty markup, so the scroll goes to the top.
+  top = 709;
+  rerender(<Views view="sessions" enter={1} />);
+  expect(top).toBe(0);
+
+  // Back to the workbench: it's live in the reference, so the browser's own clamp applies.
+  top = 709;
+  rerender(<Views view="wb" enter={2} />);
+  expect(top).toBe(709);
+
+  // Second visit: clamped to the last render's height (1344 - 784).
+  rerender(<Views view="sessions" enter={3} />);
+  expect(top).toBe(560);
+
+  // Already inside the range: untouched.
+  top = 100;
+  rerender(<Views view="wb" enter={4} />);
+  rerender(<Views view="sessions" enter={5} />);
+  expect(top).toBe(100);
 });

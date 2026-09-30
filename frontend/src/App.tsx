@@ -11,6 +11,7 @@ import { Idle } from "./components/workbench/Idle";
 import { earlierData, Panel } from "./components/workbench/panels/Panel";
 import { SUGGESTIONS } from "./demo/data";
 import { usePointerGlow } from "./hooks/usePointerGlow";
+import { useStaleViewScroll } from "./hooks/useStaleViewScroll";
 import { COPY, fill } from "./lib/copy";
 import { curSession, shownSession } from "./store/sessionOps";
 import { StoresProvider, useRuns, useSession, useSettings, useStores, useUi, useVault, type Stores } from "./store/stores";
@@ -89,6 +90,7 @@ function ViewSection({ name, label, children }: { name: View; label: string; chi
     // Only a view change (a viewEnter bump) replays it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewEnter]);
+  useStaleViewScroll(ref, view === name, viewEnter, name !== "workbench");
   return (
     <section className="view" id={`view-${name}`} aria-label={label} hidden={view !== name} ref={ref}>
       {children}
