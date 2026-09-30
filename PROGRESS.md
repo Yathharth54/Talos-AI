@@ -248,6 +248,18 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-01-persistence-design.md`. Pl
 - [x] Integration tests (`-m integration`, real Postgres): migrations round-trip, repo, 20 concurrent appends, interrupt survives a restart, HITL on Postgres, recovery
 - Moved to stage 2: the `copy.py` vs reference-demo test (spec 01 §8), since `copy.py` is a stage 2 file.
 
+## Web app stage 04a — Frontend, demo mode ✅
+
+- [x] `frontend/`: React 18 + TypeScript (strict) + Vite 5, Vitest + Testing Library, ESLint. Scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `extract`, `fixtures`, `e2e` (lands in 04b).
+- [x] `src/styles.css`, the vault data and the two bundled tool sources are generated verbatim from `docs/superpowers/specs/reference/workbench-demo/artifact-body.html` (`npm run extract`), and tests check them byte for byte.
+- [x] DOM parity: `npm run fixtures` runs the reference in headless Chromium and records its renderer outputs (53 cases) and live DOM at checkpoints of 18 scripted flows. Components are compared with them after normalisation (`src/test/normalize.ts`), and `src/app/flows.test.tsx` replays every flow against the app.
+- [x] Runs go through one path: `Transport` → `Player` (pacing from the reference) → stores → components. Demo mode (`/?demo` or `VITE_DEMO=1`) uses `DemoTransport`, the reference's scripted flows emitting contract events; golden event logs for the five fake-graph flows are in `src/transport/__golden__/`.
+- [x] Seams for 04b: `Transport` (`src/transport/types.ts`), `Player` (`src/transport/player.ts`, with the §6 minimum dwells behind `momentDwell`), `DataSource` (`src/data/source.ts`), `createServices(mode)` (`src/services.ts`).
+
+**Notes**:
+- Controller ruling: demo mode shows the reference's literal "34 lines" for the weather tool's reused Code tab; live mode computes the count.
+- Proposed contract addition for stage 2: `forge.code.tests` (the number of tests written), so the Tests tab shows its count while the code reveals.
+
 ## Session log
 A short bullet per session — what we did, what's next. Append-only.
 
@@ -302,3 +314,4 @@ A short bullet per session — what we did, what's next. Append-only.
 - **2026-09-30** — Open-source readiness pass on branch `chore/open-source-readiness`. (1) MIT `LICENSE` plus license/authors/urls/classifiers in `pyproject.toml` and a `talos` console script. (2) `python_exec`/`shell_exec` now pause via `interrupt()` with a preview and run only on `y`; approval echoes the shown args back, so a re-resolved call on resume can't run different code. `TALOS_AUTO_APPROVE_EXEC=true` skips it; both benchmark runners set it. (3) `ruff check` + `ruff format` clean (prompts exempt from E501 so their text is unchanged). (4) GitHub Actions CI: lint + mocked pytest on 3.11/3.12. The default suite now runs with no keys: live web_search/web_read tests moved behind `RUN_LIVE=1`, researcher tests fake the LLM key. README rewritten (safety section, badges, current layout/config, credits, license); `.env.example` defaults tracing off. Removed the stale unchecked Phase 9/10 duplicates. Unit 160 passed / 7 skipped. Still open: process isolation + timeout for forged vault tools; suite failures Q01/Q43 (stale checks), Q33 (time budget), Q46, Q64, Q65.
 
 - **2026-09-30** — Web app stage 01 (persistence) on branch `feat/web-01-persistence`. Postgres storage for sessions, messages, runs, run events and settings (SQLAlchemy 2 async + Alembic `0001_initial`), `AsyncPostgresSaver` with the pickle-fallback serializer, startup recovery, and the core changes stage 2 needs: `emit()` events from forger/tester/smoke/executor/learn, per-test results, `changed`, `SkillManager.remove`, env-driven paths, `build_app(checkpointer)`. The CLI is unchanged and needs no database. Unit 258 passed / 33 skipped (26 of the skips are integration tests); integration 26 passed against `postgres:16-alpine`.
+- **2026-09-30** — Web app stage 04a (frontend, demo mode) on branch `feat/web-04-frontend`. The Workbench demo ported to React with DOM, style and copy parity against the reference file, running entirely in demo mode through the real event player. Part B (live transport, visual/e2e/axe, CI) follows on the same branch.
