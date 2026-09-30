@@ -541,3 +541,53 @@ test("the App with real live services hides the Demo controls (spec 04 §8.1)", 
   expect(document.querySelector("#demo-pop")).toBeNull();
   r.unmount();
 });
+
+/* Final wave C1: stage 2's run numbers are per session, so a run's Talos message is found by session and n. */
+
+const talosHtml = (s: Stores, id: string) =>
+  s.session.get().sessions.find((x) => x.id === id)!.messages.flatMap((m) => (m.kind === "talos" ? [m.html] : []));
+
+test("replaying another session's run with the same n leaves this session's answer alone", async () => {
+  const a1 = summary("a1", 1, "done");
+  const b1 = summary("b1", 1, "done");
+  const bEvents = finishedEvents(b1).map((e) =>
+    e.type === "answer.done" ? ({ ...e, data: { html: "ANSWER FROM B", note: "b note", chips: [{ kind: "reused", text: "b chip" }] } } as RunEvent) : e,
+  );
+  const w: World = {
+    sessions: [detail("A", "Now", [a1]), detail("B", "Older", [b1])],
+    runs: {},
+    events: { a1: finishedEvents(a1), b1: bEvents },
+    tools: [],
+  };
+  const { stores, wb } = await start(w);
+  expect(talosHtml(stores, "A")).toEqual(["Answer 1"]);
+  await wb.openSession("B");
+  expect(talosHtml(stores, "A")).toEqual(["Answer 1"]);
+  expect(talosHtml(stores, "B")).toEqual(["Answer 1"]);
+  await wb.backToNow();
+  const a = stores.session.get().sessions.find((x) => x.id === "A")!.messages.find((m) => m.kind === "talos");
+  expect(a).toMatchObject({ html: "Answer 1", note: null, chips: [] });
+});
+
+test("a live run in a new session doesn't rewrite a past session's run with the same n", async () => {
+  const a1 = summary("a1", 1, "done");
+  const w: World = { sessions: [detail("A", "Past", [a1])], runs: {}, events: { a1: finishedEvents(a1) }, tools: [] };
+  const { stores, wb } = await start(w);
+  w.sessions.push(detail("s-new", "Hello", []));
+  await wb.newSession();
+  expect(stores.session.get().curId).toBe("s-new");
+  await wb.submit("hello");
+  const es = streamOf("r-sent")!;
+  const later = "2026-09-30T12:00:01.000Z";
+  es.emit(ev("r-sent", "run.started", { session_id: "s-new", query: "hello", n: 1 }, later));
+  es.emit(ev("r-sent", "talos.status", { text: "Thinking hard" }, later));
+  es.emit(ev("r-sent", "answer.done", { html: "NEW SESSION ANSWER", note: null, chips: [] }, later));
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(talosHtml(stores, "A")).toEqual(["Answer 1"]);
+  expect(talosHtml(stores, "s-new")).toEqual(["NEW SESSION ANSWER"]);
+  await wb.stop();
+  es.emit(ev("r-sent", "run.finished", { status: "stopped", summary: "Stopped", summary_gold: false, forged: [], used: [] }, later));
+  await vi.advanceTimersByTimeAsync(100);
+  const past = stores.session.get().sessions.find((x) => x.id === "A")!.messages.find((m) => m.kind === "talos");
+  expect(past).toMatchObject({ html: "Answer 1", stopNote: null, status: null });
+});

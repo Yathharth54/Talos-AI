@@ -10,8 +10,16 @@ test("addYou marks earlier messages past; addTalos starts thinking", () => {
   const msgs = s.sessions[0]!.messages;
   expect(msgs.map((m) => m.past)).toEqual([true, true, false]);
   expect(msgs[1]).toMatchObject({ kind: "talos", status: "Working on it", html: null, runLink: false });
-  s = updateTalos(s, 6, (m) => ({ ...m, runLink: true }));
+  s = updateTalos(s, "s1", 6, (m) => ({ ...m, runLink: true }));
   expect(s.sessions[0]!.messages[1]).toMatchObject({ runLink: true });
+});
+
+test("updateTalos changes only the given session's message: run numbers repeat across sessions", () => {
+  let s = addTalos(empty(), "s1", 1, "t1", "Working on it");
+  s = { ...s, sessions: [...s.sessions, { id: "s2", name: "Session 2", started: "2026-09-30T12:05", live: false, runIds: [], messages: [] }] };
+  s = addTalos(s, "s2", 1, "t1", "Working on it");
+  s = updateTalos(s, "s2", 1, (m) => ({ ...m, html: "two" }));
+  expect(s.sessions.map((x) => x.messages[0])).toMatchObject([{ html: null }, { html: "two" }]);
 });
 
 test("openNewSession drops an empty current session and keeps one with runs", () => {

@@ -160,7 +160,7 @@ export class Player {
   }
   private talos(fn: (m: TalosMessage) => TalosMessage): void {
     const n = this.run().n;
-    this.stores.session.update((s) => M.updateTalos(s, n, fn));
+    this.stores.session.update((s) => M.updateTalos(s, this.opts.sessionId, n, fn));
   }
 
   private async apply(e: RunEvent): Promise<void> {
@@ -235,7 +235,8 @@ export class Player {
         this.up((r) => R.logTone(R.logStatus(r, e.data.text, e.data.gold), e.data.tone));
         return;
       case "talos.status":
-        this.talos((m) => ({ ...m, status: e.data.text }));
+        // A replay writes no messages: they come from GET /api/sessions/{id}.
+        if (!this.opts.replay) this.talos((m) => ({ ...m, status: e.data.text }));
         return;
       case "forge.code":
         return this.forgeCode(e);
@@ -481,6 +482,7 @@ export class Player {
 
   private async answer(e: EventOf<"answer.done">): Promise<void> {
     const d = e.data;
+    if (this.opts.replay) return;
     const total = wrapWordsHtml(d.html, 0).count;
     const instant = this.fast || reducedMotion();
     this.talos((m) => ({ ...m, status: null, html: d.html, wrap: true, wordsOn: instant ? total : 0 }));
@@ -497,7 +499,7 @@ export class Player {
       return;
     }
     this.talos((m) => ({ ...m, note: d.note, chips: d.chips, suggest: !!d.suggest }));
-    if (!this.opts.replay) this.stores.ui.set({ live: COPY.convo.livePrefix + textOf(d.html) });
+    this.stores.ui.set({ live: COPY.convo.livePrefix + textOf(d.html) });
   }
 
   private finished(e: EventOf<"run.finished">): void {

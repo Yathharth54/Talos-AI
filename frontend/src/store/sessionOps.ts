@@ -23,15 +23,13 @@ export function addTalos(s: SessionState, sessionId: string, runN: number, key: 
   return mapSession(s, sessionId, (x) => ({ ...x, messages: [...x.messages, m] }));
 }
 
-export function updateTalos(s: SessionState, runN: number, fn: (m: TalosMessage) => TalosMessage): SessionState {
-  return {
-    ...s,
-    sessions: s.sessions.map((x) =>
-      x.messages.some((m) => m.kind === "talos" && m.runN === runN)
-        ? { ...x, messages: x.messages.map((m): Message => (m.kind === "talos" && m.runN === runN ? fn(m) : m)) }
-        : x,
-    ),
-  };
+/** The Talos message of run `runN` in one session: stage 2 numbers runs per session, so `n` alone isn't unique. */
+export function updateTalos(s: SessionState, sessionId: string, runN: number, fn: (m: TalosMessage) => TalosMessage): SessionState {
+  return mapSession(s, sessionId, (x) =>
+    x.messages.some((m) => m.kind === "talos" && m.runN === runN)
+      ? { ...x, messages: x.messages.map((m): Message => (m.kind === "talos" && m.runN === runN ? fn(m) : m)) }
+      : x,
+  );
 }
 
 export const rename = (s: SessionState, sessionId: string, name: string): SessionState => mapSession(s, sessionId, (x) => ({ ...x, name }));
