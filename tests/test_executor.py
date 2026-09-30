@@ -590,3 +590,91 @@ def test_schema_from_signature_reads_type_hints():
         return a
 
     assert exec_mod.schema_from_signature(f) == {"a": "dict", "b": "list[int]", "d": "float"}
+
+
+# ---- exec confirmation gate -----------------------------------------------
+
+def _exec_graph():
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.graph import END, START, StateGraph
+
+    from talos.state import TalosState
+
+    g: StateGraph = StateGraph(TalosState)
+    g.add_node("executor", executor_node)
+    g.add_edge(START, "executor")
+    g.add_edge("executor", END)
+    return g.compile(checkpointer=MemorySaver())
+
+
+def _exec_state(tool: str = "python_exec") -> dict:
+    sub_task = {"id": 1, "needs": "primitive", "tool_hint": tool, "action": "run"}
+    return _state(current_sub_task=sub_task, sub_task_results=[])
+
+
+def test_exec_primitive_pauses_for_confirmation(vault, monkeypatch):
+    monkeypatch.delenv("TALOS_AUTO_APPROVE_EXEC", raising=False)
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={"code": "print(1)"}))
+    ran: list = []
+    monkeypatch.setitem(exec_mod.PRIMITIVES, "python_exec", lambda **kw: ran.append(kw))
+
+    app = _exec_graph()
+    config = {"configurable": {"thread_id": "exec-pause"}}
+    out = app.invoke(_exec_state(), config=config)
+
+    payload = out["__interrupt__"][0].value
+    assert payload["type"] == "confirm_exec"
+    assert payload["preview"] == "print(1)"
+    assert ran == []  # nothing runs before approval
+
+
+def test_exec_decline_records_failure(vault, monkeypatch):
+    from langgraph.types import Command
+
+    monkeypatch.delenv("TALOS_AUTO_APPROVE_EXEC", raising=False)
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={"code": "print(1)"}))
+    ran: list = []
+    monkeypatch.setitem(exec_mod.PRIMITIVES, "python_exec", lambda **kw: ran.append(kw))
+
+    app = _exec_graph()
+    config = {"configurable": {"thread_id": "exec-decline"}}
+    app.invoke(_exec_state(), config=config)
+    final = app.invoke(Command(resume={"approved": False}), config=config)
+
+    assert ran == []
+    rec = final["sub_task_results"][-1]
+    assert rec["ok"] is False and rec["error"] == "declined by user"
+
+
+def test_exec_approval_runs_the_args_the_user_saw(vault, monkeypatch):
+    """On resume the node re-runs and the resolver may return different code;
+    the approved args from the resume value must win."""
+    from langgraph.types import Command
+
+    monkeypatch.delenv("TALOS_AUTO_APPROVE_EXEC", raising=False)
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={"code": "print('shown')"}))
+    ran: list = []
+    monkeypatch.setitem(exec_mod.PRIMITIVES, "shell_exec", lambda **kw: ran.append(kw) or "ok")
+
+    app = _exec_graph()
+    config = {"configurable": {"thread_id": "exec-approve"}}
+    out = app.invoke(_exec_state("shell_exec"), config=config)
+    payload = out["__interrupt__"][0].value
+
+    # Resolver drifts on the re-run.
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={"code": "echo drifted"}))
+    resume = {"approved": True, "args": payload["args"], "kwargs": payload["kwargs"]}
+    final = app.invoke(Command(resume=resume), config=config)
+
+    assert ran == [{"code": "print('shown')"}]
+    assert final["sub_task_results"][-1]["ok"] is True
+
+
+def test_exec_auto_approve_skips_prompt(vault, monkeypatch):
+    monkeypatch.setenv("TALOS_AUTO_APPROVE_EXEC", "true")
+    _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={"code": "print(1)"}))
+    monkeypatch.setitem(exec_mod.PRIMITIVES, "python_exec", lambda **kw: "done")
+
+    result = executor_node(_exec_state())
+
+    assert result["sub_task_results"][-1]["ok"] is True

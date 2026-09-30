@@ -23,6 +23,9 @@ def _drain_interrupts(final_state, config) -> dict:
         intr = interrupts[0]
         payload = intr.value
         msg = payload.get("message", "Need input from you:")
+        if payload.get("type") == "confirm_exec":
+            final_state = app.invoke(Command(resume=_ask_exec_approval(payload)), config=config)
+            continue
         print(f"\n[!] {msg}")
         if payload.get("type") == "missing_api_key":
             env_var = payload.get("env_var", "")
@@ -34,6 +37,23 @@ def _drain_interrupts(final_state, config) -> dict:
             user_value = "skip"
         final_state = app.invoke(Command(resume=user_value), config=config)
     return final_state
+
+
+def _ask_exec_approval(payload: dict) -> dict:
+    """Show the code Talos wants to run and ask y/N. Approving echoes the
+    payload's args back so the executor runs exactly what was shown."""
+    print(f"\n[!] {payload.get('message', 'Allow execution? [y/N]')}")
+    print("    ----")
+    for line in str(payload.get("preview", "")).splitlines() or [""]:
+        print(f"    {line}")
+    print("    ----")
+    try:
+        answer = input("    > ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        answer = ""
+    if answer not in {"y", "yes"}:
+        return {"approved": False}
+    return {"approved": True, "args": payload.get("args"), "kwargs": payload.get("kwargs")}
 
 
 def main() -> None:

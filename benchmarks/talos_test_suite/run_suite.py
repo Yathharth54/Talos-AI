@@ -102,6 +102,8 @@ def main() -> None:
     if args.model:
         os.environ["TALOS_MODEL"] = args.model
         print(f"[suite] TALOS_MODEL = {args.model}")
+    # Unattended run: nobody is there to approve python_exec/shell_exec calls.
+    os.environ.setdefault("TALOS_AUTO_APPROVE_EXEC", "true")
 
     # Late imports so the env override above takes effect.
     from talos.config.logging import setup_logging

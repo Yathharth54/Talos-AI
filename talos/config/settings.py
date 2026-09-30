@@ -28,6 +28,15 @@ FORGE_MAX_RETRIES = int(os.environ.get("TALOS_FORGE_MAX_RETRIES", "3"))
 # stalled provider response would otherwise hang a query for minutes.
 LLM_TIMEOUT = float(os.environ.get("TALOS_LLM_TIMEOUT", "120"))
 
+
+def auto_approve_exec() -> bool:
+    """Whether python_exec/shell_exec run without asking the user first.
+
+    Off by default: both run model-written code on the host. Read at call
+    time (not import time) so unattended runners and tests can flip it.
+    """
+    return os.environ.get("TALOS_AUTO_APPROVE_EXEC", "false").lower() in {"1", "true", "yes"}
+
 VAULT_DIR = PROJECT_ROOT / "talos" / "vault"
 VAULT_TOOLS_DIR = VAULT_DIR / "tools"
 VAULT_MANIFEST_PATH = VAULT_DIR / "manifest.json"

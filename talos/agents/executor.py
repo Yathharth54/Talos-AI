@@ -25,9 +25,11 @@ import re
 from typing import Any, Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
 from talos.agents._history import format_recent_history
+from talos.config import settings
 from talos.config.llm import make_structured_model
 from talos.primitives.file_ops import file_read, file_write
 from talos.primitives.python_exec import python_exec
@@ -51,6 +53,10 @@ PRIMITIVES: dict[str, Callable[..., Any]] = {
     "shell_exec": shell_exec,
     "vault_list": vault_list,
 }
+
+# Primitives that run model-written code on the host. The user approves each
+# call unless TALOS_AUTO_APPROVE_EXEC is set.
+CONFIRM_PRIMITIVES: frozenset[str] = frozenset({"python_exec", "shell_exec"})
 
 
 class ResolvedArgs(BaseModel):
@@ -394,6 +400,12 @@ def executor_node(state: TalosState) -> dict:
             _substitute_placeholders(resolved.kwargs, results_by_id),
         )
 
+    if _needs_confirmation(sub_task):
+        approved = _confirm_exec(sub_task, final_args, final_kwargs)
+        if approved is None:
+            return _record_failure(state, sub_task, "declined by user")
+        final_args, final_kwargs = approved
+
     try:
         output = fn(*final_args, **final_kwargs)
         ok = True
@@ -440,6 +452,40 @@ def failed_dependencies(sub_task: dict, results: list[dict]) -> list[int]:
 
 
 # ---- internal helpers -----------------------------------------------------
+
+def _needs_confirmation(sub_task: dict) -> bool:
+    return (
+        sub_task.get("needs") == "primitive"
+        and sub_task.get("tool_hint") in CONFIRM_PRIMITIVES
+        and not settings.auto_approve_exec()
+    )
+
+
+def _confirm_exec(
+    sub_task: dict, args: list[Any], kwargs: dict[str, Any],
+) -> tuple[list[Any], dict[str, Any]] | None:
+    """Pause the graph and ask the user to approve a code/shell execution.
+
+    LangGraph re-runs this node from the top on resume, so the ArgResolver
+    may produce different args the second time. To guarantee we run exactly
+    what the user saw, the caller resumes with the payload's own args/kwargs
+    (`{"approved": True, "args": ..., "kwargs": ...}`) and we use those.
+    Returns the approved (args, kwargs), or None if declined.
+    """
+    tool = sub_task.get("tool_hint")
+    preview = kwargs.get("code") or kwargs.get("command") or (args[0] if args else repr(kwargs))
+    decision = interrupt({
+        "type": "confirm_exec",
+        "tool": tool,
+        "preview": str(preview),
+        "args": args,
+        "kwargs": kwargs,
+        "message": f"Talos wants to run {tool}. Allow it? [y/N]",
+    })
+    if not isinstance(decision, dict) or not decision.get("approved"):
+        return None
+    return list(decision.get("args") or []), dict(decision.get("kwargs") or {})
+
 
 def _record_failure(state: TalosState, sub_task: dict, reason: str) -> dict:
     prior = state.get("sub_task_results") or []
