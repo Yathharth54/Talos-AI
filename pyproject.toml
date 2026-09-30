@@ -67,3 +67,6 @@ pythonpath = ["."]
 # Default `python_functions = test` matches anything prefixed "test", which
 # accidentally collects helpers like `tester_node`. Require an underscore.
 python_functions = ["test_*"]
+# Async tests (persistence, event streams) run without per-test markers.
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
