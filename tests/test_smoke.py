@@ -195,3 +195,40 @@ def test_smoke_result_repr_is_capped():
     text = short_repr("x" * 1000)
     assert len(text) == 200
     assert text.endswith("…")
+
+
+# ---- sandbox (spec 03 §2.3) ----------------------------------------------------
+
+
+def test_smoke_runs_the_tool_in_another_process():
+    import os
+
+    code = "import os\ndef pid():\n    return os.getpid()\n"
+    out = smoke_node(_state(code, "pid", {"id": 1, "needs": "forge"}))
+    assert out["smoke_result"]["passed"] is True
+    assert out["smoke_result"]["output"] != os.getpid()
+
+
+def test_smoke_times_out_a_hanging_tool(monkeypatch):
+    from talos.config import settings
+
+    monkeypatch.setattr(settings, "TOOL_TIMEOUT", 1.0)
+    code = "import time\ndef hang():\n    time.sleep(60)\n"
+    out = smoke_node(_state(code, "hang", {"id": 1, "needs": "forge"}))
+    assert out["smoke_result"] == {
+        "passed": False,
+        "skipped": False,
+        "error": "runtime: TimeoutError: tool ran longer than 1s",
+    }
+
+
+def test_smoke_reports_a_missing_import_as_a_runtime_failure():
+    code = "import no_such_module_talos\ndef f():\n    return 1\n"
+    out = smoke_node(_state(code, "f", {"id": 1, "needs": "forge"}))
+    assert out["smoke_result"]["passed"] is False
+    assert "ModuleNotFoundError" in out["smoke_result"]["error"]
+
+
+def test_smoke_load_error_when_function_is_missing():
+    out = smoke_node(_state("def other():\n    return 1\n", "wanted", _ADD_TASK))
+    assert out["smoke_result"]["error"] == "load error: source defines no function 'wanted'"
