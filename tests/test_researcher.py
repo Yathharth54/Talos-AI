@@ -13,6 +13,15 @@ import pytest
 from talos.agents import forger as forger_mod
 from talos.agents import researcher as research_mod
 from talos.agents.forger import ForgedTool, forger_node
+from talos.config import settings
+
+
+@pytest.fixture(autouse=True)
+def _fake_llm_key(monkeypatch):
+    """research() bails out early without a key; the mocked tests need to get
+    past that check even on a keyless checkout (CI). A real key is kept."""
+    monkeypatch.setattr(settings, "OPENROUTER_API_KEY", settings.OPENROUTER_API_KEY or "test-key")
+
 
 # ---- should_research heuristic --------------------------------------------
 

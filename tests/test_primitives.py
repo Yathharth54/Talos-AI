@@ -1,12 +1,13 @@
 """Phase 2 primitive tests.
 
-Network primitives (web_search, web_read) make live calls. They're cheap
-on free tiers, so no `RUN_LIVE` flag yet. If a key is missing or the network
-is unavailable, the test will fail loudly — that's the desired signal.
+Network primitives (web_search, web_read) make live calls, so those tests
+are gated behind RUN_LIVE=1 like every other live test. That keeps the
+default suite (and CI) runnable with no keys and no network.
 """
 
 from __future__ import annotations
 
+import os
 import time
 
 import pytest
@@ -17,9 +18,15 @@ from talos.primitives.shell_exec import shell_exec
 from talos.primitives.web_read import web_read
 from talos.primitives.web_search import web_search
 
+live = pytest.mark.skipif(
+    os.environ.get("RUN_LIVE") != "1",
+    reason="Set RUN_LIVE=1 to hit the real Tavily/Jina APIs.",
+)
+
 # --- web_search (live Tavily call) -------------------------------------------
 
 
+@live
 def test_web_search_returns_results():
     results = web_search("LangGraph python framework", max_results=3)
     assert isinstance(results, list)
@@ -31,6 +38,7 @@ def test_web_search_returns_results():
 # --- web_read (live Jina call) -----------------------------------------------
 
 
+@live
 def test_web_read_returns_markdown():
     out = web_read("https://example.com")
     assert isinstance(out, str)
