@@ -4,7 +4,7 @@
 
 **Stack confirmed**: OpenAI only (gpt-4o) for now • Tavily • Jina Reader • LangSmith • LangGraph • LangChain • `uv` venv • pytest per-module tests
 
-**Keys status**: Tavily, Jina, LangSmith provided (free dev keys). OpenAI key pending — user will provide before Phase 4.
+**Keys status**: OpenRouter, Tavily, Jina, LangSmith provided (free dev keys). LLM calls moved from OpenAI to OpenRouter on 2026-09-28.
 
 **Scope**: Backend only. CLI/REPL is the sole interface. No frontend, no web UI, no HTTP server in any phase below — deferred to a future phase not yet planned.
 
@@ -235,33 +235,6 @@ Triggered by a real REPL session that hallucinated a Mumbai temperature. LangSmi
 
 ---
 
-## Phase 9 — Human-in-the-loop for API keys
-- [ ] Interrupt flow in orchestrator
-- [ ] `.env` auto-write helper
-- [ ] Resume flow after user provides key
-- [ ] Test: simulate interrupt + resume; assert `.env` updated and second run skips prompt
-
-**Test gate**: HITL flow round-trips and persists.
-
-**Notes**:
-_(add after work)_
-
----
-
-## Phase 10 — Polish
-- [ ] Logging cleanup (no print statements anywhere)
-- [ ] Error handling pass across all nodes
-- [ ] `README.md` for GitHub
-- [ ] `examples/demo_queries.py`
-- [ ] LangSmith tracing verified for full session
-
-**Test gate**: full demo session traceable in LangSmith; README runnable.
-
-**Notes**:
-_(add after work)_
-
----
-
 ## Session log
 A short bullet per session — what we did, what's next. Append-only.
 
@@ -312,3 +285,5 @@ A short bullet per session — what we did, what's next. Append-only.
   9. Suite fixes: Q08 expectation was arithmetically wrong; Q30/Q41 phrasing; runner links LangSmith `run_id`, reports HITL pauses.
   10. `create_agent` replaces deprecated `create_react_agent`; LLM `timeout=120s` (`TALOS_LLM_TIMEOUT`) after a 10-min stalled OpenRouter call in the re-run.
   Unit 158 passed / 5 skipped; RUN_LIVE 160 passed. **Suite 45/62 → 56/62 (90%)**; category 4 (search/read) 0/5 → 5/5; crashes 3 → 1. 12 fixed, 1 regressed (Q33: correct answer, 408s vs 240s budget — ran before the timeout fix). Median 13.9s → 17.1s per query (larger synthesis prompts). Remaining: Q01/Q43 correct but checks stale/strict; Q46 forges for `2 ** 100`; Q64 now fails one step later on a strict reused `format_markdown_table(rows: list[list[str]])`; Q65 table omits kg. Next: process isolation + timeout for forged tools (deferred item 9).
+
+- **2026-09-30** — Open-source readiness pass on branch `chore/open-source-readiness`. (1) MIT `LICENSE` plus license/authors/urls/classifiers in `pyproject.toml` and a `talos` console script. (2) `python_exec`/`shell_exec` now pause via `interrupt()` with a preview and run only on `y`; approval echoes the shown args back, so a re-resolved call on resume can't run different code. `TALOS_AUTO_APPROVE_EXEC=true` skips it; both benchmark runners set it. (3) `ruff check` + `ruff format` clean (prompts exempt from E501 so their text is unchanged). (4) GitHub Actions CI: lint + mocked pytest on 3.11/3.12. The default suite now runs with no keys: live web_search/web_read tests moved behind `RUN_LIVE=1`, researcher tests fake the LLM key. README rewritten (safety section, badges, current layout/config, credits, license); `.env.example` defaults tracing off. Removed the stale unchecked Phase 9/10 duplicates. Unit 160 passed / 7 skipped. Still open: process isolation + timeout for forged vault tools; suite failures Q01/Q43 (stale checks), Q33 (time budget), Q46, Q64, Q65.
