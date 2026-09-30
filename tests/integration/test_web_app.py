@@ -103,7 +103,8 @@ async def test_real_graph_restart_mid_pause_then_resume(factory, migrated_url, t
 
         second = await services_with_new_saver()
         async for client in open_client(make_app(second)):
-            await client.post(f"/api/runs/{run_id}/resume", json={"decision": "approve"})
+            resumed = await client.post(f"/api/runs/{run_id}/resume", json={"decision": "approve"})
+            assert resumed.status_code == 202, resumed.text
             done = await wait_for_status(client, run_id, "done", "failed")
             assert done["status"] == "done", done
             assert done["summary"] == "Built-in, approved"

@@ -116,19 +116,23 @@ async def test_settings_shape_and_key_rows(client, dotenv, monkeypatch):
 
 
 async def test_patch_ask_before_exec_applies_and_persists(client, services):
-    body = (await client.patch("/api/settings", json={"ask_before_exec": False})).json()
-    assert body["ask_before_exec"] is False
-    assert settings.auto_approve_exec() is True
-    assert await services.store.get_setting("ask_before_exec") is False
+    try:
+        body = (await client.patch("/api/settings", json={"ask_before_exec": False})).json()
+        assert body["ask_before_exec"] is False
+        assert settings.auto_approve_exec() is True
+        assert await services.store.get_setting("ask_before_exec") is False
 
-    sid = (await client.post("/api/sessions")).json()["id"]
-    text = "Run this Python code: print(2 + 2)"
-    run = (await client.post(f"/api/sessions/{sid}/messages", json={"text": text})).json()["run"]
-    done = await wait_for_status(client, run["id"], "done")  # no approval pause
-    assert done["summary"] == "Built-in"
+        sid = (await client.post("/api/sessions")).json()["id"]
+        text = "Run this Python code: print(2 + 2)"
+        sent = await client.post(f"/api/sessions/{sid}/messages", json={"text": text})
+        run = sent.json()["run"]
+        done = await wait_for_status(client, run["id"], "done")  # no approval pause
+        assert done["summary"] == "Built-in"
 
-    assert (
-        await client.patch("/api/settings", json={"ask_before_exec": "nope"})
-    ).status_code == 422
-    await client.patch("/api/settings", json={"ask_before_exec": True})
-    assert settings.auto_approve_exec() is False
+        assert (
+            await client.patch("/api/settings", json={"ask_before_exec": "nope"})
+        ).status_code == 422
+        await client.patch("/api/settings", json={"ask_before_exec": True})
+        assert settings.auto_approve_exec() is False
+    finally:
+        settings.set_auto_approve_override(None)  # never leak into other tests

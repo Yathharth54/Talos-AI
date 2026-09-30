@@ -10,8 +10,11 @@ from talos.web import __main__ as web_main
 
 def test_talos_web_runs_one_local_worker(monkeypatch):
     calls = {}
+    logging_setups = []
+    monkeypatch.setattr(web_main, "setup_logging", lambda: logging_setups.append(True))
     monkeypatch.setattr(web_main.uvicorn, "run", lambda *a, **k: calls.update(args=a, kw=k))
     web_main.main()
+    assert logging_setups == [True]
     assert calls["args"] == ("talos.web.app:create_app",)
     assert calls["kw"]["factory"] is True
     assert calls["kw"]["workers"] == 1
