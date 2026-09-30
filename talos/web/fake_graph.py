@@ -163,7 +163,10 @@ def _arith(node: ast.AST) -> float:
         left, right = _arith(node.left), _arith(node.right)
         if isinstance(node.op, ast.Pow) and abs(right) > 64:
             raise ValueError("exponent too large")
-        return _OPS[type(node.op)](left, right)
+        result = _OPS[type(node.op)](left, right)
+        if isinstance(result, int) and result.bit_length() > 4096:
+            raise ValueError("result too large")
+        return result
     raise ValueError("not arithmetic")
 
 
@@ -182,13 +185,13 @@ def run_python(code: str) -> str | None:
     if re.fullmatch(r"[\d\s+\-*/().%]+", inner):
         try:
             value = _arith(ast.parse(inner, mode="eval").body)
-        except (SyntaxError, ValueError, ZeroDivisionError, OverflowError):
+            if isinstance(value, float):
+                if value != value or value in (float("inf"), float("-inf")):
+                    return None
+                return str(int(value)) if value.is_integer() else repr(value)
+            return str(value)
+        except (SyntaxError, ValueError, ZeroDivisionError, OverflowError, RecursionError):
             return None
-        if isinstance(value, float):
-            if value != value or value in (float("inf"), float("-inf")):
-                return None
-            return str(int(value)) if value.is_integer() else repr(value)
-        return str(value)
     return None
 
 

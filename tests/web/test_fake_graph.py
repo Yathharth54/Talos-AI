@@ -267,6 +267,8 @@ def test_parse_caesar_matches_the_demo():
         ("print(7 / 2)", "3.5"),
         ("print(8 / 2)", "4"),
         ("print(9 ** 9 ** 9)", None),
+        ("print(((9**64)**64)**3)", None),
+        ("print(((((9**64)**64)**64)**64)**64)", None),
         ("print(1 / 0)", None),
         ("import os", None),
     ],
