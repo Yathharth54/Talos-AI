@@ -108,7 +108,7 @@ Resume rules:
 
 `Settings = {model, ask_before_exec, forge_retries, test_timeout_s, llm_timeout_s, prune_after, keys: [{name, set: bool, required: bool, description}]}`
 
-- `keys` lists `OPENROUTER_API_KEY` (required), `TAVILY_API_KEY` (required for web search), `JINA_API_KEY` and `LANGSMITH_API_KEY` (optional), plus every other `*_API_KEY` found in `.env` (described as "Saved by Human check").
+- `keys` lists `OPENROUTER_API_KEY` (required), `TAVILY_API_KEY` (required for web search), `JINA_API_KEY` and `LANGSMITH_API_KEY` (optional), plus every other `*_API_KEY` found in `.env` (described as "Saved by Human check this session.", the demo's sentence).
 - Values are never returned. Only `set: true|false`.
 
 ### Health

@@ -31,7 +31,7 @@ Talos runs code written by an LLM on your machine.
 - **`python_exec` and `shell_exec` ask before running.** The REPL shows you the exact code or command and waits for `y`. Anything else declines. Set `TALOS_AUTO_APPROVE_EXEC=true` to skip the prompt (the unattended benchmark runners do this).
 - **Forged tools are not sandboxed.** They are tested in a subprocess with a timeout, but once registered they run inside the Talos process, with your user's permissions and no timeout.
 - **There is no container isolation.** Run Talos in a VM, container, or throwaway account if you plan to point it at anything you care about.
-- **The web app has no login.** `talos-web` binds to `127.0.0.1` and anyone who can reach its port can run code through it. Keep it on localhost; don't set `TALOS_WEB_HOST=0.0.0.0` on a shared network.
+- **The web app has no login.** `talos-web` binds to `127.0.0.1` and anyone who can reach its port can run code through it. Keep it on localhost. Inside a container it has to bind `TALOS_WEB_HOST=0.0.0.0` to be reachable at all; then publish the port on the host's loopback only (`-p 127.0.0.1:8000:8000`), never as `-p 8000:8000`. Outside a container, don't set `0.0.0.0` on a shared network.
 - **The web app only answers local requests.** It rejects any `Host` header other than `127.0.0.1`, `localhost` and `[::1]` (plus `TALOS_WEB_ALLOWED_HOSTS`) with `400`, so a web page can't reach it through DNS rebinding, and it rejects `POST`/`PATCH`/`DELETE` requests whose `Origin` is another site with `403`, so a page you visit can't start runs or save keys.
 
 ## Quick start
@@ -243,7 +243,7 @@ All via `.env` (see `.env.example`):
 | `TALOS_VAULT_DIR` | no | Vault folder (`manifest.json` + `tools/`). Default `talos/vault` |
 | `TALOS_WORKSPACE_DIR` | no | Where relative `file_read`/`file_write` paths land. Default `workspace/` |
 | `TALOS_DOTENV_PATH` | no | The `.env` Talos loads and where Human check saves keys. Default `.env` in the repo. Must be set in the shell environment: it is read before `.env` is loaded |
-| `TALOS_WEB_HOST` | no | Web app bind address. Default `127.0.0.1`. There is no login: keep it local |
+| `TALOS_WEB_HOST` | no | Web app bind address. Default `127.0.0.1`. There is no login: keep it local. In a container use `0.0.0.0` and publish as `127.0.0.1:8000:8000` |
 | `TALOS_WEB_PORT` | no | Web app port. Default `8000` |
 | `TALOS_WEB_ALLOWED_HOSTS` | no | Comma-separated extra `Host` names the web app answers, besides `127.0.0.1`, `localhost` and `[::1]`. Default empty. Writes from those hosts' pages are allowed too |
 | `TALOS_FAKE_GRAPH` | no | `1` runs the web app with the demo's scripted runs: no model calls, no keys, a temporary vault copy |
@@ -279,6 +279,7 @@ The web app's route, SSE and runner tests run in the default suite against an in
 - Single provider (OpenRouter): one model for every node, set via `TALOS_MODEL`.
 - OAuth-style API auth is out of scope; only env-var-keyed APIs are supported via HITL.
 - The CLI uses an in-memory checkpointer (`MemorySaver`); its conversation state is lost on exit. The vault persists.
+- Stopping a web run ends it right away (the run is marked `stopped` and its stream closes), but a graph node already running in a worker thread (an LLM call, a tool, a test subprocess) can't be interrupted: its thread runs to completion in the background. Its result is discarded, but its side effects (a file written, a tool saved to the vault) can still happen.
 
 ## Acknowledgements
 
