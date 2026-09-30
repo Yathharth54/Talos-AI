@@ -301,7 +301,7 @@ export class Player {
     }
   }
 
-  private started(e: EventOf<"run.started">): void {
+  private async started(e: EventOf<"run.started">): Promise<void> {
     const { query, n } = e.data;
     const sid = this.opts.sessionId;
     const names = this.stores.vault.get().tools.map((t) => t.name);
@@ -309,6 +309,12 @@ export class Player {
     this.stores.runs.update((s) => ({ byId: { ...s.byId, [run.id]: run } }));
     if (this.opts.replay) return;
     this.stores.session.update((s) => M.addTalos(M.attachRun(M.addYou(s, sid, query, `you-${n}`), sid, run.id), sid, n, `talos-${n}`, COPY.convo.thinking));
+    // submit() (lines 1455-1466) scrolls the conversation in addYou/addTalos, which lays out the page while
+    // the previous run is still on the bench, and only then draws the new run. Let React commit the
+    // messages (and run that scroll) first: its forced layout must not see the new bench before log.cmd's
+    // command row, or `.views` (below 820 px) clamps against a shorter page than the reference ever has.
+    await Promise.resolve();
+    if (this.gone) return;
     this.stores.ui.set({ currentRunId: run.id, viewingRunId: run.id, busy: true });
   }
 

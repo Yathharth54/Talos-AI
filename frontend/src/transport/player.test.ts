@@ -298,3 +298,16 @@ describe.each([
     expect(s.ui.get()).toMatchObject({ badge: false, selected: "caesar_cipher" });
   });
 });
+
+test("run.started lands the messages a microtask before the bench switches, as submit's addYou/addTalos scroll first", async () => {
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false });
+  // React flushes a store update in a microtask queued by the update, like this one.
+  const benchAtFlush: (string | null)[] = [];
+  const off = s.session.subscribe(() => queueMicrotask(() => benchAtFlush.push(s.ui.get().viewingRunId)));
+  await p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  off();
+  expect(benchAtFlush[0]).toBeNull();
+  expect(s.session.get().sessions[0]!.messages.map((m) => m.kind)).toEqual(["you", "talos"]);
+  expect(s.ui.get()).toMatchObject({ currentRunId: "r", viewingRunId: "r", busy: true });
+});
