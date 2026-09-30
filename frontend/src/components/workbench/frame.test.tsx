@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { allFlows, expectParity, fixtureCase, flow } from "../../test/parity";
 import { asRun } from "../../test/parity/runs";
+import { setReducedMotion } from "../../test/media";
 import { innerOf, ssr } from "../../test/ssr";
+import type { Run } from "../../store/types";
 import { Banner } from "./Banner";
 import { Bench } from "./Bench";
 import { Idle } from "./Idle";
@@ -71,4 +73,64 @@ test("tabs select, stop and suggestions call back", () => {
   render(<Idle count={40} weatherKeySet={false} askExec onSuggest={onSuggest} />);
   fireEvent.click(screen.getByText(/Build a Caesar cipher tool/));
   expect(onSuggest).toHaveBeenCalledWith(0);
+});
+
+const savedRun = (): Run => asRun(fixtureCase("banner/saved").state.run);
+
+/** Runs scramble() with motion on and counts the animation frames it asks for. */
+function withMotion(fn: (frames: () => number) => void) {
+  setReducedMotion(false);
+  const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 1);
+  try {
+    fn(() => raf.mock.calls.length);
+  } finally {
+    raf.mockRestore();
+    setReducedMotion(true);
+  }
+}
+
+test("a bench remounted with a saved banner doesn't decode the name again (renderBench never scrambles)", () => {
+  withMotion((frames) => {
+    render(<Bench run={savedRun()} live={false} panel={null} onTab={noop} onStop={noop} onOpenTool={noop} />);
+    expect(screen.getByText("caesar_cipher")).toBeInTheDocument();
+    expect(frames()).toBe(0);
+  });
+});
+
+test("a banner set after the bench mounted decodes its name (setBanner, line 1120)", () => {
+  withMotion((frames) => {
+    const run = savedRun();
+    const bare = { ...run, banner: null };
+    const noop2 = { panel: null, onTab: noop, onStop: noop, onOpenTool: noop };
+    const { rerender } = render(<Bench run={bare} live {...noop2} />);
+    expect(frames()).toBe(0);
+    rerender(<Bench run={run} live {...noop2} />);
+    expect(frames()).toBeGreaterThan(0);
+  });
+});
+
+test("the retry packet shows only when retrying() is called after the strip mounted", () => {
+  const run = { ...asRun(fixtureCase("strip/forge-retry").state.run), retrying: true };
+  const link = () => document.querySelector('[data-link="forger-tester"]')!;
+  const { rerender, unmount } = render(<Strip run={run} />);
+  expect(link()).not.toHaveClass("retrying");
+  rerender(<Strip run={{ ...run, retrying: false }} />);
+  expect(link()).not.toHaveClass("retrying");
+  rerender(<Strip run={{ ...run, retrying: true }} />);
+  expect(link()).toHaveClass("retrying");
+  unmount();
+  const fresh = render(<Strip run={{ ...run, retrying: false }} />);
+  fresh.rerender(<Strip run={{ ...run, retrying: true }} />);
+  expect(link()).toHaveClass("retrying");
+});
+
+test("Stop run and Open in vault call back", () => {
+  const onStop = vi.fn();
+  const onOpenTool = vi.fn();
+  const run = { ...savedRun(), status: "running" as const };
+  render(<Bench run={run} live panel={null} onTab={noop} onStop={onStop} onOpenTool={onOpenTool} />);
+  fireEvent.click(screen.getByRole("button", { name: "Stop run" }));
+  expect(onStop).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole("link", { name: "Open in vault" }));
+  expect(onOpenTool).toHaveBeenCalledWith("caesar_cipher");
 });

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useRestartAnimation } from "../../hooks/useRestartAnimation";
 import { COPY } from "../../lib/copy";
 import { STRIPS } from "../../store/runOps";
@@ -20,6 +20,10 @@ function StripLink({ lk, swap, lit, retrying, flows, mountFlows }: StripLinkProp
 /** The graph strip (stripHtml, lines 1007–1019, inside renderBench's <ol>, line 1097). */
 export function Strip({ run }: { run: Run }) {
   const mountFlows = useRef(run.flows ?? {});
+  // stripHtml() never emits "retrying"; only a retrying() call after the render shows it (line 1040).
+  const [staleRetry, setStaleRetry] = useState(!!run.retrying);
+  if (staleRetry && !run.retrying) setStaleRetry(false);
+  const retrying = !!run.retrying && !staleRetry;
   const items = STRIPS[run.strip];
   return (
     <ol className="strip" id="b-strip" aria-label={COPY.bench.graph}>
@@ -40,7 +44,7 @@ export function Strip({ run }: { run: Run }) {
               lk={lk}
               swap={key === "forger" && next === "tester"}
               lit={!!run.links[lk]}
-              retrying={!!run.retrying}
+              retrying={retrying}
               flows={run.flows?.[lk] ?? 0}
               mountFlows={mountFlows.current[lk] ?? 0}
             />

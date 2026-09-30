@@ -6,10 +6,12 @@ import type { Banner as BannerData } from "../../store/types";
 
 type BannerProps = { banner: BannerData | null | undefined; onOpenTool?(name: string): void };
 
-function SavedBanner({ name, sub, onOpenTool }: { name: string; sub: string; onOpenTool?(name: string): void }) {
+type SavedProps = { name: string; sub: string; animate: boolean; onOpenTool?(name: string): void };
+
+function SavedBanner({ name, sub, animate, onOpenTool }: SavedProps) {
   const ref = useRef<HTMLSpanElement>(null);
-  // setBanner() decodes the name when the banner appears (line 1120).
-  useScramble(ref, name, 900, { onMount: true });
+  // setBanner() decodes the name when a banner is set (line 1120); renderBench() never does (line 1101).
+  useScramble(ref, name, 900, { onMount: animate });
   return (
     <section className="banner" aria-label={COPY.banner.savedAria}>
       <span className="sq" aria-hidden="true"></span>
@@ -27,10 +29,14 @@ function SavedBanner({ name, sub, onOpenTool }: { name: string; sub: string; onO
   );
 }
 
-/** The saved / removed banner (bannerHtml, lines 1122–1128). */
+const same = (a: BannerData | null | undefined, b: BannerData): boolean => !!a && a.kind === b.kind && a.name === b.name && a.sub === b.sub;
+
+/** The saved / removed banner (bannerHtml, lines 1122–1128). Only a banner set after mount animates. */
 export function Banner({ banner, onOpenTool }: BannerProps) {
+  const mountBanner = useRef(banner);
   if (!banner) return null;
-  if (banner.kind === "saved") return <SavedBanner name={banner.name} sub={banner.sub} onOpenTool={onOpenTool} />;
+  if (banner.kind === "saved")
+    return <SavedBanner name={banner.name} sub={banner.sub} animate={!same(mountBanner.current, banner)} onOpenTool={onOpenTool} />;
   return (
     <section className="banner removed" aria-label={COPY.banner.removedAria}>
       <span className="sq" aria-hidden="true"></span>
