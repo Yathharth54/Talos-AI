@@ -21,6 +21,7 @@ import asyncio
 import html
 import inspect
 import logging
+import unicodedata
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
@@ -509,8 +510,15 @@ def _resume_for(pending: dict[str, Any], decision: str, value: str | None) -> Re
             key = (value or "").strip()
             if not key:
                 raise BadDecision("Paste the key first, or choose Skip.")
+            if not _clean_key(key):  # a newline would add a line to .env; never echo it
+                raise BadDecision("A key can't contain spaces, line breaks or control characters.")
             return Resume(kind, decision, key)
         if decision == "skip":
             return Resume(kind, decision, "skip")
         raise BadDecision("A key request takes save or skip.")
     raise BadDecision(f"Unknown pause kind {kind!r}.")
+
+
+def _clean_key(key: str) -> bool:
+    """True when `key` has no whitespace and no control or format characters."""
+    return not any(ch.isspace() or unicodedata.category(ch).startswith("C") for ch in key)

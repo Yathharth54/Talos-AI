@@ -65,3 +65,45 @@ async def test_a_saved_key_never_leaks(leaky_services, caplog):
     assert KEY not in json.dumps([e.data for e in stored])
     assert KEY not in caplog.text
     assert "resumed with [redacted]" in caplog.text
+
+
+INJECTION = "abc\nTALOS_AUTO_APPROVE_EXEC=true"
+
+
+async def test_a_key_with_a_newline_is_refused_without_echoing_it(
+    leaky_services, dotenv, caplog
+):
+    """A newline in a key would add a line to .env (spec 02 §10)."""
+    caplog.set_level(logging.DEBUG)
+    async for client in open_client(make_app(leaky_services)):
+        sid = (await client.post("/api/sessions")).json()["id"]
+        sent = await client.post(f"/api/sessions/{sid}/messages", json={"text": "key"})
+        run_id = sent.json()["run"]["id"]
+        await wait_for_status(client, run_id, "waiting")
+        refused = await client.post(
+            f"/api/runs/{run_id}/resume", json={"decision": "save", "value": INJECTION}
+        )
+        assert refused.status_code == 422
+        assert refused.json()["error"]["code"] == "bad_decision"
+        assert "abc" not in refused.text and "TALOS_AUTO_APPROVE_EXEC" not in refused.text
+        assert (await client.get(f"/api/runs/{run_id}")).json()["status"] == "waiting"
+    assert not dotenv.exists()
+    assert leaky_services.driver.resumes == []
+    assert "TALOS_AUTO_APPROVE_EXEC=true" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "value", ["abc def", "abc\tdef", "abc\rdef", "abc\x00def", "abc\x1bdef", "abc def"]
+)
+def test_keys_with_whitespace_or_control_characters_are_bad_decisions(value):
+    from talos.web.runner import BadDecision, _resume_for
+
+    with pytest.raises(BadDecision) as caught:
+        _resume_for({"type": "missing_api_key"}, "save", value)
+    assert "abc" not in str(caught.value) and "def" not in str(caught.value)
+
+
+def test_a_padded_key_is_stripped_and_accepted():
+    from talos.web.runner import _resume_for
+
+    assert _resume_for({"type": "missing_api_key"}, "save", "  sk-123\n").value == "sk-123"
