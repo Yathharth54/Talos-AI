@@ -220,7 +220,7 @@ async def set_run_status(db: AsyncSession, run_id: uuid.UUID, status: str, **fie
     unknown = set(fields) - _RUN_FIELDS
     if unknown:
         raise ValueError(f"set_run_status can't set {sorted(unknown)}")
-    run = await db.get(Run, run_id, with_for_update=True)
+    run = await db.get(Run, run_id, with_for_update={"key_share": True})
     if run is None:
         raise LookupError(f"run {run_id} not found")
     run.status = status
@@ -259,7 +259,7 @@ async def append_event(
     Raises:
         LookupError: The run doesn't exist.
     """
-    locked = await db.scalar(select(Run.id).where(Run.id == run_id).with_for_update())
+    locked = await db.scalar(select(Run.id).where(Run.id == run_id).with_for_update(key_share=True))
     if locked is None:
         raise LookupError(f"run {run_id} not found")
     seq = (

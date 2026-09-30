@@ -115,8 +115,12 @@ class Run(Base):
     n: Mapped[int] = mapped_column(Integer, nullable=False)
     query: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
-    translator_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    pending_interrupt: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    translator_state: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
+    pending_interrupt: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_gold: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")

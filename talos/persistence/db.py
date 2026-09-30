@@ -65,6 +65,9 @@ def make_engine(url: str | None = None) -> AsyncEngine:
 def init_db(url: str | None = None) -> async_sessionmaker[AsyncSession]:
     """Create the process-wide engine and session factory. Idempotent per process.
 
+    Only the first call uses `url`; later calls ignore it and return the
+    existing factory.
+
     `expire_on_commit=False` keeps loaded objects readable after the
     session that loaded them has committed and closed.
     """

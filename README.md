@@ -192,7 +192,7 @@ All via `.env` (see `.env.example`):
 | `TALOS_CHECKPOINTER` | no | `memory` (default) or `postgres`. The web app always uses Postgres; the CLI stays in memory and logs a warning if this is `postgres` |
 | `TALOS_VAULT_DIR` | no | Vault folder (`manifest.json` + `tools/`). Default `talos/vault` |
 | `TALOS_WORKSPACE_DIR` | no | Where relative `file_read`/`file_write` paths land. Default `workspace/` |
-| `TALOS_DOTENV_PATH` | no | The `.env` Talos loads and where Human check saves keys. Default `.env` in the repo |
+| `TALOS_DOTENV_PATH` | no | The `.env` Talos loads and where Human check saves keys. Default `.env` in the repo. Must be set in the shell environment: it is read before `.env` is loaded |
 
 ## Tests
 
@@ -204,9 +204,9 @@ uv run ruff check . && uv run ruff format --check .
 
 Tests are organised by component. LLMs are mocked at the factory seam (`_make_llm`, `_make_resolver_llm`, etc.) for cheap deterministic runs. Live tests are gated by `RUN_LIVE=1`. CI runs lint and the mocked suite on Python 3.11 and 3.12.
 
-Postgres integration tests (the web app's storage) are marked `integration`. They drop and recreate the tables, so point them at a throwaway database. They run only when `DATABASE_URL` is exported in your shell and you pass `-m integration`; a value in `.env` is ignored, so a plain `uv run pytest` never touches a database.
+Postgres integration tests (the web app's storage) are marked `integration`. They run only when `DATABASE_URL` is exported in your shell and you pass `-m integration`; a value in `.env` is ignored, so a plain `uv run pytest` never touches a database. The schema is managed by Alembic; apply it to a database with `uv run alembic upgrade head`.
 
-**Warning:** the integration suite downgrades and truncates the database at `DATABASE_URL`. It must point at a disposable database (for example the `talos-pg-test` container below), never a real one.
+**Warning:** the integration suite downgrades, recreates and truncates the tables at `DATABASE_URL`. It must point at a disposable database (for example the `talos-pg-test` container below), never a real one.
 
 ```bash
 docker run -d --name talos-pg-test -e POSTGRES_USER=talos -e POSTGRES_PASSWORD=talos \
@@ -221,7 +221,7 @@ DATABASE_URL=postgresql+psycopg://talos:talos@localhost:55432/talos uv run pytes
 - Keyword vault search; no semantic search yet (deferred until the vault grows).
 - Single provider (OpenRouter): one model for every node, set via `TALOS_MODEL`.
 - OAuth-style API auth is out of scope; only env-var-keyed APIs are supported via HITL.
-- In-memory checkpointer (`MemorySaver`); conversation state is lost on exit. The vault persists.
+- The CLI uses an in-memory checkpointer (`MemorySaver`); its conversation state is lost on exit. The vault persists.
 
 ## Acknowledgements
 

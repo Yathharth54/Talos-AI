@@ -6,7 +6,7 @@ import asyncio
 import uuid
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 
 from talos.persistence import repo
 from talos.persistence.db import session_scope
@@ -114,6 +114,30 @@ async def test_set_run_status_fields_and_finished_at(factory):
     assert got.translator_state == {"seq": 7}
     assert got.forged == ["caesar_cipher"] and got.used == ["caesar_cipher"]
     assert got.summary_gold is True
+
+
+async def test_clearing_jsonb_columns_writes_sql_null(factory):
+    s = await _new_session(factory)
+    run = await _new_run(factory, s.id)
+    async with session_scope(factory) as db:
+        await repo.set_run_status(
+            db, run.id, "waiting", pending_interrupt={"type": "x"}, translator_state={"seq": 1}
+        )
+    async with session_scope(factory) as db:
+        await repo.set_run_status(
+            db, run.id, "running", pending_interrupt=None, translator_state=None
+        )
+    async with session_scope(factory) as db:
+        row = (
+            await db.execute(
+                text(
+                    "select pending_interrupt is null, translator_state is null "
+                    "from runs where id = :id"
+                ),
+                {"id": run.id},
+            )
+        ).one()
+    assert tuple(row) == (True, True)
 
 
 async def test_active_runs(factory):

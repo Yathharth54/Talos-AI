@@ -35,7 +35,12 @@ async def _diff(url: str) -> list:
 
             def _compare(sync_conn):
                 ctx = MigrationContext.configure(
-                    sync_conn, opts={"include_object": include_object, "compare_type": True}
+                    sync_conn,
+                    opts={
+                        "include_object": include_object,
+                        "compare_type": True,
+                        "compare_server_default": True,
+                    },
                 )
                 return compare_metadata(ctx, Base.metadata)
 

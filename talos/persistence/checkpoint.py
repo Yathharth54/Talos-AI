@@ -44,6 +44,7 @@ async def open_postgres_saver(
         min_size=1,
         max_size=max_size,
         kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+        check=AsyncConnectionPool.check_connection,
         open=False,
     )
     await pool.open(wait=True)

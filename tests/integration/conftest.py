@@ -17,6 +17,7 @@ from talos.persistence.db import make_engine
 from talos.persistence.migrations import downgrade_base, upgrade_head
 
 _APP_TABLES = "sessions, runs, messages, run_events, app_settings"
+# checkpoint_migrations is not truncated: it records the checkpointer's schema version.
 _CHECKPOINT_TABLES = ("checkpoint_writes", "checkpoint_blobs", "checkpoints")
 
 
