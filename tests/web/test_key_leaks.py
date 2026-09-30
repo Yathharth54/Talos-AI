@@ -70,9 +70,7 @@ async def test_a_saved_key_never_leaks(leaky_services, caplog):
 INJECTION = "abc\nTALOS_AUTO_APPROVE_EXEC=true"
 
 
-async def test_a_key_with_a_newline_is_refused_without_echoing_it(
-    leaky_services, dotenv, caplog
-):
+async def test_a_key_with_a_newline_is_refused_without_echoing_it(leaky_services, dotenv, caplog):
     """A newline in a key would add a line to .env (spec 02 §10)."""
     caplog.set_level(logging.DEBUG)
     async for client in open_client(make_app(leaky_services)):
