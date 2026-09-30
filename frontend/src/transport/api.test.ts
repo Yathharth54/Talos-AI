@@ -30,3 +30,10 @@ test("resume sends the decision and nothing else", async () => {
   await createApi(f as unknown as typeof fetch).resume("r", { decision: "save", value: "k" });
   expect(f).toHaveBeenCalledWith("/api/runs/r/resume", expect.objectContaining({ body: '{"decision":"save","value":"k"}' }));
 });
+
+test("runEvents reads stage 2's error body on failure", async () => {
+  const api = createApi((() => reply(404, { error: { code: "not_found", message: "Run not found." } })) as unknown as typeof fetch);
+  const err = await api.runEvents("r").catch((e: unknown) => e);
+  expect(err).toBeInstanceOf(ApiError);
+  expect(err).toMatchObject({ status: 404, code: "not_found", message: "Run not found." });
+});

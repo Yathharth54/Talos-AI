@@ -46,6 +46,13 @@ export interface Api {
 
 type ErrorBody = { error?: { code?: string; message?: string; run_id?: string; session_id?: string } };
 
+/** Builds an ApiError from a non-2xx response, reading stage 2's `{error: {...}}` body when there is one. */
+async function toError(res: Response): Promise<ApiError> {
+  const data: unknown = await res.json().catch(() => null);
+  const e = (data as ErrorBody | null)?.error;
+  return new ApiError(res.status, e?.code ?? `http_${res.status}`, e?.message ?? res.statusText, e?.run_id, e?.session_id);
+}
+
 /** The stage 2 REST client. `fetchImpl` is injectable for tests. */
 export function createApi(fetchImpl: typeof fetch = (...a) => fetch(...a)): Api {
   async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -55,12 +62,8 @@ export function createApi(fetchImpl: typeof fetch = (...a) => fetch(...a)): Api 
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     if (res.status === 204) return undefined as T;
-    const data: unknown = await res.json().catch(() => null);
-    if (!res.ok) {
-      const e = (data as ErrorBody | null)?.error;
-      throw new ApiError(res.status, e?.code ?? `http_${res.status}`, e?.message ?? res.statusText, e?.run_id, e?.session_id);
-    }
-    return data as T;
+    if (!res.ok) throw await toError(res);
+    return (await res.json().catch(() => null)) as T;
   }
   const enc = encodeURIComponent;
   return {
@@ -71,7 +74,7 @@ export function createApi(fetchImpl: typeof fetch = (...a) => fetch(...a)): Api 
     getRun: (id) => call("GET", `/runs/${enc(id)}`),
     runEvents: async (id) => {
       const res = await fetchImpl(`/api/runs/${enc(id)}/events?after=0`);
-      if (!res.ok) throw new ApiError(res.status, `http_${res.status}`, res.statusText);
+      if (!res.ok) throw await toError(res);
       return parseSse(await res.text());
     },
     resume: async (id, d) => void (await call("POST", `/runs/${enc(id)}/resume`, d)),

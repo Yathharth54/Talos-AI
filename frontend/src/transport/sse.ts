@@ -22,7 +22,12 @@ export function parseSse(text: string): RunEvent[] {
       .filter((l) => l.startsWith("data:"))
       .map((l) => l.slice(5).replace(/^ /, ""))
       .join("\n");
-    if (data) out.push(JSON.parse(data) as RunEvent);
+    if (!data) continue;
+    try {
+      out.push(JSON.parse(data) as RunEvent);
+    } catch (err) {
+      console.warn("Skipped an SSE block that isn't JSON", err);
+    }
   }
   return out;
 }
@@ -59,7 +64,8 @@ export function openRunStream(o: {
     es?.close();
   };
   const onMessage = (m: MessageEvent<string>) => {
-    if (closed) return;
+    // A dropped connection also fires "error" (the contract's `error` type) with no data.
+    if (closed || typeof m.data !== "string") return;
     const e = JSON.parse(m.data) as RunEvent;
     if (e.seq <= last) return;
     last = e.seq;
@@ -72,7 +78,9 @@ export function openRunStream(o: {
     const cur = new ES(`/api/runs/${encodeURIComponent(o.runId)}/events?after=${last}`);
     es = cur;
     for (const t of EVENT_TYPES) cur.addEventListener(t, onMessage);
-    cur.onerror = () => {
+    cur.onerror = (ev) => {
+      // A server-sent `event: error` also reaches onerror; it's a contract event, not a failure.
+      if ("data" in ev) return;
       cur.close();
       if (!closed && es === cur && timer === null) timer = setTimeout(connect, o.retryMs ?? 1000);
     };

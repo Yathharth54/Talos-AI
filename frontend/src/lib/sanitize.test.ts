@@ -15,3 +15,15 @@ test("drops every other element to its text and escapes it", () => {
 test("keeps entities escaped", () => {
   expect(sanitize("&lt;b&gt; &amp; &quot;q&quot;")).toBe("&lt;b&gt; &amp; &quot;q&quot;");
 });
+
+test("rejects hostile links, extra attributes and near-miss hrefs", () => {
+  expect(sanitize('<a href="javascript:alert(1)">x</a>')).toBe("x");
+  expect(sanitize('<a href="#vault" onclick="x()">x</a>')).toBe("x");
+  expect(sanitize('<a href=" #vault">x</a>')).toBe("x");
+});
+
+test("normalises case, unwraps disallowed parents and escapes raw-text content", () => {
+  expect(sanitize('<SPAN CLASS="mono">y</SPAN>')).toBe('<span class="mono">y</span>');
+  expect(sanitize('<b><span class="mono">x</span></b>')).toBe('<span class="mono">x</span>');
+  expect(sanitize("<textarea><img src=x onerror=x()></textarea>")).toBe("&lt;img src=x onerror=x()&gt;");
+});
