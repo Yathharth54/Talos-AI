@@ -29,8 +29,8 @@ from talos.agents.planner import Plan, SubTask
 from talos.graph import build_graph
 from talos.vault.manager import SkillManager
 
-
 # ---- fakes ----------------------------------------------------------------
+
 
 class _FakeStructured:
     def __init__(self, items: list) -> None:
@@ -51,10 +51,12 @@ class _FakeChat:
     def invoke(self, _messages):
         class _Msg:
             content = self._content
+
         return _Msg()
 
 
 # ---- fixtures -------------------------------------------------------------
+
 
 @pytest.fixture
 def tmp_vault(tmp_path: Path, monkeypatch) -> SkillManager:
@@ -75,6 +77,7 @@ def _patch_orchestrator_llm(monkeypatch, response: str = "done"):
 # The graph calls e.g. `_make_resolver_llm()` once per sub-task, so each call
 # must keep popping from the SAME list — otherwise every sub-task gets the
 # first canned response and later items are never seen.
+
 
 def _patch_planner(monkeypatch, plan: Plan):
     fake = _FakeStructured([plan])
@@ -112,15 +115,23 @@ def _good_reverse_string() -> ForgedTool:
 
 # ---- end-to-end tests -----------------------------------------------------
 
+
 def test_e2e_single_primitive_subtask(tmp_vault, monkeypatch, tmp_path: Path):
     """One sub-task, primitive only. No vault, no forging."""
     target = tmp_path / "out.txt"
-    plan = Plan(sub_tasks=[
-        SubTask(id=1, action="write file", needs="primitive",
+    plan = Plan(
+        sub_tasks=[
+            SubTask(
+                id=1,
+                action="write file",
+                needs="primitive",
                 tool_hint="file_write",
-                keywords=["write"], input_description="literal",
-                depends_on=[]),
-    ])
+                keywords=["write"],
+                input_description="literal",
+                depends_on=[],
+            ),
+        ]
+    )
     _patch_planner(monkeypatch, plan)
     _patch_resolver(monkeypatch, [ResolvedArgs(args=[str(target), "hello"], kwargs={})])
     _patch_orchestrator_llm(monkeypatch, "wrote the file")
@@ -130,28 +141,42 @@ def test_e2e_single_primitive_subtask(tmp_vault, monkeypatch, tmp_path: Path):
 
     assert target.read_text() == "hello"
     assert final["sub_task_results"][0]["ok"] is True
-    assert any(getattr(m, "content", "") == "wrote the file"
-               for m in final["messages"])
+    assert any(getattr(m, "content", "") == "wrote the file" for m in final["messages"])
 
 
 def test_e2e_two_primitive_subtasks(tmp_vault, monkeypatch, tmp_path: Path):
     """Two sub-tasks in sequence, both primitives. Results accumulate."""
     target = tmp_path / "out.txt"
-    plan = Plan(sub_tasks=[
-        SubTask(id=1, action="write file", needs="primitive",
+    plan = Plan(
+        sub_tasks=[
+            SubTask(
+                id=1,
+                action="write file",
+                needs="primitive",
                 tool_hint="file_write",
-                keywords=["write"], input_description="literal",
-                depends_on=[]),
-        SubTask(id=2, action="read file", needs="primitive",
+                keywords=["write"],
+                input_description="literal",
+                depends_on=[],
+            ),
+            SubTask(
+                id=2,
+                action="read file",
+                needs="primitive",
                 tool_hint="file_read",
-                keywords=["read"], input_description="output of 1",
-                depends_on=[1]),
-    ])
+                keywords=["read"],
+                input_description="output of 1",
+                depends_on=[1],
+            ),
+        ]
+    )
     _patch_planner(monkeypatch, plan)
-    _patch_resolver(monkeypatch, [
-        ResolvedArgs(args=[str(target), "talos"], kwargs={}),
-        ResolvedArgs(args=[str(target)], kwargs={}),
-    ])
+    _patch_resolver(
+        monkeypatch,
+        [
+            ResolvedArgs(args=[str(target), "talos"], kwargs={}),
+            ResolvedArgs(args=[str(target)], kwargs={}),
+        ],
+    )
     _patch_orchestrator_llm(monkeypatch, "done")
 
     app = build_graph().compile()
@@ -164,11 +189,18 @@ def test_e2e_two_primitive_subtasks(tmp_vault, monkeypatch, tmp_path: Path):
 
 def test_e2e_forge_then_execute(tmp_vault, monkeypatch):
     """Single forge sub-task: forge → test passes → learn → execute."""
-    plan = Plan(sub_tasks=[
-        SubTask(id=1, action="reverse a string", needs="forge",
-                keywords=["reverse"], input_description="literal string",
-                depends_on=[]),
-    ])
+    plan = Plan(
+        sub_tasks=[
+            SubTask(
+                id=1,
+                action="reverse a string",
+                needs="forge",
+                keywords=["reverse"],
+                input_description="literal string",
+                depends_on=[],
+            ),
+        ]
+    )
     _patch_planner(monkeypatch, plan)
     _patch_forger(monkeypatch, [_good_reverse_string()])
     _patch_resolver(monkeypatch, [ResolvedArgs(args=["hello"], kwargs={})])
@@ -186,21 +218,36 @@ def test_e2e_forge_then_execute(tmp_vault, monkeypatch):
 
 def test_e2e_forge_then_vault_reuse(tmp_vault, monkeypatch):
     """Two sub-tasks: forge first (registers tool), then re-use as vault."""
-    plan = Plan(sub_tasks=[
-        SubTask(id=1, action="reverse 'foo'", needs="forge",
-                keywords=["reverse"], input_description="literal",
-                depends_on=[]),
-        SubTask(id=2, action="reverse 'bar' too", needs="vault",
+    plan = Plan(
+        sub_tasks=[
+            SubTask(
+                id=1,
+                action="reverse 'foo'",
+                needs="forge",
+                keywords=["reverse"],
+                input_description="literal",
+                depends_on=[],
+            ),
+            SubTask(
+                id=2,
+                action="reverse 'bar' too",
+                needs="vault",
                 tool_hint="reverse_string",
-                keywords=["reverse"], input_description="literal",
-                depends_on=[]),
-    ])
+                keywords=["reverse"],
+                input_description="literal",
+                depends_on=[],
+            ),
+        ]
+    )
     _patch_planner(monkeypatch, plan)
     _patch_forger(monkeypatch, [_good_reverse_string()])
-    _patch_resolver(monkeypatch, [
-        ResolvedArgs(args=["foo"], kwargs={}),
-        ResolvedArgs(args=["bar"], kwargs={}),
-    ])
+    _patch_resolver(
+        monkeypatch,
+        [
+            ResolvedArgs(args=["foo"], kwargs={}),
+            ResolvedArgs(args=["bar"], kwargs={}),
+        ],
+    )
     _patch_orchestrator_llm(monkeypatch, "done")
 
     app = build_graph().compile()
@@ -223,11 +270,18 @@ def test_e2e_forge_fails_graph_terminates(tmp_vault, monkeypatch):
         code="def reverse_string(s):\n    return s\n",  # no-op (wrong)
         test_code="def test_x():\n    assert reverse_string('a') == 'A'\n",  # always fails
     )
-    plan = Plan(sub_tasks=[
-        SubTask(id=1, action="reverse a string", needs="forge",
-                keywords=["reverse"], input_description="literal",
-                depends_on=[]),
-    ])
+    plan = Plan(
+        sub_tasks=[
+            SubTask(
+                id=1,
+                action="reverse a string",
+                needs="forge",
+                keywords=["reverse"],
+                input_description="literal",
+                depends_on=[],
+            ),
+        ]
+    )
     _patch_planner(monkeypatch, plan)
     _patch_forger(monkeypatch, [broken, broken, broken])
     _patch_resolver(monkeypatch, [])  # never reached — execute won't run
@@ -252,8 +306,7 @@ def test_e2e_conversational_query_short_circuits(tmp_vault, monkeypatch):
     final = app.invoke(_state("hi"))
 
     assert final["sub_task_results"] == []
-    assert any(getattr(m, "content", "") == "Hi! How can I help?"
-               for m in final["messages"])
+    assert any(getattr(m, "content", "") == "Hi! How can I help?" for m in final["messages"])
 
 
 def test_e2e_multi_turn_history_accumulates(tmp_vault, monkeypatch):
@@ -292,6 +345,7 @@ def test_e2e_multi_turn_history_accumulates(tmp_vault, monkeypatch):
 
 # ---- live -----------------------------------------------------------------
 
+
 @pytest.mark.skipif(
     os.environ.get("RUN_LIVE") != "1",
     reason="Set RUN_LIVE=1 to run the full pipeline against real OpenAI.",
@@ -300,9 +354,7 @@ def test_e2e_live_read_url_and_write_file(tmp_vault, tmp_path):
     """Real end-to-end: read example.com, write body to a file."""
     target = tmp_path / "talos_e2e.txt"
     app = build_graph().compile()
-    final = app.invoke(_state(
-        f"Read https://example.com and save the body to {target}"
-    ))
+    final = app.invoke(_state(f"Read https://example.com and save the body to {target}"))
     assert target.exists(), final.get("sub_task_results")
     # Jina envelope, not page text (Jina sometimes serves a stale cached snapshot).
     assert "example.com" in target.read_text()
@@ -326,6 +378,7 @@ def test_dispatch_forges_when_upstream_succeeded():
 
 
 # ---- result formatting for the response synthesiser -------------------------
+
 
 def test_format_results_keeps_small_outputs_verbatim():
     plan = [{"id": 1, "action": "add"}]

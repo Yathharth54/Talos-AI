@@ -110,9 +110,10 @@ def run_tests(code: str, test_code: str, timeout: int | None = None) -> dict:
     # stderr will have the trace and stdout will have no markers.
     if parsed["n_total"] == 0 and not result["ok"]:
         parsed["passed"] = False
+        stderr = result["stderr"].strip()
         parsed["error"] = (
             "Code did not run to completion. "
-            f"stderr: {result['stderr'].strip().splitlines()[-1] if result['stderr'].strip() else 'unknown'}"
+            f"stderr: {stderr.splitlines()[-1] if stderr else 'unknown'}"
         )
     elif parsed["n_failed"] > 0:
         parsed["passed"] = False
@@ -152,6 +153,7 @@ def tester_node(state: TalosState) -> dict:
 
 # ---- internal -------------------------------------------------------------
 
+
 def _parse_runner_output(stdout: str) -> dict:
     """Parse our TALOS_TEST markers out of subprocess stdout."""
     n_passed = 0
@@ -167,7 +169,7 @@ def _parse_runner_output(stdout: str) -> dict:
         elif line.startswith("TALOS_TEST FAIL "):
             n_failed += 1
         elif line.startswith("TALOS_TEST TRACE_START "):
-            in_trace_for = line[len("TALOS_TEST TRACE_START "):].strip()
+            in_trace_for = line[len("TALOS_TEST TRACE_START ") :].strip()
             trace_buf = []
         elif line.startswith("TALOS_TEST TRACE_END "):
             if in_trace_for is not None:

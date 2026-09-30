@@ -45,7 +45,9 @@ def _encode(content: Any) -> str:
         return content.decode("utf-8")
     if isinstance(content, (dict, list)):
         return json.dumps(content, indent=2, default=str, ensure_ascii=False)
-    log.warning("file_write received unsupported type %s; falling back to repr()", type(content).__name__)
+    log.warning(
+        "file_write received unsupported type %s; falling back to repr()", type(content).__name__
+    )
     return repr(content)
 
 

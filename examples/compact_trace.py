@@ -15,8 +15,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
-import sys
 from typing import Any
 
 from langsmith import Client
@@ -36,10 +34,12 @@ def compact(run_id: str) -> str:
         return f"run {run_id} not found"
     root = runs[0]
 
-    descendants = list(client.list_runs(
-        project_name=settings.LANGSMITH_PROJECT,
-        trace_id=root.trace_id,
-    ))
+    descendants = list(
+        client.list_runs(
+            project_name=settings.LANGSMITH_PROJECT,
+            trace_id=root.trace_id,
+        )
+    )
     descendants.sort(key=lambda r: r.start_time)
 
     out: list[str] = []
@@ -96,14 +96,17 @@ def compact(run_id: str) -> str:
             out.append("")
 
         elif name == "hitl_check" and (r.outputs or {}).get("available_integrations"):
-            out.append(f"[hitl] keys collected: {list((r.outputs or {}).get('available_integrations', {}).keys())}")
+            keys = list((r.outputs or {}).get("available_integrations", {}).keys())
+            out.append(f"[hitl] keys collected: {keys}")
 
         elif name == "orchestrator_out":
             outp = r.outputs or {}
             msgs = outp.get("messages") or []
             if msgs:
                 last = msgs[-1]
-                content = last.get("content") if isinstance(last, dict) else getattr(last, "content", "")
+                content = (
+                    last.get("content") if isinstance(last, dict) else getattr(last, "content", "")
+                )
                 out.append(f"[final] {_truncate(content, 400)}")
                 out.append("")
 

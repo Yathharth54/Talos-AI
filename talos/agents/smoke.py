@@ -73,21 +73,36 @@ def smoke_node(state: TalosState) -> dict:
     # If the tool needs env vars we may not have set, smoke would always
     # fail with KeyError. Skip and let the HITL flow handle missing keys.
     if forged.get("needs_env_vars"):
-        return {"smoke_result": {"passed": True, "skipped": True,
-                                  "reason": f"env vars required: {forged['needs_env_vars']}"}}
+        return {
+            "smoke_result": {
+                "passed": True,
+                "skipped": True,
+                "reason": f"env vars required: {forged['needs_env_vars']}",
+            }
+        }
 
     try:
         fn = _load_forged_function(forged)
     except (SyntaxError, ValueError) as e:
-        return {"smoke_result": {"passed": False, "skipped": False,
-                                  "error": f"load error: {type(e).__name__}: {e}"}}
+        return {
+            "smoke_result": {
+                "passed": False,
+                "skipped": False,
+                "error": f"load error: {type(e).__name__}: {e}",
+            }
+        }
 
     has_contract = bool(sub_task.get("input_schema"))
     if not has_contract and not _is_zero_arg(fn):
         # No typed contract → no deterministic way to invoke. Pass through.
         # (Zero-arg tools are still callable, so they fall through and run.)
-        return {"smoke_result": {"passed": True, "skipped": True,
-                                  "reason": "no typed contract on sub-task"}}
+        return {
+            "smoke_result": {
+                "passed": True,
+                "skipped": True,
+                "reason": "no typed contract on sub-task",
+            }
+        }
 
     prior = state.get("sub_task_results") or []
     results_by_id = {r.get("sub_task_id"): r for r in prior}
@@ -100,13 +115,19 @@ def smoke_node(state: TalosState) -> dict:
         )
         _validate_kwargs(fn, kwargs)
     except (ValueError, TypeError) as e:
-        return {"smoke_result": {"passed": False, "skipped": False,
-                                  "error": f"contract violation: {e}"}}
+        return {
+            "smoke_result": {"passed": False, "skipped": False, "error": f"contract violation: {e}"}
+        }
 
     try:
         out = fn(**kwargs)
     except Exception as e:  # noqa: BLE001 — smoke is meant to surface anything
-        return {"smoke_result": {"passed": False, "skipped": False,
-                                  "error": f"runtime: {type(e).__name__}: {e}"}}
+        return {
+            "smoke_result": {
+                "passed": False,
+                "skipped": False,
+                "error": f"runtime: {type(e).__name__}: {e}",
+            }
+        }
 
     return {"smoke_result": {"passed": True, "skipped": False, "output": out}}

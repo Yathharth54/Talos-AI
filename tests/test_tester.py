@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from talos.agents.tester import run_tests, tester_node
 
-
 # --- run_tests utility --------------------------------------------------------
+
 
 def test_run_tests_passes_when_code_is_correct():
     code = "def add(a: int, b: int) -> int:\n    return a + b\n"
@@ -67,11 +67,10 @@ def test_run_tests_does_not_leak_files_to_cwd(tmp_path, monkeypatch):
     """Even if a test writes to a relative path, it must NOT land in cwd —
     the test subprocess runs in an isolated temp dir."""
     import os
+
     monkeypatch.chdir(tmp_path)
     code = "def stash(p: str, c: str) -> None:\n    open(p, 'w').write(c)\n"
-    test_code = (
-        "def test_a():\n    stash('leaked_evil_file.txt', 'haha')\n    assert True\n"
-    )
+    test_code = "def test_a():\n    stash('leaked_evil_file.txt', 'haha')\n    assert True\n"
     r = run_tests(code, test_code)
     assert r["passed"] is True
     # Most importantly — the file is NOT in the test's cwd.
@@ -95,6 +94,7 @@ def test_run_tests_partial_failure_summary():
 
 
 # --- tester_node (LangGraph contract) ----------------------------------------
+
 
 def test_tester_node_reads_forged_tool_from_state():
     state = {

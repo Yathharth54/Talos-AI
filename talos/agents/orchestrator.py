@@ -31,6 +31,7 @@ def _make_llm() -> Any:
 
 # ---- nodes -----------------------------------------------------------------
 
+
 def orchestrator_in_node(state: TalosState) -> dict:
     """Reset per-query state. Runs once at the start of each invocation.
 
@@ -106,6 +107,7 @@ def orchestrator_out_node(state: TalosState) -> dict:
 
 
 # ---- routers ---------------------------------------------------------------
+
 
 def route_after_planner(state: TalosState) -> str:
     """Three terminals after planning:
@@ -186,6 +188,7 @@ def advance_node(state: TalosState) -> dict:
 
 
 # ---- helpers ---------------------------------------------------------------
+
 
 def _last_user_text(state: TalosState) -> str:
     for msg in reversed(state.get("messages", []) or []):

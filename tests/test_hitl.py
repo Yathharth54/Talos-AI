@@ -10,9 +10,6 @@ Verifies:
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -22,8 +19,8 @@ from talos.agents import hitl as hitl_mod
 from talos.agents.hitl import hitl_check_node
 from talos.state import TalosState
 
-
 # ---- _persist_env_var -----------------------------------------------------
+
 
 def test_persist_creates_env_file(tmp_path, monkeypatch):
     target = tmp_path / ".env"
@@ -34,6 +31,7 @@ def test_persist_creates_env_file(tmp_path, monkeypatch):
 
     assert target.read_text() == "X_TEST_KEY=abc123\n"
     import os
+
     assert os.environ["X_TEST_KEY"] == "abc123"
 
 
@@ -63,6 +61,7 @@ def test_persist_appends_new_key(tmp_path, monkeypatch):
 
 # ---- hitl_check_node (no-graph) -------------------------------------------
 
+
 def test_hitl_noop_when_no_vars_needed():
     state = {"forged_tool": {"name": "x", "needs_env_vars": []}}
     assert hitl_check_node(state) == {}  # type: ignore[arg-type]
@@ -75,6 +74,7 @@ def test_hitl_noop_when_vars_already_set(monkeypatch):
 
 
 # ---- hitl_check_node inside a checkpointed graph (interrupt + resume) ----
+
 
 def test_hitl_interrupts_and_resumes(monkeypatch, tmp_path):
     """Build a tiny graph with one node — hitl_check — and verify it
@@ -105,6 +105,7 @@ def test_hitl_interrupts_and_resumes(monkeypatch, tmp_path):
     final = app.invoke(Command(resume="user-supplied-key"), config=config)
     assert "__interrupt__" not in final
     import os
+
     assert os.environ["FAKE_API_KEY"] == "user-supplied-key"
     assert "FAKE_API_KEY" in (final.get("available_integrations") or {})
 
@@ -132,6 +133,7 @@ def test_hitl_multiple_missing_vars_get_their_own_values(monkeypatch, tmp_path):
     app.invoke(Command(resume="value-b"), config=config)
 
     import os
+
     assert os.environ["MULTI_A"] == "value-a"
     assert os.environ["MULTI_B"] == "value-b"
     text = (tmp_path / ".env").read_text()
@@ -155,6 +157,7 @@ def test_hitl_skip_does_not_persist(monkeypatch, tmp_path):
     app.invoke(Command(resume="skip"), config=config)
 
     import os
+
     assert "OPTIONAL_KEY" not in os.environ
     # .env file should still not contain the skipped key
     env_path = tmp_path / ".env"

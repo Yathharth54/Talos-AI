@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from talos.vault.manager import SkillManager, SkillEntry
+from talos.vault.manager import SkillEntry, SkillManager
 
 
 @pytest.fixture
@@ -21,6 +21,7 @@ def manager(tmp_path) -> SkillManager:
 
 
 # --- manifest lifecycle ------------------------------------------------------
+
 
 def test_manifest_created_on_init(tmp_path):
     mgr = SkillManager(vault_dir=tmp_path)
@@ -72,6 +73,7 @@ def test_register_requires_name_and_function(manager: SkillManager):
 
 # --- search ------------------------------------------------------------------
 
+
 def test_search_ranks_by_overlap(manager: SkillManager):
     manager.register(
         {"name": "a", "function": "a", "keywords": ["csv", "parse"]},
@@ -110,6 +112,7 @@ def test_search_empty_query_returns_empty(manager: SkillManager):
 
 # --- load --------------------------------------------------------------------
 
+
 def test_load_returns_working_callable(manager: SkillManager):
     manager.register(
         {"name": "adder", "function": "adder", "keywords": ["add"]},
@@ -144,6 +147,7 @@ def test_reload_picks_up_overwritten_code(manager: SkillManager):
 
 # --- usage tracking ----------------------------------------------------------
 
+
 def test_record_usage_bumps_counter_and_timestamp(manager: SkillManager):
     manager.register(
         {"name": "a", "function": "a", "keywords": ["x"]},
@@ -161,6 +165,7 @@ def test_record_usage_unknown_is_silent(manager: SkillManager):
 
 
 # --- failure tracking + auto-prune --------------------------------------------
+
 
 def test_record_failure_increments_counters(manager: SkillManager):
     manager.register(

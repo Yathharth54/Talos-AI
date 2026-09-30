@@ -38,7 +38,9 @@ class SubTask(BaseModel):
     )
     tool_hint: str | None = Field(
         default=None,
-        description="primitive name if needs=primitive; vault skill name if needs=vault; null otherwise",
+        description=(
+            "primitive name if needs=primitive; vault skill name if needs=vault; null otherwise"
+        ),
     )
     keywords: list[str] = Field(
         default_factory=list,
@@ -46,7 +48,9 @@ class SubTask(BaseModel):
     )
     input_description: str = Field(
         default="",
-        description="how this sub-task gets its input (literal value vs output of an upstream sub-task)",
+        description=(
+            "how this sub-task gets its input (literal value vs output of an upstream sub-task)"
+        ),
     )
     depends_on: list[int] = Field(
         default_factory=list,
@@ -79,7 +83,7 @@ class SubTask(BaseModel):
             "Forge only: maps each parameter NAME to its concrete value. "
             "Each value is either a literal (str/int/float/bool/list/dict) "
             "OR the string '__SUBTASK_OUTPUT_<N>__' to receive the full output "
-            "of upstream sub-task N (optionally with [idx]/[\"key\"] accessors, "
+            'of upstream sub-task N (optionally with [idx]/["key"] accessors, '
             "e.g. '__SUBTASK_OUTPUT_1__[\"price\"]'). Every key in input_schema "
             "MUST appear in param_bindings."
         ),
@@ -97,8 +101,11 @@ class Plan(BaseModel):
         ),
     )
     verdict_category: Literal[
-        "physics-impossible", "missing-resource", "out-of-scope",
-        "underspecified", "",
+        "physics-impossible",
+        "missing-resource",
+        "out-of-scope",
+        "underspecified",
+        "",
     ] = Field(
         default="",
         description=(

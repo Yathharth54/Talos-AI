@@ -76,15 +76,17 @@ def hitl_check_node(state: TalosState) -> dict:
     for var in missing:
         # Each interrupt pauses the graph until resumed; once resumed, the
         # call returns the user's value and execution continues.
-        value = interrupt({
-            "type": "missing_api_key",
-            "env_var": var,
-            "tool_name": forged.get("name"),
-            "message": (
-                f"The forged tool '{forged.get('name')}' needs the env var "
-                f"{var}. Please paste its value (or 'skip' to abort)."
-            ),
-        })
+        value = interrupt(
+            {
+                "type": "missing_api_key",
+                "env_var": var,
+                "tool_name": forged.get("name"),
+                "message": (
+                    f"The forged tool '{forged.get('name')}' needs the env var "
+                    f"{var}. Please paste its value (or 'skip' to abort)."
+                ),
+            }
+        )
         if not value or str(value).strip().lower() == "skip":
             # User declined → don't write; the next executor call will fail
             # cleanly because the env var is still unset.

@@ -24,8 +24,8 @@ from talos.agents import forger as forger_mod
 from talos.agents.forge_subgraph import build_forge_subgraph
 from talos.agents.forger import ForgedTool, forger_node
 
-
 # ---- helpers ---------------------------------------------------------------
+
 
 class _FakeLLM:
     """Stand-in for ChatOpenAI.with_structured_output(...).
@@ -78,6 +78,7 @@ def _broken_tool() -> ForgedTool:
 
 # ---- forger_node unit tests ------------------------------------------------
 
+
 def test_forger_node_first_attempt(monkeypatch):
     fake = _FakeLLM([_good_tool()])
     monkeypatch.setattr(forger_mod, "_make_llm", lambda: fake)
@@ -96,17 +97,19 @@ def test_forger_node_retry_includes_previous_attempt(monkeypatch):
     fake = _FakeLLM([_good_tool()])
     monkeypatch.setattr(forger_mod, "_make_llm", lambda: fake)
 
-    out = forger_node({  # type: ignore[arg-type]
-        "current_sub_task": {"action": "reverse a string"},
-        "retry_count": 1,
-        "forged_tool": _broken_tool().model_dump(),
-        "test_result": {
-            "passed": False,
-            "stderr": "AssertionError",
-            "error": "test_basic: AssertionError",
-            "timed_out": False,
-        },
-    })
+    out = forger_node(
+        {  # type: ignore[arg-type]
+            "current_sub_task": {"action": "reverse a string"},
+            "retry_count": 1,
+            "forged_tool": _broken_tool().model_dump(),
+            "test_result": {
+                "passed": False,
+                "stderr": "AssertionError",
+                "error": "test_basic: AssertionError",
+                "timed_out": False,
+            },
+        }
+    )
 
     assert out["retry_count"] == 2
     user_msg = fake.calls[0][1].content
@@ -115,6 +118,7 @@ def test_forger_node_retry_includes_previous_attempt(monkeypatch):
 
 
 # ---- forge sub-graph integration (mocked LLM) ------------------------------
+
 
 def test_forge_subgraph_succeeds_first_try(monkeypatch):
     fake = _FakeLLM([_good_tool()])
@@ -158,6 +162,7 @@ def test_forge_subgraph_exhausts_retries(monkeypatch):
 
 
 # ---- live OpenAI test (gated) -----------------------------------------------
+
 
 @pytest.mark.skipif(
     os.environ.get("RUN_LIVE") != "1",

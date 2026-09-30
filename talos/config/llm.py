@@ -61,10 +61,12 @@ class _RetryingStructured:
         if result is not None:
             return result
 
-        nudge = HumanMessage(content=(
-            f"You must respond by calling the `{self._schema_name}` tool with "
-            "valid arguments. Do not reply in plain text."
-        ))
+        nudge = HumanMessage(
+            content=(
+                f"You must respond by calling the `{self._schema_name}` tool with "
+                "valid arguments. Do not reply in plain text."
+            )
+        )
         try:
             result = self._runnable.invoke([*messages, nudge])
         except Exception as e:  # noqa: BLE001

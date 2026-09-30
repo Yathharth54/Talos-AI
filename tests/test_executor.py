@@ -19,8 +19,8 @@ from talos.agents import executor as exec_mod
 from talos.agents.executor import ResolvedArgs, executor_node
 from talos.vault.manager import SkillManager
 
-
 # ---- helpers --------------------------------------------------------------
+
 
 class _FakeResolver:
     def __init__(self, resolved: ResolvedArgs) -> None:
@@ -53,6 +53,7 @@ def _state(query: str = "do thing", **extra) -> dict:
 
 # ---- primitive dispatch ---------------------------------------------------
 
+
 def test_executor_runs_primitive_with_resolved_args(vault, monkeypatch, tmp_path: Path):
     target = tmp_path / "out.txt"
     _patch_resolver(monkeypatch, ResolvedArgs(args=[str(target), "hello"], kwargs={}))
@@ -72,6 +73,7 @@ def test_executor_unknown_primitive_records_failure(vault, monkeypatch):
 
 
 # ---- vault dispatch -------------------------------------------------------
+
 
 def test_executor_runs_vault_tool(vault, monkeypatch):
     vault.register(
@@ -115,6 +117,7 @@ def test_executor_vault_records_usage(vault, monkeypatch):
 
 # ---- forge dispatch (post-learn) -----------------------------------------
 
+
 def test_executor_runs_freshly_forged_tool(vault, monkeypatch):
     # Simulate the path where Learn has just registered a forged tool and
     # the Executor immediately runs it for the current sub-task.
@@ -148,12 +151,18 @@ def test_executor_forge_without_forged_tool_fails(vault, monkeypatch):
 
 # ---- runtime errors -------------------------------------------------------
 
+
 def test_executor_records_failure_on_vault_tool_error(vault, monkeypatch):
     """When a vault tool raises, executor should bump consecutive_failures.
     Two consecutive failures auto-prune the entry from the manifest."""
     vault.register(
-        {"name": "boom", "description": "raises", "keywords": ["err"],
-         "function": "boom", "signature": "boom() -> None"},
+        {
+            "name": "boom",
+            "description": "raises",
+            "keywords": ["err"],
+            "function": "boom",
+            "signature": "boom() -> None",
+        },
         "def boom():\n    raise ValueError('kaboom')\n",
     )
     _patch_resolver(monkeypatch, ResolvedArgs(args=[], kwargs={}))
@@ -192,6 +201,7 @@ def test_executor_captures_tool_runtime_error(vault, monkeypatch):
 
 # ---- empty / missing sub-task --------------------------------------------
 
+
 def test_executor_no_sub_task_returns_clean_state(vault, monkeypatch):
     out = executor_node(_state())
     assert out["execution_result"] is None
@@ -199,15 +209,19 @@ def test_executor_no_sub_task_returns_clean_state(vault, monkeypatch):
 
 # ---- placeholder substitution (truncation fix) ---------------------------
 
+
 def test_substitute_exact_placeholder_returns_raw_object(vault, monkeypatch, tmp_path: Path):
     """An arg that is EXACTLY `__SUBTASK_OUTPUT_N__` gets the raw prior
     output substituted in — no stringification, full content preserved."""
     target = tmp_path / "out.txt"
     huge = "X" * 5000  # well past the 500-char prompt-truncation
-    _patch_resolver(monkeypatch, ResolvedArgs(
-        args=[str(target), "__SUBTASK_OUTPUT_1__"],
-        kwargs={},
-    ))
+    _patch_resolver(
+        monkeypatch,
+        ResolvedArgs(
+            args=[str(target), "__SUBTASK_OUTPUT_1__"],
+            kwargs={},
+        ),
+    )
     sub_task = {"id": 2, "needs": "primitive", "tool_hint": "file_write", "action": "save"}
     state = _state(
         "save the page",
@@ -223,10 +237,13 @@ def test_substitute_exact_placeholder_returns_raw_object(vault, monkeypatch, tmp
 def test_substitute_within_string_does_string_replace(vault, monkeypatch, tmp_path: Path):
     """A string CONTAINING a placeholder gets string-substituted."""
     target = tmp_path / "out.txt"
-    _patch_resolver(monkeypatch, ResolvedArgs(
-        args=[str(target), "Result was: __SUBTASK_OUTPUT_1__"],
-        kwargs={},
-    ))
+    _patch_resolver(
+        monkeypatch,
+        ResolvedArgs(
+            args=[str(target), "Result was: __SUBTASK_OUTPUT_1__"],
+            kwargs={},
+        ),
+    )
     sub_task = {"id": 2, "needs": "primitive", "tool_hint": "file_write", "action": "wrap"}
     state = _state(
         "wrap the result",
@@ -240,10 +257,13 @@ def test_substitute_within_string_does_string_replace(vault, monkeypatch, tmp_pa
 def test_substitute_with_index_accessor(vault, monkeypatch, tmp_path: Path):
     """`__SUBTASK_OUTPUT_1__[0]` → first list element."""
     target = tmp_path / "out.txt"
-    _patch_resolver(monkeypatch, ResolvedArgs(
-        args=[str(target), '__SUBTASK_OUTPUT_1__[0]'],
-        kwargs={},
-    ))
+    _patch_resolver(
+        monkeypatch,
+        ResolvedArgs(
+            args=[str(target), "__SUBTASK_OUTPUT_1__[0]"],
+            kwargs={},
+        ),
+    )
     sub_task = {"id": 2, "needs": "primitive", "tool_hint": "file_write", "action": "save"}
     state = _state(
         "save first",
@@ -256,10 +276,14 @@ def test_substitute_with_index_accessor(vault, monkeypatch, tmp_path: Path):
 
 def test_substitute_with_key_accessor(vault, monkeypatch):
     """`__SUBTASK_OUTPUT_1__["url"]` extracts dict value."""
-    captured: list = []
     vault.register(
-        {"name": "echo", "description": "echo", "keywords": ["echo"],
-         "function": "echo", "signature": "echo(x) -> str"},
+        {
+            "name": "echo",
+            "description": "echo",
+            "keywords": ["echo"],
+            "function": "echo",
+            "signature": "echo(x) -> str",
+        },
         "def echo(x):\n    return x\n",
     )
     _patch_resolver(monkeypatch, ResolvedArgs(args=['__SUBTASK_OUTPUT_1__["url"]'], kwargs={}))
@@ -267,8 +291,9 @@ def test_substitute_with_key_accessor(vault, monkeypatch):
     state = _state(
         "extract",
         current_sub_task=sub_task,
-        sub_task_results=[{"sub_task_id": 1, "ok": True,
-                           "output": {"url": "https://x.com", "title": "X"}}],
+        sub_task_results=[
+            {"sub_task_id": 1, "ok": True, "output": {"url": "https://x.com", "title": "X"}}
+        ],
     )
     out = executor_node(state)
     assert out["sub_task_results"][1]["output"] == "https://x.com"
@@ -277,19 +302,27 @@ def test_substitute_with_key_accessor(vault, monkeypatch):
 def test_substitute_chained_accessors(vault, monkeypatch):
     """`__SUBTASK_OUTPUT_1__[0]["url"]` walks list-of-dicts."""
     vault.register(
-        {"name": "echo", "description": "echo", "keywords": ["echo"],
-         "function": "echo", "signature": "echo(x) -> str"},
+        {
+            "name": "echo",
+            "description": "echo",
+            "keywords": ["echo"],
+            "function": "echo",
+            "signature": "echo(x) -> str",
+        },
         "def echo(x):\n    return x\n",
     )
-    _patch_resolver(monkeypatch, ResolvedArgs(
-        args=['__SUBTASK_OUTPUT_1__[0]["url"]'], kwargs={}))
+    _patch_resolver(monkeypatch, ResolvedArgs(args=['__SUBTASK_OUTPUT_1__[0]["url"]'], kwargs={}))
     sub_task = {"id": 2, "needs": "vault", "tool_hint": "echo", "action": "x"}
     state = _state(
         "first url",
         current_sub_task=sub_task,
-        sub_task_results=[{"sub_task_id": 1, "ok": True, "output": [
-            {"url": "https://a.com"}, {"url": "https://b.com"}
-        ]}],
+        sub_task_results=[
+            {
+                "sub_task_id": 1,
+                "ok": True,
+                "output": [{"url": "https://a.com"}, {"url": "https://b.com"}],
+            }
+        ],
     )
     out = executor_node(state)
     assert out["sub_task_results"][1]["output"] == "https://a.com"
@@ -298,7 +331,6 @@ def test_substitute_chained_accessors(vault, monkeypatch):
 def test_substitute_preserves_type_for_dict_args(vault, monkeypatch):
     """If a prior output is a dict and the resolver puts a placeholder in a
     kwarg, the actual dict (not its str repr) reaches the tool."""
-    received: list = []
     vault.register(
         {
             "name": "echo",
@@ -321,6 +353,7 @@ def test_substitute_preserves_type_for_dict_args(vault, monkeypatch):
 
 
 # ---- arg resolver received the right context -----------------------------
+
 
 def test_arg_resolver_sees_prior_results(vault, monkeypatch):
     # The resolver should be handed prior sub-task outputs in its prompt.
@@ -350,23 +383,33 @@ def test_arg_resolver_sees_prior_results(vault, monkeypatch):
 
 # ---- typed contract path (Change 2) --------------------------------------
 
+
 def test_typed_contract_skips_resolver_and_passes_kwargs(vault, monkeypatch):
     """When the Planner emits input_schema + param_bindings for a forge
     sub-task, the Executor builds kwargs from bindings (no LLM call) and
     calls the registered tool directly."""
     vault.register(
-        {"name": "scale", "description": "scale x by k", "keywords": ["scale"],
-         "function": "scale", "signature": "scale(x: float, k: float) -> float"},
+        {
+            "name": "scale",
+            "description": "scale x by k",
+            "keywords": ["scale"],
+            "function": "scale",
+            "signature": "scale(x: float, k: float) -> float",
+        },
         "def scale(x, k):\n    return x * k\n",
     )
     # If the resolver is touched, blow up loudly — proves we took the new path.
     monkeypatch.setattr(
-        exec_mod, "_make_resolver_llm",
+        exec_mod,
+        "_make_resolver_llm",
         lambda: (_ for _ in ()).throw(AssertionError("resolver should be skipped")),
     )
 
     sub_task = {
-        "id": 1, "needs": "forge", "tool_hint": None, "action": "scale by 2.5",
+        "id": 1,
+        "needs": "forge",
+        "tool_hint": None,
+        "action": "scale by 2.5",
         "input_schema": {"x": "float", "k": "float"},
         "output_schema": "float",
         "param_bindings": {"x": 4, "k": 2.5},
@@ -386,16 +429,25 @@ def test_typed_contract_resolves_upstream_placeholder(vault, monkeypatch):
     """`__SUBTASK_OUTPUT_1__` in a binding pulls the prior result without
     going through the LLM resolver."""
     vault.register(
-        {"name": "double", "description": "double x", "keywords": ["double"],
-         "function": "double", "signature": "double(x: float) -> float"},
+        {
+            "name": "double",
+            "description": "double x",
+            "keywords": ["double"],
+            "function": "double",
+            "signature": "double(x: float) -> float",
+        },
         "def double(x):\n    return x * 2\n",
     )
     monkeypatch.setattr(
-        exec_mod, "_make_resolver_llm",
+        exec_mod,
+        "_make_resolver_llm",
         lambda: (_ for _ in ()).throw(AssertionError("resolver should be skipped")),
     )
     sub_task = {
-        "id": 2, "needs": "forge", "tool_hint": None, "action": "double upstream",
+        "id": 2,
+        "needs": "forge",
+        "tool_hint": None,
+        "action": "double upstream",
         "input_schema": {"x": "float"},
         "output_schema": "float",
         "param_bindings": {"x": "__SUBTASK_OUTPUT_1__"},
@@ -421,13 +473,21 @@ def test_typed_contract_validation_catches_missing_param(vault, monkeypatch):
         return x * k
 
     vault.register(
-        {"name": "scale2", "description": "scale", "keywords": ["scale"],
-         "function": "scale2", "signature": "scale2(x: float, k: float) -> float"},
+        {
+            "name": "scale2",
+            "description": "scale",
+            "keywords": ["scale"],
+            "function": "scale2",
+            "signature": "scale2(x: float, k: float) -> float",
+        },
         "def scale2(x, k):\n    return x * k\n",
     )
 
     sub_task = {
-        "id": 1, "needs": "forge", "tool_hint": None, "action": "scale",
+        "id": 1,
+        "needs": "forge",
+        "tool_hint": None,
+        "action": "scale",
         "input_schema": {"x": "float", "k": "float"},
         "output_schema": "float",
         "param_bindings": {"x": 4},  # missing 'k'
@@ -446,6 +506,7 @@ def test_typed_contract_validation_catches_missing_param(vault, monkeypatch):
 
 # ---- live test (gated) ---------------------------------------------------
 
+
 @pytest.mark.skipif(
     os.environ.get("RUN_LIVE") != "1",
     reason="Set RUN_LIVE=1 to exercise real OpenAI arg resolution.",
@@ -462,13 +523,18 @@ def test_executor_live_arg_resolution(vault):
         "needs": "primitive",
         "tool_hint": "file_write",
         "action": "write the text 'hello world' to the file the user mentioned",
-        "input_description": "the path is mentioned in the user query; the content is the literal string 'hello world'",
+        "input_description": (
+            "the path is mentioned in the user query; "
+            "the content is the literal string 'hello world'"
+        ),
         "depends_on": [],
     }
-    out = executor_node(_state(
-        f"please write 'hello world' to {target}",
-        current_sub_task=sub_task,
-    ))
+    out = executor_node(
+        _state(
+            f"please write 'hello world' to {target}",
+            current_sub_task=sub_task,
+        )
+    )
     assert out["sub_task_results"][0]["ok"] is True
     assert os.path.exists(target)
     assert "hello world" in open(target).read()
@@ -488,15 +554,22 @@ def test_executor_records_failure_when_resolver_returns_none(vault, monkeypatch)
 
 # ---- dependency short-circuit ---------------------------------------------
 
+
 def test_executor_skips_subtask_when_upstream_failed(vault, monkeypatch):
     """#2 depends on #1, #1 failed → #2 must not run (e.g. must not write an
     empty file and report success)."""
     monkeypatch.setattr(
-        exec_mod, "_make_resolver_llm",
+        exec_mod,
+        "_make_resolver_llm",
         lambda: (_ for _ in ()).throw(AssertionError("must not resolve args")),
     )
-    sub_task = {"id": 2, "needs": "primitive", "tool_hint": "file_write",
-                "action": "save", "depends_on": [1]}
+    sub_task = {
+        "id": 2,
+        "needs": "primitive",
+        "tool_hint": "file_write",
+        "action": "save",
+        "depends_on": [1],
+    }
     prior = [{"sub_task_id": 1, "ok": False, "output": None, "error": "boom"}]
     out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
     rec = out["sub_task_results"][-1]
@@ -507,12 +580,21 @@ def test_executor_skips_subtask_when_upstream_failed(vault, monkeypatch):
 
 def test_executor_skip_propagates_transitively(vault, monkeypatch):
     """#3 depends on #2 which was itself skipped → #3 is skipped too."""
-    sub_task = {"id": 3, "needs": "primitive", "tool_hint": "file_write",
-                "action": "save", "depends_on": [2]}
+    sub_task = {
+        "id": 3,
+        "needs": "primitive",
+        "tool_hint": "file_write",
+        "action": "save",
+        "depends_on": [2],
+    }
     prior = [
         {"sub_task_id": 1, "ok": False, "output": None, "error": "boom"},
-        {"sub_task_id": 2, "ok": False, "output": None,
-         "error": "skipped: upstream sub-task 1 failed"},
+        {
+            "sub_task_id": 2,
+            "ok": False,
+            "output": None,
+            "error": "skipped: upstream sub-task 1 failed",
+        },
     ]
     out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
     assert "skipped: upstream sub-task 2 failed" in out["sub_task_results"][-1]["error"]
@@ -520,21 +602,25 @@ def test_executor_skip_propagates_transitively(vault, monkeypatch):
 
 # ---- type coercion at step boundaries -------------------------------------
 
-@pytest.mark.parametrize("value,type_str,expected", [
-    ('{"a": 1}', "dict", {"a": 1}),
-    ('{"a": 1}', "dict[str, Any]", {"a": 1}),
-    ("[1, 2]", "list[int]", [1, 2]),
-    ("[1, 2]", "List", [1, 2]),
-    ("3.5", "float", 3.5),
-    ("42", "int", 42),
-    (" 7 ", "int", 7),
-    ("not json", "dict", "not json"),     # unparseable → unchanged
-    ("[1, 2]", "dict", "[1, 2]"),         # parses, wrong type → unchanged
-    ("4.2", "int", "4.2"),                # not an int → unchanged
-    ("hello", "str", "hello"),
-    ({"a": 1}, "dict", {"a": 1}),         # already right type
-    ("12", "Any", "12"),                  # unknown/any → untouched
-])
+
+@pytest.mark.parametrize(
+    "value,type_str,expected",
+    [
+        ('{"a": 1}', "dict", {"a": 1}),
+        ('{"a": 1}', "dict[str, Any]", {"a": 1}),
+        ("[1, 2]", "list[int]", [1, 2]),
+        ("[1, 2]", "List", [1, 2]),
+        ("3.5", "float", 3.5),
+        ("42", "int", 42),
+        (" 7 ", "int", 7),
+        ("not json", "dict", "not json"),  # unparseable → unchanged
+        ("[1, 2]", "dict", "[1, 2]"),  # parses, wrong type → unchanged
+        ("4.2", "int", "4.2"),  # not an int → unchanged
+        ("hello", "str", "hello"),
+        ({"a": 1}, "dict", {"a": 1}),  # already right type
+        ("12", "Any", "12"),  # unknown/any → untouched
+    ],
+)
 def test_coerce_to_schema(value, type_str, expected):
     out = exec_mod.coerce_to_schema({"x": value}, {"x": type_str})
     assert out == {"x": expected}
@@ -544,21 +630,33 @@ def test_typed_path_parses_upstream_json_string(vault, monkeypatch):
     """file_read returns a JSON *string*; a forged tool declaring a dict
     param must receive the parsed dict."""
     vault.register(
-        {"name": "count_keys", "description": "count keys", "keywords": ["keys"],
-         "function": "count_keys", "signature": "count_keys(data: dict) -> int"},
+        {
+            "name": "count_keys",
+            "description": "count keys",
+            "keywords": ["keys"],
+            "function": "count_keys",
+            "signature": "count_keys(data: dict) -> int",
+        },
         "def count_keys(data):\n"
         "    if not isinstance(data, dict):\n"
         "        raise TypeError(f'data must be a dict, got {type(data).__name__}')\n"
         "    return len(data)\n",
     )
     sub_task = {
-        "id": 2, "needs": "forge", "action": "count", "depends_on": [1],
-        "input_schema": {"data": "dict"}, "output_schema": "int",
+        "id": 2,
+        "needs": "forge",
+        "action": "count",
+        "depends_on": [1],
+        "input_schema": {"data": "dict"},
+        "output_schema": "int",
         "param_bindings": {"data": "__SUBTASK_OUTPUT_1__"},
     }
     prior = [{"sub_task_id": 1, "ok": True, "output": '{"a": 1, "b": 2}', "error": None}]
-    out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior,
-                               forged_tool={"name": "count_keys"}))
+    out = executor_node(
+        _state(
+            current_sub_task=sub_task, sub_task_results=prior, forged_tool={"name": "count_keys"}
+        )
+    )
     rec = out["sub_task_results"][-1]
     assert rec["ok"] is True, rec["error"]
     assert rec["output"] == 2
@@ -568,16 +666,26 @@ def test_vault_path_parses_json_string_using_type_hints(vault, monkeypatch):
     """Vault tools go through the LLM arg resolver (no input_schema); the
     function's own type hints drive coercion there."""
     vault.register(
-        {"name": "flatten_json", "description": "flatten", "keywords": ["flatten"],
-         "function": "flatten_json", "signature": "flatten_json(data: dict) -> dict"},
+        {
+            "name": "flatten_json",
+            "description": "flatten",
+            "keywords": ["flatten"],
+            "function": "flatten_json",
+            "signature": "flatten_json(data: dict) -> dict",
+        },
         "def flatten_json(data: dict) -> dict:\n"
         "    if not isinstance(data, dict):\n"
         "        raise TypeError(f'data must be a dict, got {type(data).__name__}')\n"
         "    return data\n",
     )
     _patch_resolver(monkeypatch, ResolvedArgs(args=["__SUBTASK_OUTPUT_1__"], kwargs={}))
-    sub_task = {"id": 2, "needs": "vault", "tool_hint": "flatten_json",
-                "action": "flatten", "depends_on": [1]}
+    sub_task = {
+        "id": 2,
+        "needs": "vault",
+        "tool_hint": "flatten_json",
+        "action": "flatten",
+        "depends_on": [1],
+    }
     prior = [{"sub_task_id": 1, "ok": True, "output": '{"app": "talos"}', "error": None}]
     out = executor_node(_state(current_sub_task=sub_task, sub_task_results=prior))
     rec = out["sub_task_results"][-1]
@@ -586,13 +694,14 @@ def test_vault_path_parses_json_string_using_type_hints(vault, monkeypatch):
 
 
 def test_schema_from_signature_reads_type_hints():
-    def f(a: dict, b: "list[int]", c, *rest, d: float = 1.0):
+    def f(a: dict, b: list[int], c, *rest, d: float = 1.0):
         return a
 
     assert exec_mod.schema_from_signature(f) == {"a": "dict", "b": "list[int]", "d": "float"}
 
 
 # ---- exec confirmation gate -----------------------------------------------
+
 
 def _exec_graph():
     from langgraph.checkpoint.memory import MemorySaver

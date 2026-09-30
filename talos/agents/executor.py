@@ -22,7 +22,8 @@ from __future__ import annotations
 import inspect
 import json
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.types import interrupt
@@ -98,10 +99,12 @@ def _resolve_args(
         f"Current user query: {user_query}\n\n"
         f"Prior sub-task results (this run):\n{_format_prior_results(prior_results)}\n"
     )
-    return _make_resolver_llm().invoke([
-        SystemMessage(content=ARG_RESOLVER_SYSTEM_PROMPT),
-        HumanMessage(content=user_msg),
-    ])
+    return _make_resolver_llm().invoke(
+        [
+            SystemMessage(content=ARG_RESOLVER_SYSTEM_PROMPT),
+            HumanMessage(content=user_msg),
+        ]
+    )
 
 
 def _format_prior_results(results: list[dict]) -> str:
@@ -130,9 +133,7 @@ def _format_prior_results(results: list[dict]) -> str:
 #   __SUBTASK_OUTPUT_1__[0]               → first element
 #   __SUBTASK_OUTPUT_1__["results"][2]    → nested
 #   __SUBTASK_OUTPUT_1__[0]["url"]        → list-of-dicts
-_PLACEHOLDER_RE = re.compile(
-    r"""__SUBTASK_OUTPUT_(\d+)__((?:\[(?:\d+|"[^"]*"|'[^']*')\])*)"""
-)
+_PLACEHOLDER_RE = re.compile(r"""__SUBTASK_OUTPUT_(\d+)__((?:\[(?:\d+|"[^"]*"|'[^']*')\])*)""")
 _ACCESSOR_RE = re.compile(r"""\[(\d+|"[^"]*"|'[^']*')\]""")
 
 
@@ -171,11 +172,13 @@ def _substitute_placeholders(value: Any, results_by_id: dict) -> Any:
             if rec is None:
                 return value
             return _walk_accessors(rec.get("output"), m.group(2))
+
         # Partial: in-string substitution, stringified.
         def _sub(mm):
             sid = int(mm.group(1))
             rec = results_by_id.get(sid) or {}
             return str(_walk_accessors(rec.get("output"), mm.group(2)))
+
         return _PLACEHOLDER_RE.sub(_sub, value)
     if isinstance(value, list):
         return [_substitute_placeholders(v, results_by_id) for v in value]
@@ -204,9 +207,7 @@ def _build_kwargs_from_bindings(
                 sid = int(m.group(1))
                 rec = results_by_id.get(sid)
                 if rec is None:
-                    raise ValueError(
-                        f"param '{name}' references sub-task {sid}, which has not run"
-                    )
+                    raise ValueError(f"param '{name}' references sub-task {sid}, which has not run")
                 kwargs[name] = _walk_accessors(rec.get("output"), m.group(2))
                 continue
             # Strings without the marker are literal strings.
@@ -269,7 +270,9 @@ def schema_from_signature(fn: Callable[..., Any]) -> dict[str, str]:
 
 
 def _coerce_call_args(
-    fn: Callable[..., Any], args: list[Any], kwargs: dict[str, Any],
+    fn: Callable[..., Any],
+    args: list[Any],
+    kwargs: dict[str, Any],
 ) -> tuple[list[Any], dict[str, Any]]:
     """Apply coerce_to_schema to positional + keyword args using fn's hints."""
     schema = schema_from_signature(fn)
@@ -281,8 +284,7 @@ def _coerce_call_args(
         return args, kwargs
     positional = {names[i]: v for i, v in enumerate(args) if i < len(names)}
     coerced_pos = coerce_to_schema(positional, schema)
-    new_args = [coerced_pos.get(names[i], v) if i < len(names) else v
-                for i, v in enumerate(args)]
+    new_args = [coerced_pos.get(names[i], v) if i < len(names) else v for i, v in enumerate(args)]
     return new_args, coerce_to_schema(kwargs, schema)
 
 
@@ -300,11 +302,10 @@ def _validate_kwargs(fn: Callable[..., Any], kwargs: dict[str, Any]) -> None:
     if not accepts_kwargs:
         unexpected = [k for k in kwargs if k not in params]
         if unexpected:
-            raise TypeError(
-                f"unexpected kwargs {unexpected} for {fn.__name__}{sig}"
-            )
+            raise TypeError(f"unexpected kwargs {unexpected} for {fn.__name__}{sig}")
     required = [
-        n for n, p in params.items()
+        n
+        for n, p in params.items()
         if p.default is inspect.Parameter.empty
         and p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     ]
@@ -379,9 +380,14 @@ def executor_node(state: TalosState) -> dict:
     # validate against the function signature before invocation.
     if sub_task.get("needs") == "forge" and sub_task.get("input_schema"):
         try:
-            final_args, final_kwargs = [], coerce_to_schema(
-                _build_kwargs_from_bindings(sub_task.get("param_bindings") or {}, results_by_id),
-                sub_task.get("input_schema") or {},
+            final_args, final_kwargs = (
+                [],
+                coerce_to_schema(
+                    _build_kwargs_from_bindings(
+                        sub_task.get("param_bindings") or {}, results_by_id
+                    ),
+                    sub_task.get("input_schema") or {},
+                ),
             )
             _validate_kwargs(fn, final_kwargs)
         except (ValueError, TypeError) as e:
@@ -446,12 +452,12 @@ def failed_dependencies(sub_task: dict, results: list[dict]) -> list[int]:
     """
     by_id = {r.get("sub_task_id"): r for r in results}
     return [
-        dep for dep in sub_task.get("depends_on") or []
-        if dep in by_id and not by_id[dep].get("ok")
+        dep for dep in sub_task.get("depends_on") or [] if dep in by_id and not by_id[dep].get("ok")
     ]
 
 
 # ---- internal helpers -----------------------------------------------------
+
 
 def _needs_confirmation(sub_task: dict) -> bool:
     return (
@@ -462,7 +468,9 @@ def _needs_confirmation(sub_task: dict) -> bool:
 
 
 def _confirm_exec(
-    sub_task: dict, args: list[Any], kwargs: dict[str, Any],
+    sub_task: dict,
+    args: list[Any],
+    kwargs: dict[str, Any],
 ) -> tuple[list[Any], dict[str, Any]] | None:
     """Pause the graph and ask the user to approve a code/shell execution.
 
@@ -474,14 +482,16 @@ def _confirm_exec(
     """
     tool = sub_task.get("tool_hint")
     preview = kwargs.get("code") or kwargs.get("command") or (args[0] if args else repr(kwargs))
-    decision = interrupt({
-        "type": "confirm_exec",
-        "tool": tool,
-        "preview": str(preview),
-        "args": args,
-        "kwargs": kwargs,
-        "message": f"Talos wants to run {tool}. Allow it? [y/N]",
-    })
+    decision = interrupt(
+        {
+            "type": "confirm_exec",
+            "tool": tool,
+            "preview": str(preview),
+            "args": args,
+            "kwargs": kwargs,
+            "message": f"Talos wants to run {tool}. Allow it? [y/N]",
+        }
+    )
     if not isinstance(decision, dict) or not decision.get("approved"):
         return None
     return list(decision.get("args") or []), dict(decision.get("kwargs") or {})

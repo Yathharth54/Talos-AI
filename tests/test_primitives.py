@@ -17,8 +17,8 @@ from talos.primitives.shell_exec import shell_exec
 from talos.primitives.web_read import web_read
 from talos.primitives.web_search import web_search
 
-
 # --- web_search (live Tavily call) -------------------------------------------
+
 
 def test_web_search_returns_results():
     results = web_search("LangGraph python framework", max_results=3)
@@ -29,6 +29,7 @@ def test_web_search_returns_results():
 
 
 # --- web_read (live Jina call) -----------------------------------------------
+
 
 def test_web_read_returns_markdown():
     out = web_read("https://example.com")
@@ -46,6 +47,7 @@ def test_web_read_rejects_bare_string():
 
 # --- file_read / file_write ---------------------------------------------------
 
+
 def test_file_round_trip(tmp_path):
     p = tmp_path / "nested" / "thing.txt"  # nested → exercises mkdir
     file_write(p, "hello, talos")
@@ -60,6 +62,7 @@ def test_file_read_missing_raises(tmp_path):
 def test_relative_paths_anchor_to_workspace(tmp_path, monkeypatch):
     """Bare filenames (no leading /) land in WORKSPACE_DIR, not cwd."""
     from talos.config import settings as s
+
     monkeypatch.setattr(s, "WORKSPACE_DIR", tmp_path)
     monkeypatch.chdir(tmp_path / "..")  # confirm cwd doesn't get the file
 
@@ -71,6 +74,7 @@ def test_relative_paths_anchor_to_workspace(tmp_path, monkeypatch):
 def test_absolute_paths_respected_verbatim(tmp_path, monkeypatch):
     """Explicit absolute paths win — workspace is bypassed."""
     from talos.config import settings as s
+
     bogus_workspace = tmp_path / "wrong"
     monkeypatch.setattr(s, "WORKSPACE_DIR", bogus_workspace)
 
@@ -84,6 +88,7 @@ def test_file_write_encodes_dict_as_json(tmp_path):
     p = tmp_path / "data.json"
     file_write(p, {"city": "Mumbai", "temp": 28.5})
     import json
+
     assert json.loads(p.read_text()) == {"city": "Mumbai", "temp": 28.5}
 
 
@@ -91,24 +96,27 @@ def test_file_write_encodes_list_as_json(tmp_path):
     p = tmp_path / "list.json"
     file_write(p, [1, 2, 3])
     import json
+
     assert json.loads(p.read_text()) == [1, 2, 3]
 
 
 def test_file_write_decodes_bytes(tmp_path):
     p = tmp_path / "b.txt"
-    file_write(p, "héllo".encode("utf-8"))
+    file_write(p, "héllo".encode())
     assert p.read_text(encoding="utf-8") == "héllo"
 
 
 def test_file_write_handles_non_serialisable_via_default(tmp_path):
     """default=str ensures dict with datetime etc. doesn't crash."""
     from datetime import datetime
+
     p = tmp_path / "dt.json"
     file_write(p, {"t": datetime(2026, 5, 5, 12, 0, 0)})
     assert "2026-05-05" in p.read_text()
 
 
 # --- python_exec --------------------------------------------------------------
+
 
 def test_python_exec_happy_path():
     r = python_exec("print(2 + 2)")
@@ -138,6 +146,7 @@ def test_python_exec_timeout_fires():
 
 # --- shell_exec ---------------------------------------------------------------
 
+
 def test_shell_exec_happy_path():
     r = shell_exec("echo hi")
     assert r["ok"] is True
@@ -161,10 +170,12 @@ def test_shell_exec_timeout_fires():
 # just verify the wrapper invokes `interrupt()` correctly inside a tiny graph
 # and that the runtime emits the expected interrupt payload.
 
+
 def test_human_input_pauses_graph():
+    from typing import TypedDict
+
     from langgraph.checkpoint.memory import MemorySaver
     from langgraph.graph import END, START, StateGraph
-    from typing import TypedDict
 
     from talos.primitives.human_input import human_input
 
@@ -196,21 +207,33 @@ def test_human_input_pauses_graph():
 
 # --- vault_list (self-introspection) ------------------------------------------
 
+
 def test_vault_list_reports_registered_tools(tmp_path, monkeypatch):
     from talos.primitives import vault_list as vl_mod
     from talos.vault.manager import SkillManager
 
     mgr = SkillManager(vault_dir=tmp_path)
     mgr.register(
-        {"name": "slugify", "description": "make a slug", "keywords": ["slug"],
-         "function": "slugify", "signature": "slugify(s: str) -> str"},
+        {
+            "name": "slugify",
+            "description": "make a slug",
+            "keywords": ["slug"],
+            "function": "slugify",
+            "signature": "slugify(s: str) -> str",
+        },
         "def slugify(s):\n    return s\n",
     )
     monkeypatch.setattr(vl_mod, "_get_skill_manager", lambda: mgr)
 
     out = vl_mod.vault_list()
-    assert out == [{"name": "slugify", "description": "make a slug",
-                    "signature": "slugify(s: str) -> str", "usage_count": 0}]
+    assert out == [
+        {
+            "name": "slugify",
+            "description": "make a slug",
+            "signature": "slugify(s: str) -> str",
+            "usage_count": 0,
+        }
+    ]
 
 
 def test_vault_list_is_a_planner_visible_primitive():

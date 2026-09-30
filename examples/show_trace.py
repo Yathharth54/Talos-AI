@@ -18,7 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from langsmith import Client
@@ -52,7 +52,7 @@ def _fmt_time(t) -> str:
     if t is None:
         return "?"
     if isinstance(t, datetime):
-        return t.astimezone(timezone.utc).strftime("%H:%M:%S")
+        return t.astimezone(UTC).strftime("%H:%M:%S")
     return str(t)
 
 
@@ -72,9 +72,7 @@ def list_runs(client: Client, project: str, limit: int) -> None:
             if msgs and isinstance(msgs, list):
                 last = msgs[-1] if msgs else {}
                 preview = _short(
-                    last.get("content")
-                    or last.get("kwargs", {}).get("content")
-                    or last,
+                    last.get("content") or last.get("kwargs", {}).get("content") or last,
                     60,
                 )
         print(f"{_fmt_time(r.start_time):<10} {status:<10} {_short(r.name, 25):<25} {preview}")
@@ -87,14 +85,17 @@ def show_run(client: Client, run_id: str) -> None:
         sys.exit(f"run {run_id} not found")
     root = runs[0]
 
-    descendants = list(client.list_runs(
-        project_name=settings.LANGSMITH_PROJECT,
-        trace_id=root.trace_id,
-    ))
-    descendants.sort(key=lambda r: r.start_time or datetime.min.replace(tzinfo=timezone.utc))
+    descendants = list(
+        client.list_runs(
+            project_name=settings.LANGSMITH_PROJECT,
+            trace_id=root.trace_id,
+        )
+    )
+    descendants.sort(key=lambda r: r.start_time or datetime.min.replace(tzinfo=UTC))
 
     print(f"=== Trace {root.trace_id} — {root.name} ===")
-    print(f"start: {_fmt_time(root.start_time)}   status: {'ERROR' if root.error else (root.status or 'ok')}")
+    status = "ERROR" if root.error else (root.status or "ok")
+    print(f"start: {_fmt_time(root.start_time)}   status: {status}")
     print(f"runs:  {len(descendants)}")
     if root.error:
         print(f"\nROOT ERROR:\n{root.error}")
@@ -131,10 +132,14 @@ def _depth_of(run, all_runs) -> int:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Fetch and dump LangSmith traces")
     ap.add_argument("target", nargs="?", help="run ID, or omit to show latest root run")
-    ap.add_argument("--list", type=int, nargs="?", const=10,
-                    help="List N most recent root runs (default 10) instead of dumping one")
-    ap.add_argument("--project", default=settings.LANGSMITH_PROJECT,
-                    help="LangSmith project name")
+    ap.add_argument(
+        "--list",
+        type=int,
+        nargs="?",
+        const=10,
+        help="List N most recent root runs (default 10) instead of dumping one",
+    )
+    ap.add_argument("--project", default=settings.LANGSMITH_PROJECT, help="LangSmith project name")
     args = ap.parse_args()
 
     client = _client()
@@ -145,9 +150,13 @@ def main() -> None:
 
     target = args.target
     if not target:
-        latest = list(client.list_runs(
-            project_name=args.project, is_root=True, limit=1,
-        ))
+        latest = list(
+            client.list_runs(
+                project_name=args.project,
+                is_root=True,
+                limit=1,
+            )
+        )
         if not latest:
             sys.exit(f"no runs in project {args.project!r}")
         target = str(latest[0].id)

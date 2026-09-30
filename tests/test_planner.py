@@ -17,8 +17,8 @@ from talos.agents import planner as planner_mod
 from talos.agents.planner import Plan, SubTask, planner_node
 from talos.vault.manager import SkillManager
 
-
 # ---- helpers --------------------------------------------------------------
+
 
 class _FakeLLM:
     def __init__(self, plan: Plan) -> None:
@@ -60,15 +60,29 @@ def _state(query: str) -> dict:
 
 # ---- structure tests -------------------------------------------------------
 
+
 def test_planner_emits_well_formed_plan(empty_vault, monkeypatch):
-    canned = Plan(sub_tasks=[
-        SubTask(id=1, action="fetch", needs="primitive", tool_hint="web_read",
-                keywords=["fetch", "url"], input_description="literal url",
-                depends_on=[]),
-        SubTask(id=2, action="parse", needs="forge",
-                keywords=["parse", "html"], input_description="output of 1",
-                depends_on=[1]),
-    ])
+    canned = Plan(
+        sub_tasks=[
+            SubTask(
+                id=1,
+                action="fetch",
+                needs="primitive",
+                tool_hint="web_read",
+                keywords=["fetch", "url"],
+                input_description="literal url",
+                depends_on=[],
+            ),
+            SubTask(
+                id=2,
+                action="parse",
+                needs="forge",
+                keywords=["parse", "html"],
+                input_description="output of 1",
+                depends_on=[1],
+            ),
+        ]
+    )
     fake = _FakeLLM(canned)
     monkeypatch.setattr(planner_mod, "_make_llm", lambda: fake)
 
@@ -92,13 +106,21 @@ def test_planner_empty_plan_for_conversational_query(empty_vault, monkeypatch):
 
 # ---- vault-awareness tests -------------------------------------------------
 
+
 def test_planner_uses_vault_hint_when_match_exists(vault_with_csv_tool, monkeypatch):
-    canned = Plan(sub_tasks=[
-        SubTask(id=1, action="get top rows of CSV", needs="vault",
+    canned = Plan(
+        sub_tasks=[
+            SubTask(
+                id=1,
+                action="get top rows of CSV",
+                needs="vault",
                 tool_hint="csv_top_rows",
-                keywords=["csv", "top"], input_description="literal path",
-                depends_on=[]),
-    ])
+                keywords=["csv", "top"],
+                input_description="literal path",
+                depends_on=[],
+            ),
+        ]
+    )
     fake = _FakeLLM(canned)
     monkeypatch.setattr(planner_mod, "_make_llm", lambda: fake)
 
@@ -134,11 +156,13 @@ def test_planner_injects_recent_history(empty_vault, monkeypatch):
     fake = _FakeLLM(Plan(sub_tasks=[]))
     monkeypatch.setattr(planner_mod, "_make_llm", lambda: fake)
 
-    state = {"messages": [
-        HumanMessage(content="what's the temp in mumbai"),
-        AIMessage(content="It's 28°C."),
-        HumanMessage(content="is that high or low?"),
-    ]}
+    state = {
+        "messages": [
+            HumanMessage(content="what's the temp in mumbai"),
+            AIMessage(content="It's 28°C."),
+            HumanMessage(content="is that high or low?"),
+        ]
+    }
     planner_node(state)
     user_msg = fake.calls[0][1].content
     assert "28°C" in user_msg
@@ -157,6 +181,7 @@ def test_planner_first_turn_history_says_so(empty_vault, monkeypatch):
 
 
 # ---- refusal verdict (Change 3) ------------------------------------------
+
 
 def test_planner_emits_infeasible_verdict(empty_vault, monkeypatch):
     """Planner can label a query infeasible with category + reason; the plan
@@ -180,12 +205,20 @@ def test_route_after_planner_infeasible_routes_to_respond():
     """The router treats infeasible verdict as a 'respond' terminal even if
     sub_tasks is somehow non-empty."""
     from talos.agents.orchestrator import route_after_planner
-    state = {"plan": {"verdict": "infeasible", "sub_tasks": [],
-                       "verdict_category": "out-of-scope", "verdict_reason": "n/a"}}
+
+    state = {
+        "plan": {
+            "verdict": "infeasible",
+            "sub_tasks": [],
+            "verdict_category": "out-of-scope",
+            "verdict_reason": "n/a",
+        }
+    }
     assert route_after_planner(state) == "respond"
 
 
 # ---- live test (gated) -----------------------------------------------------
+
 
 @pytest.mark.skipif(
     os.environ.get("RUN_LIVE") != "1",
@@ -197,9 +230,7 @@ def test_planner_live_multi_step(monkeypatch, tmp_path):
     mgr = SkillManager(vault_dir=tmp_path)
     monkeypatch.setattr(planner_mod, "_get_skill_manager", lambda: mgr)
 
-    out = planner_node(_state(
-        "Read https://example.com and save the body to /tmp/out.txt"
-    ))
+    out = planner_node(_state("Read https://example.com and save the body to /tmp/out.txt"))
     sub_tasks = out["plan"]["sub_tasks"]
     assert len(sub_tasks) >= 2, f"expected ≥2 sub-tasks, got: {sub_tasks}"
     needs_set = {st["needs"] for st in sub_tasks}
@@ -223,6 +254,7 @@ def test_planner_failure_becomes_infeasible_plan(empty_vault, monkeypatch):
 
 
 # ---- prompt content: routing rules ------------------------------------------
+
 
 def test_planner_prompt_routes_answer_only_questions_to_primitives():
     from talos.prompts.planner import PLANNER_SYSTEM_PROMPT as p

@@ -30,21 +30,21 @@ class TalosState(TypedDict, total=False):
     messages: Annotated[list[BaseMessage], add_messages]
 
     # --- Planning ---
-    plan: dict | None                    # full structured plan from Planner
-    current_sub_task: dict | None        # sub-task currently being processed
-    sub_task_results: list[dict]         # results of completed sub-tasks
+    plan: dict | None  # full structured plan from Planner
+    current_sub_task: dict | None  # sub-task currently being processed
+    sub_task_results: list[dict]  # results of completed sub-tasks
 
     # --- Skill search ---
-    skill_matches: list[dict]            # vault hits for current sub-task
+    skill_matches: list[dict]  # vault hits for current sub-task
 
     # --- Forging ---
-    forged_tool: dict | None             # {name, code, test_code, description}
-    test_result: dict | None             # {passed, stdout, stderr} — unit tests (mocked)
-    smoke_result: dict | None            # {passed, error, output, skipped} — real-call gate
-    retry_count: int                     # forge→test retry counter (cap at FORGE_MAX_RETRIES)
+    forged_tool: dict | None  # {name, code, test_code, description}
+    test_result: dict | None  # {passed, stdout, stderr} — unit tests (mocked)
+    smoke_result: dict | None  # {passed, error, output, skipped} — real-call gate
+    retry_count: int  # forge→test retry counter (cap at FORGE_MAX_RETRIES)
 
     # --- Execution ---
-    execution_result: str | None         # output from running a tool
+    execution_result: str | None  # output from running a tool
 
     # --- Routing flags ---
     # Conditional edges read these to decide where to go next.
@@ -55,4 +55,4 @@ class TalosState(TypedDict, total=False):
     human_input_request: dict | None
 
     # --- Discovered API integrations ---
-    available_integrations: dict         # name → env var
+    available_integrations: dict  # name → env var

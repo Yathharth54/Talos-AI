@@ -14,8 +14,8 @@ from talos.agents import forger as forger_mod
 from talos.agents import researcher as research_mod
 from talos.agents.forger import ForgedTool, forger_node
 
-
 # ---- should_research heuristic --------------------------------------------
+
 
 def test_should_research_triggers_on_api_keywords():
     assert research_mod.should_research("call the OpenWeather API")
@@ -32,12 +32,14 @@ def test_should_research_skips_pure_python_tasks():
 
 # ---- research() utility ---------------------------------------------------
 
+
 def test_research_uses_react_agent(monkeypatch):
     """research() should construct an agent and return its final message."""
 
     class _FakeAgent:
         def invoke(self, _input, config=None):
             from langchain_core.messages import AIMessage
+
             return {"messages": [AIMessage(content="open-meteo.com works keyless")]}
 
     monkeypatch.setattr(research_mod, "_make_react_agent", lambda: _FakeAgent())
@@ -56,6 +58,7 @@ def test_research_handles_empty_response(monkeypatch):
 
 
 # ---- forger × researcher integration -------------------------------------
+
 
 class _FakeLLM:
     def __init__(self, tool: ForgedTool) -> None:
@@ -168,6 +171,7 @@ def test_forger_skips_research_on_retry(monkeypatch):
 
 
 # ---- live ----------------------------------------------------------------
+
 
 @pytest.mark.skipif(
     os.environ.get("RUN_LIVE") != "1",

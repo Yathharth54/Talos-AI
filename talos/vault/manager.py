@@ -25,24 +25,25 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, TypedDict
+from typing import Any, TypedDict
 
 from talos.config import settings
 
 
 class SkillEntry(TypedDict, total=False):
-    name: str                # unique identifier; matches the .py filename and the function name
-    description: str         # one-liner used by Planner
-    keywords: list[str]      # lowercase tokens for search
-    file: str                # relative path within vault (e.g. "tools/csv_top_rows.py")
-    function: str            # the symbol to call inside the file
-    signature: str           # human-readable signature for prompts
-    created_at: str          # ISO 8601
+    name: str  # unique identifier; matches the .py filename and the function name
+    description: str  # one-liner used by Planner
+    keywords: list[str]  # lowercase tokens for search
+    file: str  # relative path within vault (e.g. "tools/csv_top_rows.py")
+    function: str  # the symbol to call inside the file
+    signature: str  # human-readable signature for prompts
+    created_at: str  # ISO 8601
     usage_count: int
-    last_used: str | None    # ISO 8601 or None
-    failure_count: int       # lifetime failures
+    last_used: str | None  # ISO 8601 or None
+    failure_count: int  # lifetime failures
     consecutive_failures: int  # failures since last success — reset by record_usage
     last_failed_at: str | None
     last_failure_reason: str | None  # short error string from most recent failure
@@ -54,7 +55,7 @@ _AUTO_PRUNE_THRESHOLD = 2
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 class SkillManager:
@@ -233,12 +234,11 @@ class SkillManager:
         except FileNotFoundError:
             return []
         except json.JSONDecodeError as e:
-            raise RuntimeError(
-                f"Vault manifest at {self.manifest_path} is corrupted: {e}"
-            ) from e
+            raise RuntimeError(f"Vault manifest at {self.manifest_path} is corrupted: {e}") from e
         if not isinstance(data, list):
             raise RuntimeError(
-                f"Vault manifest at {self.manifest_path} must be a JSON list, got {type(data).__name__}"
+                f"Vault manifest at {self.manifest_path} must be a JSON list, "
+                f"got {type(data).__name__}"
             )
         return data  # type: ignore[return-value]
 

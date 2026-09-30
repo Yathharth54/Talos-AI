@@ -76,9 +76,7 @@ def forger_node(state: TalosState) -> dict:
     """
     sub_task = state.get("current_sub_task") or {}
     task_description = (
-        sub_task.get("action")
-        or sub_task.get("description")
-        or "No task description provided"
+        sub_task.get("action") or sub_task.get("description") or "No task description provided"
     )
 
     messages: list[Any] = [SystemMessage(content=FORGER_SYSTEM_PROMPT)]
@@ -131,8 +129,13 @@ def forger_node(state: TalosState) -> dict:
         # Empty code makes the Tester report a failure, which feeds the normal
         # retry path (or exits it once retries are exhausted).
         forged_dump = {
-            "name": "", "description": f"forger failed: {e}", "keywords": [],
-            "signature": "", "code": "", "test_code": "", "needs_env_vars": [],
+            "name": "",
+            "description": f"forger failed: {e}",
+            "keywords": [],
+            "signature": "",
+            "code": "",
+            "test_code": "",
+            "needs_env_vars": [],
         }
 
     return {

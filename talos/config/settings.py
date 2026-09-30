@@ -37,6 +37,7 @@ def auto_approve_exec() -> bool:
     """
     return os.environ.get("TALOS_AUTO_APPROVE_EXEC", "false").lower() in {"1", "true", "yes"}
 
+
 VAULT_DIR = PROJECT_ROOT / "talos" / "vault"
 VAULT_TOOLS_DIR = VAULT_DIR / "tools"
 VAULT_MANIFEST_PATH = VAULT_DIR / "manifest.json"

@@ -44,6 +44,7 @@ log = logging.getLogger(__name__)
 # schema the LLM sees. This is the FIRST time we wrap things as Tools —
 # everywhere else they're called directly.
 
+
 @tool
 def search_web(query: str) -> list[dict]:
     """Search the web for a free-text query. Returns up to 5 results, each

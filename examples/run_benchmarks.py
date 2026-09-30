@@ -36,7 +36,7 @@ import sys
 import time
 import traceback
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +57,7 @@ RUN_LOG_FILE = settings.PROJECT_ROOT / "workspace" / "benchmark_runs.jsonl"
 # Vault helpers
 # ---------------------------------------------------------------------------
 
+
 def wipe_vault() -> None:
     """Clean slate — delete all forged tools + manifest."""
     tools_dir = settings.VAULT_TOOLS_DIR
@@ -73,6 +74,7 @@ def wipe_vault() -> None:
 def vault_snapshot() -> list[dict]:
     """Whatever's in the manifest right now."""
     from talos.vault.manager import SkillManager
+
     return list(SkillManager().all())
 
 
@@ -80,21 +82,26 @@ def vault_snapshot() -> list[dict]:
 # Trace helpers (uses examples/show_trace.py's API indirectly)
 # ---------------------------------------------------------------------------
 
+
 def fetch_trace_summary(run_id: str) -> dict:
     """Pull a compact summary of a LangSmith run for the report."""
     if not settings.LANGSMITH_API_KEY:
         return {"error": "LANGSMITH_API_KEY missing — skipping trace fetch"}
     try:
         from langsmith import Client
+
         client = Client(api_key=settings.LANGSMITH_API_KEY)
         # The run we're asking about is the root LangGraph run.
         runs = list(client.list_runs(id=[run_id]))
         if not runs:
             return {"error": f"run {run_id} not found"}
         root = runs[0]
-        descendants = list(client.list_runs(
-            project_name=settings.LANGSMITH_PROJECT, trace_id=root.trace_id,
-        ))
+        descendants = list(
+            client.list_runs(
+                project_name=settings.LANGSMITH_PROJECT,
+                trace_id=root.trace_id,
+            )
+        )
         # Counts by node name.
         by_name: dict[str, int] = {}
         errors: list[dict] = []
@@ -102,11 +109,13 @@ def fetch_trace_summary(run_id: str) -> dict:
             n = r.name or "?"
             by_name[n] = by_name.get(n, 0) + 1
             if r.error:
-                errors.append({
-                    "name": n,
-                    "type": r.run_type,
-                    "error": str(r.error)[:400],
-                })
+                errors.append(
+                    {
+                        "name": n,
+                        "type": r.run_type,
+                        "error": str(r.error)[:400],
+                    }
+                )
         return {
             "trace_id": str(root.trace_id),
             "n_descendants": len(descendants),
@@ -120,6 +129,7 @@ def fetch_trace_summary(run_id: str) -> dict:
 # ---------------------------------------------------------------------------
 # Assertion engine
 # ---------------------------------------------------------------------------
+
 
 def evaluate_expectations(
     expects: dict,
@@ -141,7 +151,9 @@ def evaluate_expectations(
     if "vault_growth_min" in expects and growth < expects["vault_growth_min"]:
         failed.append(f"vault growth {growth} < min {expects['vault_growth_min']}")
     if "forge_count_max" in expects and growth > expects["forge_count_max"]:
-        failed.append(f"vault grew by {growth}, exceeds forge_count_max {expects['forge_count_max']}")
+        failed.append(
+            f"vault grew by {growth}, exceeds forge_count_max {expects['forge_count_max']}"
+        )
 
     if expects.get("needs_env_vars") is False:
         offenders = [e for e in vault_after if e.get("needs_env_vars")]
@@ -181,8 +193,12 @@ def evaluate_expectations(
                 missing = [s for s in expects["file_contains_all"] if s not in text]
                 if missing:
                     failed.append(f"file {fpath} missing all of: {missing!r}")
-            if "file_size_min_bytes" in expects and full.stat().st_size < expects["file_size_min_bytes"]:
-                failed.append(f"file {fpath} size {full.stat().st_size} < min {expects['file_size_min_bytes']}")
+            if (
+                "file_size_min_bytes" in expects
+                and full.stat().st_size < expects["file_size_min_bytes"]
+            ):
+                size, min_size = full.stat().st_size, expects["file_size_min_bytes"]
+                failed.append(f"file {fpath} size {size} < min {min_size}")
 
     return (len(failed) == 0, failed)
 
@@ -190,6 +206,7 @@ def evaluate_expectations(
 # ---------------------------------------------------------------------------
 # Single-query execution
 # ---------------------------------------------------------------------------
+
 
 def _last_ai_text(messages: list) -> str:
     for m in reversed(messages or []):
@@ -202,6 +219,7 @@ def run_one_query(query_obj: dict, thread_id: str | None = None) -> dict:
     """Execute one benchmark entry. Supports either `query` (single-turn) or
     `query_sequence` (multi-turn within a single thread)."""
     from talos.graph import build_graph, make_checkpointer
+
     # IMPORTANT: build a fresh app per query so checkpointer state is clean
     # unless we explicitly want continuity (sequence within ONE entry).
     app = build_graph().compile(checkpointer=make_checkpointer())
@@ -222,14 +240,14 @@ def run_one_query(query_obj: dict, thread_id: str | None = None) -> dict:
 
     try:
         for turn_idx, q in enumerate(queries):
-            turn_start = time.monotonic()
             # We can't strictly enforce a wall-clock timeout on graph.invoke
             # without threading. We rely on the per-tool subprocess timeouts
             # plus a soft check after each turn.
             # Explicit root run id → the LangSmith trace for this turn.
             run_id = uuid.uuid4()
             last_state = app.invoke(
-                {"messages": [HumanMessage(content=q)]}, config={**config, "run_id": run_id},
+                {"messages": [HumanMessage(content=q)]},
+                config={**config, "run_id": run_id},
             )
             last_run_id = str(run_id)
             if last_state.get("__interrupt__"):
@@ -273,8 +291,9 @@ def run_one_query(query_obj: dict, thread_id: str | None = None) -> dict:
 # Reporting
 # ---------------------------------------------------------------------------
 
+
 def _ts() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%SZ")
 
 
 def _classify_failure(result: dict) -> str:
@@ -311,7 +330,7 @@ def write_report(passes: list[dict], output_path: Path) -> None:
     """Emit the morning briefing — sorted, clustered, scannable."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
-    lines.append(f"# Talos Benchmark Report")
+    lines.append("# Talos Benchmark Report")
     lines.append(f"\nGenerated: {_ts()}\n")
 
     # ---- summary ----
@@ -322,7 +341,10 @@ def write_report(passes: list[dict], output_path: Path) -> None:
         passed = sum(1 for r in results if r.get("assertion_passed"))
         failed = n - passed
         avg_dur = (sum(r.get("duration_s", 0) for r in results) / n) if n else 0
-        lines.append(f"- **Pass {p_idx}** ({p['mode']}): {passed}/{n} passed, {failed} failed, avg {avg_dur:.1f}s/query")
+        lines.append(
+            f"- **Pass {p_idx}** ({p['mode']}): {passed}/{n} passed, {failed} failed, "
+            f"avg {avg_dur:.1f}s/query"
+        )
     lines.append("")
 
     # ---- failure clusters ----
@@ -337,7 +359,8 @@ def write_report(passes: list[dict], output_path: Path) -> None:
         for cls, items in sorted(clusters.items(), key=lambda x: -len(x[1])):
             lines.append(f"### `{cls}` — {len(items)} query(ies)")
             for r in items:
-                lines.append(f"- **{r['id']}**: {r.get('expectation_failures_str') or r.get('error') or '(no detail)'}")
+                detail = r.get("expectation_failures_str") or r.get("error") or "(no detail)"
+                lines.append(f"- **{r['id']}**: {detail}")
             lines.append("")
 
     # ---- per-pass details ----
@@ -347,12 +370,17 @@ def write_report(passes: list[dict], output_path: Path) -> None:
         for r in p["results"]:
             mark = "✅" if r.get("assertion_passed") else "❌"
             lines.append(f"### {mark} {r['id']} (tier {r.get('tier')})")
-            lines.append(f"- **query**: {r['queries'][0] if len(r['queries']) == 1 else r['queries']}")
+            lines.append(
+                f"- **query**: {r['queries'][0] if len(r['queries']) == 1 else r['queries']}"
+            )
             lines.append(f"- **duration**: {r.get('duration_s')}s")
-            lines.append(f"- **vault delta**: +{len(r.get('vault_added_names', []))} (new: {r.get('vault_added_names')})")
+            added = r.get("vault_added_names", [])
+            lines.append(f"- **vault delta**: +{len(added)} (new: {r.get('vault_added_names')})")
             if r.get("run_id"):
-                lines.append(f"- **trace**: `{r['run_id']}` "
-                             f"(`uv run python -m examples.show_trace {r['run_id']}`)")
+                lines.append(
+                    f"- **trace**: `{r['run_id']}` "
+                    f"(`uv run python -m examples.show_trace {r['run_id']}`)"
+                )
             if r.get("error"):
                 lines.append(f"- **error**: `{(r.get('error') or '').splitlines()[0][:300]}`")
             if r.get("expectation_failures"):
@@ -374,6 +402,7 @@ def write_report(passes: list[dict], output_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Pass orchestration
 # ---------------------------------------------------------------------------
+
 
 def run_pass(
     queries: list[dict],
@@ -414,7 +443,15 @@ def run_pass(
             answer=result.get("answer", ""),
             vault_before=[{"name": n} for n in [None] * (result.get("vault_before_count") or 0)],
             vault_after=result.get("vault_added_full", [])
-            + [{"name": n} for n in [None] * max(0, (result.get("vault_after_count") or 0) - len(result.get("vault_added_full", [])))],
+            + [
+                {"name": n}
+                for n in [None]
+                * max(
+                    0,
+                    (result.get("vault_after_count") or 0)
+                    - len(result.get("vault_added_full", [])),
+                )
+            ],
         )
         # Note: the cheap stand-in above keeps growth math right but loses
         # full vault entries for the env-var assertion. So redo that bit
@@ -439,7 +476,10 @@ def run_pass(
 
         results.append(result)
         append_jsonl(RUN_LOG_FILE, {**result, "pass_mode": mode, "ts": _ts()})
-        print(f"     → {'PASS' if passed_assert else 'FAIL'} ({result.get('duration_s')}s)", flush=True)
+        print(
+            f"     → {'PASS' if passed_assert else 'FAIL'} ({result.get('duration_s')}s)",
+            flush=True,
+        )
 
     duration_s = time.monotonic() - t0
     return {"mode": mode, "started": started, "duration_s": duration_s, "results": results}
@@ -448,6 +488,7 @@ def run_pass(
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def _select_queries(all_q: list[dict], args) -> list[dict]:
     selected = all_q
@@ -490,23 +531,40 @@ def main() -> None:
 
     if args.max_passes >= 1:
         print("\n=== PASS 1: cold start (vault wiped) ===")
-        passes.append(run_pass(queries, mode="cold start (wipe)", wipe_first=True, fetch_traces=fetch_traces))
+        passes.append(
+            run_pass(queries, mode="cold start (wipe)", wipe_first=True, fetch_traces=fetch_traces)
+        )
         write_report(passes, Path(args.out))
 
     if args.max_passes >= 2:
         print("\n=== PASS 2: cold start again (reproducibility) ===")
-        passes.append(run_pass(queries, mode="cold start #2 (wipe)", wipe_first=True, fetch_traces=fetch_traces))
+        passes.append(
+            run_pass(
+                queries, mode="cold start #2 (wipe)", wipe_first=True, fetch_traces=fetch_traces
+            )
+        )
         write_report(passes, Path(args.out))
 
     if args.max_passes >= 3:
         # Pass 3: warm vault from pass 2; only re-run queries that failed in pass 2.
         last_failed = [
-            q for q in queries
-            if next((r for r in passes[-1]["results"] if r["id"] == q["id"]), {}).get("assertion_passed") is False
+            q
+            for q in queries
+            if next((r for r in passes[-1]["results"] if r["id"] == q["id"]), {}).get(
+                "assertion_passed"
+            )
+            is False
         ]
         if last_failed:
             print(f"\n=== PASS 3: warm vault, re-run {len(last_failed)} failures ===")
-            passes.append(run_pass(last_failed, mode="warm vault, failures only", wipe_first=False, fetch_traces=fetch_traces))
+            passes.append(
+                run_pass(
+                    last_failed,
+                    mode="warm vault, failures only",
+                    wipe_first=False,
+                    fetch_traces=fetch_traces,
+                )
+            )
             write_report(passes, Path(args.out))
         else:
             print("\n=== PASS 3 skipped: no failures in pass 2 ===")

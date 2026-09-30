@@ -27,7 +27,7 @@ import subprocess
 import sys
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -38,7 +38,7 @@ RUN_LOG_FILE = PROJECT_ROOT / "workspace" / "suite_runs.jsonl"
 
 
 def _ts() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%SZ")
 
 
 def expand_query(q: dict) -> str:
@@ -58,8 +58,12 @@ def run_setup(q: dict) -> str | None:
         return None
     try:
         r = subprocess.run(
-            cmd, shell=True, cwd=str(PROJECT_ROOT),
-            capture_output=True, text=True, timeout=30,
+            cmd,
+            shell=True,
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except subprocess.TimeoutExpired:
         return "setup timed out (>30s)"
@@ -88,13 +92,21 @@ def main() -> None:
     ap.add_argument("--only", help="Comma-separated query IDs (e.g. Q01,Q06,Q12)")
     ap.add_argument("--skip", help="Comma-separated query IDs to exclude")
     ap.add_argument("--category", type=int, help="Run only queries from this category (1-11)")
-    ap.add_argument("--include-hitl", action="store_true",
-                    help="Include human-input queries (Q35-Q37); you must drive the interrupt")
-    ap.add_argument("--wipe-each", action="store_true",
-                    help="Wipe vault before EVERY query (default: wipe once at start, warm vault after)")
+    ap.add_argument(
+        "--include-hitl",
+        action="store_true",
+        help="Include human-input queries (Q35-Q37); you must drive the interrupt",
+    )
+    ap.add_argument(
+        "--wipe-each",
+        action="store_true",
+        help="Wipe vault before EVERY query (default: wipe once at start, warm vault after)",
+    )
     ap.add_argument("--no-wipe", action="store_true", help="Do not wipe vault at all")
     ap.add_argument("--no-trace", action="store_true", help="Skip LangSmith trace summaries")
-    ap.add_argument("--model", help="Override TALOS_MODEL for this run (OpenRouter slug, e.g. openai/gpt-4.1)")
+    ap.add_argument(
+        "--model", help="Override TALOS_MODEL for this run (OpenRouter slug, e.g. openai/gpt-4.1)"
+    )
     ap.add_argument("--out", default=str(REPORT_FILE), help="Report path")
     args = ap.parse_args()
 
@@ -106,11 +118,16 @@ def main() -> None:
     os.environ.setdefault("TALOS_AUTO_APPROVE_EXEC", "true")
 
     # Late imports so the env override above takes effect.
-    from talos.config.logging import setup_logging
     from examples.run_benchmarks import (
-        evaluate_expectations, fetch_trace_summary, run_one_query,
-        vault_snapshot, wipe_vault, write_report, append_jsonl, _classify_failure,
+        append_jsonl,
+        evaluate_expectations,
+        fetch_trace_summary,
+        run_one_query,
+        wipe_vault,
+        write_report,
     )
+    from talos.config.logging import setup_logging
+
     setup_logging()
 
     if not SUITE_FILE.exists():
@@ -120,7 +137,8 @@ def main() -> None:
     if not queries:
         sys.exit("no queries selected")
 
-    print(f"Will run {len(queries)} queries (model={os.environ.get('TALOS_MODEL', 'deepseek/deepseek-v4.1-flash')})")
+    model = os.environ.get("TALOS_MODEL", "deepseek/deepseek-v4.1-flash")
+    print(f"Will run {len(queries)} queries (model={model})")
     print(f"Report → {args.out}")
     skipped = [q["id"] for q in spec["queries"] if q.get("requires_hitl") and not args.include_hitl]
     if skipped:
@@ -159,12 +177,17 @@ def main() -> None:
             result = run_one_query(query_obj)
         except Exception as e:
             result = {
-                "id": q["id"], "tier": q.get("category"),
+                "id": q["id"],
+                "tier": q.get("category"),
                 "queries": [q_text[:200]],
-                "succeeded": False, "duration_s": 0, "answer": "",
+                "succeeded": False,
+                "duration_s": 0,
+                "answer": "",
                 "error": f"harness error: {type(e).__name__}: {e}\n{traceback.format_exc()}",
-                "vault_before_count": -1, "vault_after_count": -1,
-                "vault_added_names": [], "vault_added_full": [],
+                "vault_before_count": -1,
+                "vault_after_count": -1,
+                "vault_added_names": [],
+                "vault_added_full": [],
             }
 
         passed_assert, failed_descs = evaluate_expectations(
@@ -172,9 +195,14 @@ def main() -> None:
             succeeded=result.get("succeeded", False),
             answer=result.get("answer", ""),
             vault_before=[{"name": n} for n in [None] * (result.get("vault_before_count") or 0)],
-            vault_after=result.get("vault_added_full", []) + [
-                {"name": n} for n in [None] * max(
-                    0, (result.get("vault_after_count") or 0) - len(result.get("vault_added_full", []))
+            vault_after=result.get("vault_added_full", [])
+            + [
+                {"name": n}
+                for n in [None]
+                * max(
+                    0,
+                    (result.get("vault_after_count") or 0)
+                    - len(result.get("vault_added_full", [])),
                 )
             ],
         )
@@ -194,12 +222,17 @@ def main() -> None:
 
         results.append(result)
         append_jsonl(RUN_LOG_FILE, {**result, "ts": _ts()})
-        print(f"     → {'PASS' if passed_assert else 'FAIL'} ({result.get('duration_s')}s)", flush=True)
+        print(
+            f"     → {'PASS' if passed_assert else 'FAIL'} ({result.get('duration_s')}s)",
+            flush=True,
+        )
 
     duration_s = time.monotonic() - t0
     pass_obj = {
-        "mode": f"talos test suite ({os.environ.get('TALOS_MODEL', 'deepseek/deepseek-v4.1-flash')})",
-        "started": started, "duration_s": duration_s, "results": results,
+        "mode": f"talos test suite ({model})",
+        "started": started,
+        "duration_s": duration_s,
+        "results": results,
     }
     write_report([pass_obj], Path(args.out))
 
