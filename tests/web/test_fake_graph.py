@@ -62,7 +62,7 @@ async def test_caesar_forge_then_reuse(driver):
     _, events, pause = await drive(driver, CAESAR_Q)
     assert pause is None
     code = data(events, "forge.code")
-    assert [(c["attempt"], c["changed"]) for c in code] == [(1, None), (2, 48)]
+    assert [(c["attempt"], c["changed"], c["tests"]) for c in code] == [(1, None, 5), (2, 48, 5)]
     assert code[0]["lines"][47] == "    effective_shift = shift"
     assert code[1]["note"] == fake_graph.CAESAR_RETRY_NOTE
     first_tests = data(events, "forge.tests")[0]["results"]

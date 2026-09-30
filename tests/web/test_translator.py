@@ -84,6 +84,7 @@ def test_forge_with_retry_produces_the_demo_sequence():
     )
     code1, code2 = [d for t, d in events if t == "forge.code"]
     assert (code1["attempt"], code1["changed"], code1["note"]) == (1, None, None)
+    assert (code1["tests"], code2["tests"]) == (5, 5)  # def test_ count in that attempt
     assert (code2["attempt"], code2["changed"]) == (2, 48)
     assert code2["note"] == "Line 48 is new in attempt 2."
     assert first(events, "log.line", text="4 of 5 passed, retrying")["tone"] == "g"
@@ -285,9 +286,10 @@ def test_forger_failure_and_smoke_without_a_call_are_tolerated():
     ns = ("forge_subgraph:abc",)
     tr.feed((ns, "tasks", {"name": "forge", "input": None}))
     code = {"tool": "", "attempt": 1, "file": "tool.py", "lines": [], "changed": 1, "note": None}
-    events = tr.feed((ns, "custom", {"type": "forge.code", "data": code}))
+    assert tr.feed((ns, "custom", {"type": "forge.code", "data": code})) == []
+    events = tr.feed((ns, "updates", {"forge": {"forged_tool": {"name": "", "code": ""}}}))
     assert first(events, "forge.code")["tool"] == ""
-    tr.feed((ns, "updates", {"forge": {"forged_tool": {"name": "", "code": ""}}}))
+    assert first(events, "forge.code")["tests"] == 0
     tr.feed((ns, "tasks", {"name": "test", "input": None}))
     tests = {"tool": "", "attempt": 1, "results": []}
     tr.feed((ns, "custom", {"type": "forge.tests", "data": tests}))
@@ -422,7 +424,9 @@ def test_no_changed_line_note_for_an_empty_file():
     tr = EventTranslator()
     tr.state["attempt"] = 2
     code = {"tool": "", "attempt": 2, "file": "t.py", "lines": [], "changed": 1, "note": None}
-    events = tr.feed((("forge_subgraph:a",), "custom", {"type": "forge.code", "data": code}))
+    ns = ("forge_subgraph:a",)
+    tr.feed((ns, "custom", {"type": "forge.code", "data": code}))
+    events = tr.feed((ns, "updates", {"forge": {"forged_tool": {"name": "", "code": ""}}}))
     assert first(events, "forge.code")["note"] is None
 
 
@@ -444,6 +448,10 @@ def test_failed_first_attempt_does_not_replay_the_intro_on_retry():
         "note": None,
     }
     events = tr.feed((ns, "custom", {"type": "forge.code", "data": code}))
+    tests = "def test_a():\n    pass\n\ndef test_b():\n    pass\n"
+    forged = {"name": "f", "test_code": tests}
+    events += tr.feed((ns, "updates", {"forge": {"forged_tool": forged}}))
+    assert first(events, "forge.code")["tests"] == 2
     assert not any(
         "Attempt" in d.get("html", "") and "first" in d.get("html", "") for t, d in events
     )

@@ -326,6 +326,7 @@ class FakeDriver:
                 lines=source.split("\n"),
                 changed=changed,
                 note=note,
+                tests=total,
             )
             b.finish("forger", "forge")
             b.flow("forger", "tester")

@@ -101,6 +101,7 @@ class EventTranslator:
             "tests_total": 0,
             "tool": None,
             "code": [],
+            "pending_code": None,
             "env_vars": [],
             "pending_attempt": None,
             "test_results": [],
@@ -252,19 +253,9 @@ class EventTranslator:
     def _custom(self, type_: str, data: dict[str, Any]) -> None:
         s, b = self.state, self.board
         if type_ == "forge.code":
-            if data.get("tool"):
-                s["tool"] = data["tool"]
-            s["code"] = list(data.get("lines") or [])
-            if s["intro_pending"] and s["tool"]:
-                self._forge_intro()
-            changed = data.get("changed")
-            if (
-                int(data.get("attempt") or s["attempt"]) > 1
-                and changed
-                and changed <= len(s["code"])
-            ):
-                data["note"] = copy.NOTE_CHANGED_LINE.format(line=changed, n=s["attempt"])
-            b.emit("forge.code", **data)
+            # Held until the forge node's update, which carries test_code: the
+            # event says how many tests this attempt has. Nothing comes between.
+            s["pending_code"] = data
         elif type_ == "forge.tests":
             s["test_results"] = list(data.get("results") or [])
             b.pop()
@@ -344,6 +335,19 @@ class EventTranslator:
         else:
             b.emit(type_, **data)
 
+    def _forge_code(self, data: dict[str, Any]) -> None:
+        """`forge.code` for one attempt, with the changed-line note from attempt 2 on."""
+        s, b = self.state, self.board
+        if data.get("tool"):
+            s["tool"] = data["tool"]
+        s["code"] = list(data.get("lines") or [])
+        if s["intro_pending"] and s["tool"]:
+            self._forge_intro()
+        changed = data.get("changed")
+        if int(data.get("attempt") or s["attempt"]) > 1 and changed and changed <= len(s["code"]):
+            data["note"] = copy.NOTE_CHANGED_LINE.format(line=changed, n=s["attempt"])
+        b.emit("forge.code", **data)
+
     # ---- updates (a node finished) ----------------------------------------------------
 
     def _updated(self, inner: bool, node: str, update: Mapping[str, Any]) -> None:
@@ -354,6 +358,10 @@ class EventTranslator:
                 s["tool"] = forged.get("name") or s["tool"]
                 s["tests_total"] = len(_TEST_DEF.findall(forged.get("test_code") or ""))
                 s["env_vars"] = list(forged.get("needs_env_vars") or [])
+                pending = s.get("pending_code")
+                if pending is not None:
+                    s["pending_code"] = None
+                    self._forge_code({**pending, "tests": s["tests_total"]})
             elif node == "test":
                 self._tests_decided(update.get("test_result") or {})
             return
@@ -497,6 +505,7 @@ class EventTranslator:
             tests_total=0,
             tool=sub.get("tool_hint") if needs == "vault" else None,
             code=[],
+            pending_code=None,
             env_vars=[],
             pending_attempt=None,
             test_results=[],
