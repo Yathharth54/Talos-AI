@@ -235,6 +235,19 @@ Triggered by a real REPL session that hallucinated a Mumbai temperature. LangSmi
 
 ---
 
+## Web app stage 01 — Persistence ✅
+
+Spec: `docs/superpowers/specs/2026-09-30-talos-web-01-persistence-design.md`. Plan: `docs/superpowers/plans/2026-09-30-talos-web-01-persistence.md`.
+
+- [x] Settings from env: `DATABASE_URL`, `TALOS_CHECKPOINTER`, `TALOS_VAULT_DIR`, `TALOS_WORKSPACE_DIR`, `TALOS_DOTENV_PATH`
+- [x] `talos/events.py` `emit()`; `forge.code`, `forge.tests`, `forge.smoke`, `call.args`, `call.result`, `call.error`, `vault.saved`, `vault.failure` emitted from the nodes
+- [x] Tester per-test `results`; Forger `changed`; `SkillManager.get/remove`
+- [x] `build_app(checkpointer)`; module-level `app` unchanged (MemorySaver)
+- [x] `talos/persistence/`: models, db, repo, migrations, checkpoint (`AsyncPostgresSaver`), recovery
+- [x] Alembic `0001_initial`; LangGraph checkpoint tables ignored
+- [x] Integration tests (`-m integration`, real Postgres): migrations round-trip, repo, 20 concurrent appends, interrupt survives a restart, HITL on Postgres, recovery
+- Moved to stage 2: the `copy.py` vs reference-demo test (spec 01 §8), since `copy.py` is a stage 2 file.
+
 ## Session log
 A short bullet per session — what we did, what's next. Append-only.
 
@@ -287,3 +300,5 @@ A short bullet per session — what we did, what's next. Append-only.
   Unit 158 passed / 5 skipped; RUN_LIVE 160 passed. **Suite 45/62 → 56/62 (90%)**; category 4 (search/read) 0/5 → 5/5; crashes 3 → 1. 12 fixed, 1 regressed (Q33: correct answer, 408s vs 240s budget — ran before the timeout fix). Median 13.9s → 17.1s per query (larger synthesis prompts). Remaining: Q01/Q43 correct but checks stale/strict; Q46 forges for `2 ** 100`; Q64 now fails one step later on a strict reused `format_markdown_table(rows: list[list[str]])`; Q65 table omits kg. Next: process isolation + timeout for forged tools (deferred item 9).
 
 - **2026-09-30** — Open-source readiness pass on branch `chore/open-source-readiness`. (1) MIT `LICENSE` plus license/authors/urls/classifiers in `pyproject.toml` and a `talos` console script. (2) `python_exec`/`shell_exec` now pause via `interrupt()` with a preview and run only on `y`; approval echoes the shown args back, so a re-resolved call on resume can't run different code. `TALOS_AUTO_APPROVE_EXEC=true` skips it; both benchmark runners set it. (3) `ruff check` + `ruff format` clean (prompts exempt from E501 so their text is unchanged). (4) GitHub Actions CI: lint + mocked pytest on 3.11/3.12. The default suite now runs with no keys: live web_search/web_read tests moved behind `RUN_LIVE=1`, researcher tests fake the LLM key. README rewritten (safety section, badges, current layout/config, credits, license); `.env.example` defaults tracing off. Removed the stale unchecked Phase 9/10 duplicates. Unit 160 passed / 7 skipped. Still open: process isolation + timeout for forged vault tools; suite failures Q01/Q43 (stale checks), Q33 (time budget), Q46, Q64, Q65.
+
+- **2026-09-30** — Web app stage 01 (persistence) on branch `feat/web-01-persistence`. Postgres storage for sessions, messages, runs, run events and settings (SQLAlchemy 2 async + Alembic `0001_initial`), `AsyncPostgresSaver` with the pickle-fallback serializer, startup recovery, and the core changes stage 2 needs: `emit()` events from forger/tester/smoke/executor/learn, per-test results, `changed`, `SkillManager.remove`, env-driven paths, `build_app(checkpointer)`. The CLI is unchanged and needs no database. Unit 258 passed / 33 skipped (26 of the skips are integration tests); integration 26 passed against `postgres:16-alpine`.
