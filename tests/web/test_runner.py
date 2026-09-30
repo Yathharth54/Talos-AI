@@ -403,3 +403,67 @@ async def test_shutdown_survives_a_failing_stop(manager, store, driver, monkeypa
     await manager.shutdown()  # must not raise
     monkeypatch.undo()
     await manager.stop(run_id)
+
+
+class RaceStore(MemoryStore):
+    """Injects `run.finished` and a terminal status between a subscriber's reads."""
+
+    armed = False
+
+    async def get_run(self, run_id):
+        if self.armed:
+            self.armed = False
+            await self.append_event(run_id, "run.finished", {"status": "done"})
+            await self.set_run_status(run_id, "done", pending_interrupt=None)
+        return await super().get_run(run_id)
+
+
+async def test_subscribe_delivers_run_finished_that_lands_after_the_backlog_read():
+    store = RaceStore()
+    manager = RunManager(store, ScriptDriver())
+    session = await store.create_session()
+    run_id = (await manager.start(session.id, "pause")).run.id
+    await manager.join(run_id)
+    store.armed = True
+    got = [e["type"] async for e in manager.subscribe(run_id, after=0)]
+    assert got[-2:] == ["interrupt", "run.finished"]
+
+
+class FlakyStatusStore(MemoryStore):
+    """set_run_status fails once for `fail_on`, after run.finished was stored."""
+
+    fail_on = ""
+
+    async def set_run_status(self, run_id, status, **fields):
+        if status == self.fail_on:
+            self.fail_on = ""
+            raise RuntimeError("db hiccup")
+        return await super().set_run_status(run_id, status, **fields)
+
+
+async def test_a_failed_status_write_does_not_publish_a_second_run_finished():
+    store = FlakyStatusStore()
+    store.fail_on = "done"
+    manager = RunManager(store, ScriptDriver())
+    session = await store.create_session()
+    run_id = (await manager.start(session.id, "hi")).run.id
+    await manager.join(run_id)
+    types = [t for _, t in await events(store, run_id)]
+    assert types.count("run.finished") == 1
+    assert "error" not in types
+    assert (await store.get_run(run_id)).status == "failed"
+
+
+async def test_a_retried_stop_does_not_publish_a_second_run_finished():
+    store = FlakyStatusStore()
+    manager = RunManager(store, ScriptDriver())
+    session = await store.create_session()
+    run_id = (await manager.start(session.id, "pause")).run.id
+    await manager.join(run_id)
+    store.fail_on = "stopped"
+    with pytest.raises(RuntimeError):
+        await manager.stop(run_id)
+    await manager.stop(run_id)
+    types = [t for _, t in await events(store, run_id)]
+    assert types.count("run.finished") == 1
+    assert (await store.get_run(run_id)).status == "stopped"

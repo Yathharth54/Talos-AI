@@ -314,8 +314,10 @@ class RunManager:
             board.finished("stopped", copy.SUMMARY_STOPPED)
             # run.finished is stored before the status turns terminal, so a
             # subscriber that sees a terminal status has the whole tail.
-            for type_, data in board.drain():
-                await self._publish(run_id, type_, **data)
+            events = board.drain()
+            if not await self._finish_stored(run_id):  # a retried stop must not repeat it
+                for type_, data in events:
+                    await self._publish(run_id, type_, **data)
             await self.store.set_run_status(
                 run_id,
                 "stopped",
@@ -351,7 +353,15 @@ class RunManager:
                 if envelope["type"] == "run.finished":
                     return
             run = await self.store.get_run(run_id)
-            if run is None or run.status in TERMINAL_STATUSES:
+            if run is None:
+                return
+            if run.status in TERMINAL_STATUSES:
+                # run.finished may have landed after the backlog read above
+                for event in await self.store.events_after(run_id, last):
+                    envelope = event.envelope()
+                    yield envelope
+                    if envelope["type"] == "run.finished":
+                        return
                 return
             while True:
                 envelope = await queue.get()
@@ -367,6 +377,11 @@ class RunManager:
                 subs.discard(queue)
                 if not subs:
                     self._subscribers.pop(run_id, None)
+
+    async def _finish_stored(self, run_id: uuid.UUID) -> bool:
+        """True when the run's last stored event is `run.finished`."""
+        stored = await self.store.events_after(run_id)
+        return bool(stored) and stored[-1].type == "run.finished"
 
     async def _publish(self, run_id: uuid.UUID, type_: str, **data: Any) -> None:
         """Persist (allocating `seq`), then hand the envelope to every subscriber."""
@@ -395,6 +410,7 @@ class RunManager:
         state: dict[str, Any],
         resume: Resume | None,
     ) -> None:
+        finish_published = False
         try:
             async for item in self.driver.run(
                 state, query=query, thread_id=thread_id, resume=resume
@@ -422,6 +438,7 @@ class RunManager:
                     )
                 elif type_ == "run.finished":
                     await self._publish(run_id, type_, **data)
+                    finish_published = True
                     await self.store.set_run_status(
                         run_id,
                         data["status"],
@@ -441,16 +458,17 @@ class RunManager:
             log.exception("run %s failed", run_id)
             message = f"{type(e).__name__}: {e}"
             forged, used = list(state.get("forged") or []), list(state.get("used") or [])
-            await self._publish(run_id, "error", message=message)
-            await self._publish(
-                run_id,
-                "run.finished",
-                status="failed",
-                summary=copy.SUMMARY_FAILED,
-                summary_gold=False,
-                forged=forged,
-                used=used,
-            )
+            if not finish_published:
+                await self._publish(run_id, "error", message=message)
+                await self._publish(
+                    run_id,
+                    "run.finished",
+                    status="failed",
+                    summary=copy.SUMMARY_FAILED,
+                    summary_gold=False,
+                    forged=forged,
+                    used=used,
+                )
             await self.store.set_run_status(
                 run_id,
                 "failed",
