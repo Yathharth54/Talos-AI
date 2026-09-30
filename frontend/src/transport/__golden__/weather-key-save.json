@@ -1,0 +1,598 @@
+[
+ {
+  "seq": 1,
+  "type": "run.started",
+  "data": {
+   "session_id": "s1",
+   "query": "Use the OpenWeatherMap API to get the current temperature in Mumbai.",
+   "n": 6
+  }
+ },
+ {
+  "seq": 2,
+  "type": "log.cmd",
+  "data": {
+   "text": "Use the OpenWeatherMap API to get the current temperature in Mumbai."
+  }
+ },
+ {
+  "seq": 3,
+  "type": "node.started",
+  "data": {
+   "step": "planner"
+  }
+ },
+ {
+  "seq": 4,
+  "type": "caption",
+  "data": {
+   "html": "The Planner is splitting your request into sub-tasks and checking the vault."
+  }
+ },
+ {
+  "seq": 5,
+  "type": "talos.status",
+  "data": {
+   "text": "Planning"
+  }
+ },
+ {
+  "seq": 6,
+  "type": "node.finished",
+  "data": {
+   "step": "planner",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 7,
+  "type": "plan.ready",
+  "data": {
+   "subtasks": [
+    {
+     "id": 1,
+     "action": "Use the OpenWeatherMap API to get the current temperature in Mumbai.",
+     "needs": "forge",
+     "tool_hint": "get_current_temperature",
+     "depends_on": []
+    }
+   ],
+   "verdict": ""
+  }
+ },
+ {
+  "seq": 8,
+  "type": "log.line",
+  "data": {
+   "label": "plan",
+   "text": "1 sub-task, needs a new tool",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 9,
+  "type": "caption",
+  "data": {
+   "html": "1 sub-task. Nothing in the vault fetches weather, so it needs a new tool."
+  }
+ },
+ {
+  "seq": 10,
+  "type": "log.status",
+  "data": {
+   "text": "Forging",
+   "gold": true,
+   "tone": ""
+  }
+ },
+ {
+  "seq": 11,
+  "type": "strip.set",
+  "data": {
+   "variant": "forge",
+   "subtask": {
+    "index": 1,
+    "total": 1,
+    "label": "Sub-task 1 of 1, needs a new tool"
+   },
+   "sig": {
+    "name": "get_current_temperature",
+    "args": "city: str",
+    "ret": "float"
+   }
+  }
+ },
+ {
+  "seq": 12,
+  "type": "log.line",
+  "data": {
+   "label": "vault",
+   "text": "no match",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 13,
+  "type": "link.flow",
+  "data": {
+   "from": "planner",
+   "to": "forger"
+  }
+ },
+ {
+  "seq": 14,
+  "type": "talos.status",
+  "data": {
+   "text": "Writing get_current_temperature"
+  }
+ },
+ {
+  "seq": 15,
+  "type": "node.started",
+  "data": {
+   "step": "forger"
+  }
+ },
+ {
+  "seq": 16,
+  "type": "caption",
+  "data": {
+   "html": "The Forger is writing <span class=\"mono\">get_current_temperature</span> and its tests in one structured call."
+  }
+ },
+ {
+  "seq": 17,
+  "type": "log.line",
+  "data": {
+   "label": "forge",
+   "text": "get_current_temperature()",
+   "tone": "g"
+  }
+ },
+ {
+  "seq": 18,
+  "type": "forge.code",
+  "data": {
+   "tool": "get_current_temperature",
+   "attempt": 1,
+   "file": "get_current_temperature.py",
+   "lines": [
+    "\"\"\"Current temperature for a city from OpenWeatherMap.\"\"\"",
+    "",
+    "import os",
+    "",
+    "import requests",
+    "",
+    "",
+    "def get_current_temperature(city: str) -> float:",
+    "    \"\"\"Return the current temperature in Celsius for ``city``.",
+    "",
+    "    Reads the API key from the OPENWEATHERMAP_API_KEY environment variable.",
+    "",
+    "    Args:",
+    "        city: City name, for example \"Mumbai\".",
+    "",
+    "    Returns:",
+    "        The current temperature in degrees Celsius.",
+    "",
+    "    Raises:",
+    "        RuntimeError: If the API key is not set.",
+    "        ValueError: If the city is empty or not found.",
+    "    \"\"\"",
+    "    key = os.environ.get(\"OPENWEATHERMAP_API_KEY\")",
+    "    if not key:",
+    "        raise RuntimeError(\"OPENWEATHERMAP_API_KEY is not set\")",
+    "    if not city.strip():",
+    "        raise ValueError(\"city must not be empty\")",
+    "    resp = requests.get(",
+    "        \"https://api.openweathermap.org/data/2.5/weather\",",
+    "        params={\"q\": city, \"appid\": key, \"units\": \"metric\"},",
+    "        timeout=10,",
+    "    )",
+    "    if resp.status_code == 404:",
+    "        raise ValueError(f\"city not found: {city!r}\")",
+    "    resp.raise_for_status()",
+    "    return float(resp.json()[\"main\"][\"temp\"])"
+   ],
+   "changed": null,
+   "note": null,
+   "tests": 3
+  }
+ },
+ {
+  "seq": 19,
+  "type": "node.finished",
+  "data": {
+   "step": "forger",
+   "status": "forge"
+  }
+ },
+ {
+  "seq": 20,
+  "type": "link.flow",
+  "data": {
+   "from": "forger",
+   "to": "tester"
+  }
+ },
+ {
+  "seq": 21,
+  "type": "node.started",
+  "data": {
+   "step": "tester"
+  }
+ },
+ {
+  "seq": 22,
+  "type": "caption",
+  "data": {
+   "html": "<span class=\"gold\">Attempt 1 of 3.</span> Running 3 tests in a subprocess, 10-second limit."
+  }
+ },
+ {
+  "seq": 23,
+  "type": "log.line",
+  "data": {
+   "label": "test",
+   "text": "running",
+   "tone": "g",
+   "caret": true
+  }
+ },
+ {
+  "seq": 24,
+  "type": "forge.tests",
+  "data": {
+   "tool": "get_current_temperature",
+   "attempt": 1,
+   "results": [
+    {
+     "name": "test_reads_temperature_from_response",
+     "passed": true,
+     "why": null
+    },
+    {
+     "name": "test_raises_when_key_missing",
+     "passed": true,
+     "why": null
+    },
+    {
+     "name": "test_raises_on_unknown_city",
+     "passed": true,
+     "why": null
+    }
+   ]
+  }
+ },
+ {
+  "seq": 25,
+  "type": "log.pop",
+  "data": {}
+ },
+ {
+  "seq": 26,
+  "type": "log.line",
+  "data": {
+   "label": "test",
+   "text": "3 of 3 passed",
+   "tone": "g"
+  }
+ },
+ {
+  "seq": 27,
+  "type": "forge.attempt",
+  "data": {
+   "attempt": 1,
+   "ok": true,
+   "detail": "3 of 3 tests passed"
+  }
+ },
+ {
+  "seq": 28,
+  "type": "node.finished",
+  "data": {
+   "step": "tester",
+   "status": "forge"
+  }
+ },
+ {
+  "seq": 29,
+  "type": "link.flow",
+  "data": {
+   "from": "tester",
+   "to": "human"
+  }
+ },
+ {
+  "seq": 30,
+  "type": "node.started",
+  "data": {
+   "step": "human"
+  }
+ },
+ {
+  "seq": 31,
+  "type": "caption",
+  "data": {
+   "html": "Human check paused the graph. <span class=\"mono\">get_current_temperature</span> needs <span class=\"mono\">OPENWEATHERMAP_API_KEY</span>."
+  }
+ },
+ {
+  "seq": 32,
+  "type": "log.line",
+  "data": {
+   "label": "check",
+   "text": "waiting for a key",
+   "tone": "g",
+   "caret": true
+  }
+ },
+ {
+  "seq": 33,
+  "type": "log.status",
+  "data": {
+   "text": "Waiting for you",
+   "gold": true,
+   "tone": ""
+  }
+ },
+ {
+  "seq": 34,
+  "type": "talos.status",
+  "data": {
+   "text": "The tool is written and tested. It needs an API key before it can run"
+  }
+ },
+ {
+  "seq": 35,
+  "type": "interrupt",
+  "data": {
+   "kind": "missing_api_key",
+   "payload": {
+    "env_var": "OPENWEATHERMAP_API_KEY",
+    "tool_name": "get_current_temperature",
+    "service": "OpenWeatherMap"
+   }
+  }
+ },
+ {
+  "seq": 36,
+  "type": "interrupt.resolved",
+  "data": {
+   "kind": "missing_api_key",
+   "decision": "save"
+  }
+ },
+ {
+  "seq": 37,
+  "type": "log.pop",
+  "data": {}
+ },
+ {
+  "seq": 38,
+  "type": "log.line",
+  "data": {
+   "label": "check",
+   "text": "key saved to .env",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 39,
+  "type": "node.finished",
+  "data": {
+   "step": "human",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 40,
+  "type": "caption",
+  "data": {
+   "html": "Saved <span class=\"mono\">OPENWEATHERMAP_API_KEY</span> to .env. Talos won't ask again."
+  }
+ },
+ {
+  "seq": 41,
+  "type": "log.status",
+  "data": {
+   "text": "Forging",
+   "gold": true,
+   "tone": ""
+  }
+ },
+ {
+  "seq": 42,
+  "type": "link.flow",
+  "data": {
+   "from": "human",
+   "to": "learn"
+  }
+ },
+ {
+  "seq": 43,
+  "type": "node.started",
+  "data": {
+   "step": "learn"
+  }
+ },
+ {
+  "seq": 44,
+  "type": "caption",
+  "data": {
+   "html": "Learn is writing the .py file and its manifest entry."
+  }
+ },
+ {
+  "seq": 45,
+  "type": "node.finished",
+  "data": {
+   "step": "learn",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 46,
+  "type": "log.line",
+  "data": {
+   "label": "learn",
+   "text": "saved to the vault",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 47,
+  "type": "vault.saved",
+  "data": {
+   "tool": {
+    "name": "get_current_temperature",
+    "args": "city: str",
+    "ret": "float",
+    "signature": "get_current_temperature(city: str) -> float",
+    "description": "Returns the current temperature in Celsius for a city from OpenWeatherMap.",
+    "keywords": [
+     "weather",
+     "temperature",
+     "openweathermap",
+     "city",
+     "celsius",
+     "mumbai"
+    ],
+    "uses": 0,
+    "failures": 0,
+    "streak": 0,
+    "created_at": "2026-09-30T12:00",
+    "last_used": null,
+    "last_failure": null,
+    "last_failed_at": null,
+    "web": true,
+    "file": "talos/vault/tools/get_current_temperature.py"
+   },
+   "sub": "Next time you ask about the weather, Talos reuses it. It reads the key from .env."
+  }
+ },
+ {
+  "seq": 48,
+  "type": "link.flow",
+  "data": {
+   "from": "learn",
+   "to": "executor"
+  }
+ },
+ {
+  "seq": 49,
+  "type": "node.started",
+  "data": {
+   "step": "executor"
+  }
+ },
+ {
+  "seq": 50,
+  "type": "caption",
+  "data": {
+   "html": "The Executor is filling in the arguments."
+  }
+ },
+ {
+  "seq": 51,
+  "type": "call.args",
+  "data": {
+   "tool": "get_current_temperature",
+   "args": [
+    [
+     "city",
+     "\"Mumbai\"",
+     false
+    ]
+   ],
+   "caption": null
+  }
+ },
+ {
+  "seq": 52,
+  "type": "call.result",
+  "data": {
+   "repr": "Not called in this demo",
+   "type": "",
+   "small": true
+  }
+ },
+ {
+  "seq": 53,
+  "type": "node.finished",
+  "data": {
+   "step": "executor",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 54,
+  "type": "log.line",
+  "data": {
+   "label": "execute",
+   "text": "done (demo stops before the API)",
+   "tone": "w"
+  }
+ },
+ {
+  "seq": 55,
+  "type": "link.flow",
+  "data": {
+   "from": "executor",
+   "to": "answer"
+  }
+ },
+ {
+  "seq": 56,
+  "type": "node.finished",
+  "data": {
+   "step": "answer",
+   "status": "answer"
+  }
+ },
+ {
+  "seq": 57,
+  "type": "log.status",
+  "data": {
+   "text": "1 tool forged",
+   "gold": true,
+   "tone": ""
+  }
+ },
+ {
+  "seq": 58,
+  "type": "caption",
+  "data": {
+   "html": "Done. In Talos the Executor would call OpenWeatherMap here with your key."
+  }
+ },
+ {
+  "seq": 59,
+  "type": "answer.done",
+  "data": {
+   "html": "The tool is ready and your key is saved. This demo can't reach the internet, so it stops before calling OpenWeatherMap.",
+   "note": "In Talos, you'd get the current temperature in Mumbai here.",
+   "chips": [
+    {
+     "kind": "forged",
+     "text": "Forged get_current_temperature"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 60,
+  "type": "run.finished",
+  "data": {
+   "status": "done",
+   "summary": "1 tool forged, key saved",
+   "summary_gold": true,
+   "forged": [
+    "get_current_temperature"
+   ],
+   "used": [
+    "get_current_temperature"
+   ]
+  }
+ }
+]

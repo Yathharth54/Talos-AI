@@ -1,0 +1,294 @@
+[
+ {
+  "seq": 1,
+  "type": "run.started",
+  "data": {
+   "session_id": "s1",
+   "query": "Run this Python code and give me the output: print(sum(range(1, 101)))",
+   "n": 6
+  }
+ },
+ {
+  "seq": 2,
+  "type": "log.cmd",
+  "data": {
+   "text": "Run this Python code and give me the output: print(sum(range(1, 101)))"
+  }
+ },
+ {
+  "seq": 3,
+  "type": "node.started",
+  "data": {
+   "step": "planner"
+  }
+ },
+ {
+  "seq": 4,
+  "type": "caption",
+  "data": {
+   "html": "The Planner is splitting your request into sub-tasks and checking the vault."
+  }
+ },
+ {
+  "seq": 5,
+  "type": "talos.status",
+  "data": {
+   "text": "Planning"
+  }
+ },
+ {
+  "seq": 6,
+  "type": "node.finished",
+  "data": {
+   "step": "planner",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 7,
+  "type": "plan.ready",
+  "data": {
+   "subtasks": [
+    {
+     "id": 1,
+     "action": "Run this Python code and give me the output: print(sum(range(1, 101)))",
+     "needs": "primitive",
+     "tool_hint": "python_exec",
+     "depends_on": []
+    }
+   ],
+   "verdict": ""
+  }
+ },
+ {
+  "seq": 8,
+  "type": "log.line",
+  "data": {
+   "label": "plan",
+   "text": "1 sub-task, primitive",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 9,
+  "type": "caption",
+  "data": {
+   "html": "1 sub-task, a built-in primitive. Nothing needs forging."
+  }
+ },
+ {
+  "seq": 10,
+  "type": "strip.set",
+  "data": {
+   "variant": "primitive",
+   "subtask": {
+    "index": 1,
+    "total": 1,
+    "label": "Sub-task 1 of 1, built-in primitive"
+   },
+   "sig": {
+    "name": "python_exec",
+    "args": "code: str, timeout: int | None = None",
+    "ret": "dict"
+   }
+  }
+ },
+ {
+  "seq": 11,
+  "type": "link.flow",
+  "data": {
+   "from": "planner",
+   "to": "primitive"
+  }
+ },
+ {
+  "seq": 12,
+  "type": "node.finished",
+  "data": {
+   "step": "primitive",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 13,
+  "type": "link.flow",
+  "data": {
+   "from": "primitive",
+   "to": "executor"
+  }
+ },
+ {
+  "seq": 14,
+  "type": "call.args",
+  "data": {
+   "tool": "python_exec",
+   "args": [
+    [
+     "code",
+     "\"print(sum(range(1, 101)))\"",
+     false
+    ]
+   ],
+   "caption": "Written by the Executor"
+  }
+ },
+ {
+  "seq": 15,
+  "type": "node.started",
+  "data": {
+   "step": "executor",
+   "label": "Executor, waiting for you"
+  }
+ },
+ {
+  "seq": 16,
+  "type": "caption",
+  "data": {
+   "html": "The Executor paused. <span class=\"mono\">python_exec</span> runs code on your machine, so it asks first."
+  }
+ },
+ {
+  "seq": 17,
+  "type": "log.line",
+  "data": {
+   "label": "execute",
+   "text": "paused for approval",
+   "tone": "g",
+   "caret": true
+  }
+ },
+ {
+  "seq": 18,
+  "type": "log.status",
+  "data": {
+   "text": "Waiting for you",
+   "gold": true,
+   "tone": ""
+  }
+ },
+ {
+  "seq": 19,
+  "type": "talos.status",
+  "data": {
+   "text": "Waiting for you to approve the code"
+  }
+ },
+ {
+  "seq": 20,
+  "type": "interrupt",
+  "data": {
+   "kind": "confirm_exec",
+   "payload": {
+    "tool": "python_exec",
+    "preview": "print(sum(range(1, 101)))"
+   }
+  }
+ },
+ {
+  "seq": 21,
+  "type": "interrupt.resolved",
+  "data": {
+   "kind": "confirm_exec",
+   "decision": "approve"
+  }
+ },
+ {
+  "seq": 22,
+  "type": "log.pop",
+  "data": {}
+ },
+ {
+  "seq": 23,
+  "type": "log.line",
+  "data": {
+   "label": "execute",
+   "text": "running",
+   "tone": "g",
+   "caret": true
+  }
+ },
+ {
+  "seq": 24,
+  "type": "log.pop",
+  "data": {}
+ },
+ {
+  "seq": 25,
+  "type": "call.result",
+  "data": {
+   "repr": "5050",
+   "type": "stdout",
+   "small": false
+  }
+ },
+ {
+  "seq": 26,
+  "type": "node.finished",
+  "data": {
+   "step": "executor",
+   "status": "done",
+   "label": "Executor"
+  }
+ },
+ {
+  "seq": 27,
+  "type": "log.line",
+  "data": {
+   "label": "execute",
+   "text": "done",
+   "tone": "w"
+  }
+ },
+ {
+  "seq": 28,
+  "type": "log.status",
+  "data": {
+   "text": "0 tools forged",
+   "gold": false,
+   "tone": ""
+  }
+ },
+ {
+  "seq": 29,
+  "type": "link.flow",
+  "data": {
+   "from": "executor",
+   "to": "answer"
+  }
+ },
+ {
+  "seq": 30,
+  "type": "node.finished",
+  "data": {
+   "step": "answer",
+   "status": "answer"
+  }
+ },
+ {
+  "seq": 31,
+  "type": "caption",
+  "data": {
+   "html": "Done. Primitives go straight to the Executor, so nothing was forged."
+  }
+ },
+ {
+  "seq": 32,
+  "type": "answer.done",
+  "data": {
+   "html": "The code prints <span class=\"mono\">5050</span>.",
+   "note": null,
+   "chips": []
+  }
+ },
+ {
+  "seq": 33,
+  "type": "run.finished",
+  "data": {
+   "status": "done",
+   "summary": "Built-in, approved",
+   "summary_gold": false,
+   "forged": [],
+   "used": []
+  }
+ }
+]

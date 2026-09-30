@@ -401,7 +401,7 @@ export class Player {
     else if (r0.strip === "vault") {
       tabs = [{ id: "call", label: COPY.bench.tabs.call }, { id: "code", label: COPY.bench.tabs.code }, { id: "history", label: COPY.bench.tabs.history }];
       const lines = await this.source(d.tool);
-      if (lines) code = { file: `${d.tool}.py`, cap: fill(COPY.code.lines, { n: lines.length }), lines, shown: lines.length };
+      if (lines) code = { file: `${d.tool}.py`, cap: d.code_cap ?? fill(COPY.code.lines, { n: lines.length }), lines, shown: lines.length };
     } else tabs = [{ id: "call", label: COPY.bench.tabs.call }];
     const call: CallState = {
       args,

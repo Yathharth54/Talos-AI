@@ -1,0 +1,321 @@
+[
+ {
+  "seq": 1,
+  "type": "run.started",
+  "data": {
+   "session_id": "s1",
+   "query": "Decrypt this Caesar cipher message with shift seven: \"AHSVZ HNLUA\"",
+   "n": 7
+  }
+ },
+ {
+  "seq": 2,
+  "type": "log.cmd",
+  "data": {
+   "text": "Decrypt this Caesar cipher message with shift seven: \"AHSVZ HNLUA\""
+  }
+ },
+ {
+  "seq": 3,
+  "type": "node.started",
+  "data": {
+   "step": "planner"
+  }
+ },
+ {
+  "seq": 4,
+  "type": "caption",
+  "data": {
+   "html": "The Planner is splitting your request into sub-tasks and checking the vault."
+  }
+ },
+ {
+  "seq": 5,
+  "type": "talos.status",
+  "data": {
+   "text": "Planning"
+  }
+ },
+ {
+  "seq": 6,
+  "type": "node.finished",
+  "data": {
+   "step": "planner",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 7,
+  "type": "plan.ready",
+  "data": {
+   "subtasks": [
+    {
+     "id": 1,
+     "action": "Decrypt this Caesar cipher message with shift seven: \"AHSVZ HNLUA\"",
+     "needs": "vault",
+     "tool_hint": "caesar_cipher",
+     "depends_on": []
+    }
+   ],
+   "verdict": ""
+  }
+ },
+ {
+  "seq": 8,
+  "type": "log.line",
+  "data": {
+   "label": "plan",
+   "text": "1 sub-task, in the vault",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 9,
+  "type": "caption",
+  "data": {
+   "html": "The Planner matched <span class=\"mono\">caesar_cipher</span> on the keywords caesar, cipher and decrypt. Nothing will be written or tested this time."
+  }
+ },
+ {
+  "seq": 10,
+  "type": "strip.set",
+  "data": {
+   "variant": "vault",
+   "subtask": {
+    "index": 1,
+    "total": 1,
+    "label": "Sub-task 1 of 1, found in the vault"
+   },
+   "sig": {
+    "name": "caesar_cipher",
+    "args": "text: str, shift: int, mode: str",
+    "ret": "str"
+   }
+  }
+ },
+ {
+  "seq": 11,
+  "type": "link.flow",
+  "data": {
+   "from": "planner",
+   "to": "vault"
+  }
+ },
+ {
+  "seq": 12,
+  "type": "node.finished",
+  "data": {
+   "step": "vault",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 13,
+  "type": "log.line",
+  "data": {
+   "label": "vault",
+   "text": "caesar_cipher",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 14,
+  "type": "log.status",
+  "data": {
+   "text": "",
+   "gold": false,
+   "tone": "warm"
+  }
+ },
+ {
+  "seq": 15,
+  "type": "log.status",
+  "data": {
+   "text": "0 tools forged",
+   "gold": false,
+   "tone": "warm"
+  }
+ },
+ {
+  "seq": 16,
+  "type": "talos.status",
+  "data": {
+   "text": "Found caesar_cipher in the vault"
+  }
+ },
+ {
+  "seq": 17,
+  "type": "link.flow",
+  "data": {
+   "from": "vault",
+   "to": "skip"
+  }
+ },
+ {
+  "seq": 18,
+  "type": "link.flow",
+  "data": {
+   "from": "skip",
+   "to": "executor"
+  }
+ },
+ {
+  "seq": 19,
+  "type": "node.started",
+  "data": {
+   "step": "executor"
+  }
+ },
+ {
+  "seq": 20,
+  "type": "caption",
+  "data": {
+   "html": "The Executor is reading your message and filling in the arguments."
+  }
+ },
+ {
+  "seq": 21,
+  "type": "talos.status",
+  "data": {
+   "text": "Running caesar_cipher"
+  }
+ },
+ {
+  "seq": 22,
+  "type": "call.args",
+  "data": {
+   "tool": "caesar_cipher",
+   "args": [
+    [
+     "text",
+     "\"AHSVZ HNLUA\"",
+     false
+    ],
+    [
+     "shift",
+     "\"seven\"",
+     true
+    ],
+    [
+     "mode",
+     "\"decrypt\"",
+     false
+    ]
+   ],
+   "caption": null
+  }
+ },
+ {
+  "seq": 23,
+  "type": "call.error",
+  "data": {
+   "error": "TypeError: shift must be an int, got str",
+   "when": "run"
+  }
+ },
+ {
+  "seq": 24,
+  "type": "node.finished",
+  "data": {
+   "step": "executor",
+   "status": "fail",
+   "label": "Executor failed"
+  }
+ },
+ {
+  "seq": 25,
+  "type": "log.line",
+  "data": {
+   "label": "execute",
+   "text": "failed, TypeError",
+   "tone": "w"
+  }
+ },
+ {
+  "seq": 26,
+  "type": "log.status",
+  "data": {
+   "text": "0 tools forged",
+   "gold": false,
+   "tone": "alert"
+  }
+ },
+ {
+  "seq": 27,
+  "type": "log.status",
+  "data": {
+   "text": "1 step failed",
+   "gold": false,
+   "tone": "alert"
+  }
+ },
+ {
+  "seq": 28,
+  "type": "log.line",
+  "data": {
+   "label": "vault",
+   "text": "1 failure in a row",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 29,
+  "type": "vault.failure",
+  "data": {
+   "tool": "caesar_cipher",
+   "streak": 1,
+   "pruned": false,
+   "error": "TypeError: shift must be an int, got str"
+  }
+ },
+ {
+  "seq": 30,
+  "type": "link.flow",
+  "data": {
+   "from": "executor",
+   "to": "answer"
+  }
+ },
+ {
+  "seq": 31,
+  "type": "node.finished",
+  "data": {
+   "step": "answer",
+   "status": "answer"
+  }
+ },
+ {
+  "seq": 32,
+  "type": "caption",
+  "data": {
+   "html": "The run still finished. Talos explained the failure instead of guessing a result."
+  }
+ },
+ {
+  "seq": 33,
+  "type": "answer.done",
+  "data": {
+   "html": "I couldn't decrypt that. <span class=\"mono\">caesar_cipher</span> needs the shift as a number, and it was given the word \"seven\".",
+   "note": "Ask again with \"shift 7\" and it should work.",
+   "chips": [
+    {
+     "kind": "failed",
+     "text": "caesar_cipher raised a TypeError"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 34,
+  "type": "run.finished",
+  "data": {
+   "status": "done",
+   "summary": "Failed, 1 failure in a row",
+   "summary_gold": false,
+   "forged": [],
+   "used": [
+    "caesar_cipher"
+   ]
+  }
+ }
+]

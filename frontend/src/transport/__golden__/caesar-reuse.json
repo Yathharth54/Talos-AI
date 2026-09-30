@@ -1,0 +1,284 @@
+[
+ {
+  "seq": 1,
+  "type": "run.started",
+  "data": {
+   "session_id": "s1",
+   "query": "Decrypt this Caesar cipher message with shift 7: \"AHSVZ HNLUA\"",
+   "n": 7
+  }
+ },
+ {
+  "seq": 2,
+  "type": "log.cmd",
+  "data": {
+   "text": "Decrypt this Caesar cipher message with shift 7: \"AHSVZ HNLUA\""
+  }
+ },
+ {
+  "seq": 3,
+  "type": "node.started",
+  "data": {
+   "step": "planner"
+  }
+ },
+ {
+  "seq": 4,
+  "type": "caption",
+  "data": {
+   "html": "The Planner is splitting your request into sub-tasks and checking the vault."
+  }
+ },
+ {
+  "seq": 5,
+  "type": "talos.status",
+  "data": {
+   "text": "Planning"
+  }
+ },
+ {
+  "seq": 6,
+  "type": "node.finished",
+  "data": {
+   "step": "planner",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 7,
+  "type": "plan.ready",
+  "data": {
+   "subtasks": [
+    {
+     "id": 1,
+     "action": "Decrypt this Caesar cipher message with shift 7: \"AHSVZ HNLUA\"",
+     "needs": "vault",
+     "tool_hint": "caesar_cipher",
+     "depends_on": []
+    }
+   ],
+   "verdict": ""
+  }
+ },
+ {
+  "seq": 8,
+  "type": "log.line",
+  "data": {
+   "label": "plan",
+   "text": "1 sub-task, in the vault",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 9,
+  "type": "caption",
+  "data": {
+   "html": "The Planner matched <span class=\"mono\">caesar_cipher</span> on the keywords caesar, cipher and decrypt. Nothing will be written or tested this time."
+  }
+ },
+ {
+  "seq": 10,
+  "type": "strip.set",
+  "data": {
+   "variant": "vault",
+   "subtask": {
+    "index": 1,
+    "total": 1,
+    "label": "Sub-task 1 of 1, found in the vault"
+   },
+   "sig": {
+    "name": "caesar_cipher",
+    "args": "text: str, shift: int, mode: str",
+    "ret": "str"
+   }
+  }
+ },
+ {
+  "seq": 11,
+  "type": "link.flow",
+  "data": {
+   "from": "planner",
+   "to": "vault"
+  }
+ },
+ {
+  "seq": 12,
+  "type": "node.finished",
+  "data": {
+   "step": "vault",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 13,
+  "type": "log.line",
+  "data": {
+   "label": "vault",
+   "text": "caesar_cipher",
+   "tone": "plain"
+  }
+ },
+ {
+  "seq": 14,
+  "type": "log.status",
+  "data": {
+   "text": "",
+   "gold": false,
+   "tone": "warm"
+  }
+ },
+ {
+  "seq": 15,
+  "type": "log.status",
+  "data": {
+   "text": "0 tools forged",
+   "gold": false,
+   "tone": "warm"
+  }
+ },
+ {
+  "seq": 16,
+  "type": "talos.status",
+  "data": {
+   "text": "Found caesar_cipher in the vault"
+  }
+ },
+ {
+  "seq": 17,
+  "type": "link.flow",
+  "data": {
+   "from": "vault",
+   "to": "skip"
+  }
+ },
+ {
+  "seq": 18,
+  "type": "link.flow",
+  "data": {
+   "from": "skip",
+   "to": "executor"
+  }
+ },
+ {
+  "seq": 19,
+  "type": "node.started",
+  "data": {
+   "step": "executor"
+  }
+ },
+ {
+  "seq": 20,
+  "type": "caption",
+  "data": {
+   "html": "The Executor is reading your message and filling in the arguments."
+  }
+ },
+ {
+  "seq": 21,
+  "type": "talos.status",
+  "data": {
+   "text": "Running caesar_cipher"
+  }
+ },
+ {
+  "seq": 22,
+  "type": "call.args",
+  "data": {
+   "tool": "caesar_cipher",
+   "args": [
+    [
+     "text",
+     "\"AHSVZ HNLUA\"",
+     false
+    ],
+    [
+     "shift",
+     "7",
+     false
+    ],
+    [
+     "mode",
+     "\"decrypt\"",
+     false
+    ]
+   ],
+   "caption": null
+  }
+ },
+ {
+  "seq": 23,
+  "type": "call.result",
+  "data": {
+   "repr": "'TALOS AGENT'",
+   "type": "str",
+   "small": false
+  }
+ },
+ {
+  "seq": 24,
+  "type": "node.finished",
+  "data": {
+   "step": "executor",
+   "status": "done"
+  }
+ },
+ {
+  "seq": 25,
+  "type": "log.line",
+  "data": {
+   "label": "execute",
+   "text": "done",
+   "tone": "w"
+  }
+ },
+ {
+  "seq": 26,
+  "type": "link.flow",
+  "data": {
+   "from": "executor",
+   "to": "answer"
+  }
+ },
+ {
+  "seq": 27,
+  "type": "node.finished",
+  "data": {
+   "step": "answer",
+   "status": "answer"
+  }
+ },
+ {
+  "seq": 28,
+  "type": "caption",
+  "data": {
+   "html": "Done from the vault. The forge sub-graph never ran."
+  }
+ },
+ {
+  "seq": 29,
+  "type": "answer.done",
+  "data": {
+   "html": "It decrypts to <span class=\"mono\">TALOS AGENT</span>.",
+   "note": null,
+   "chips": [
+    {
+     "kind": "reused",
+     "text": "Reused caesar_cipher from the vault"
+    }
+   ]
+  }
+ },
+ {
+  "seq": 30,
+  "type": "run.finished",
+  "data": {
+   "status": "done",
+   "summary": "0 tools forged",
+   "summary_gold": false,
+   "forged": [],
+   "used": [
+    "caesar_cipher"
+   ]
+  }
+ }
+]

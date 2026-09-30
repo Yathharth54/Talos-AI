@@ -67,7 +67,13 @@ export interface EventData {
   "forge.smoke": { call: string; result: string | null; passed: boolean };
   "vault.saved": { tool: VaultEntry; sub: string };
   "vault.failure": { tool: string; streak: number; pruned: boolean; error: string };
-  "call.args": { tool: string; args: [string, string, boolean][]; caption: string | null };
+  "call.args": {
+    tool: string;
+    args: [string, string, boolean][];
+    caption: string | null;
+    /** Demo transport only (ruling 10): the reused tool's Code tab caption, when the reference hard-codes one. */
+    code_cap?: string;
+  };
   "call.result": { repr: string; type: string; small: boolean };
   /** `when` is a code from stage 2 (e.g. "run", "declined"), not display text. */
   "call.error": { error: string; when: string };
