@@ -21,51 +21,74 @@ When this spec and the reference file disagree, the reference file wins, and thi
 
 ## 2. Stack and layout
 
-- Vite 5, TypeScript (strict), no UI framework, no CSS framework. The demo is vanilla DOM plus string templates, and the port keeps that.
+- React 18 with TypeScript (strict) and `.tsx` components, built with Vite 5. No component library, no CSS framework, no CSS-in-JS. Styling is the demo's stylesheet, applied through the demo's class names.
+- State: one `useReducer` store per concern, exposed through context: `runs` (the demo's run objects), `session`, `vault`, `settings` and `ui` (view, dialog, busy). No Redux or Zustand.
 - Only three external resources, as in the demo: Google Fonts (Michroma, Instrument Sans 400/500/600, JetBrains Mono 400/500) and the two images.
 - `frontend/` at the repo root:
 
 ```
 frontend/
-  index.html               # the demo's markup: header, the 4 views, #modal-root, the two <script type="text/plain"> source blocks removed (see §5)
-  vite.config.ts           # dev proxy /api → 127.0.0.1:8000
-  package.json             # scripts: dev, build, typecheck, lint, test, e2e
-  public/assets/           # apple-touch-icon.png, hero-mark.webp
+  index.html                 # <div id="root">, the Google Fonts link, <title>Talos Workbench</title>
+  vite.config.ts             # React plugin, dev proxy /api → 127.0.0.1:8000
+  package.json               # scripts: dev, build, typecheck, lint, test, e2e
+  public/assets/             # apple-touch-icon.png, hero-mark.webp
   src/
-    styles.css             # the demo's <style> block, verbatim (§3)
-    main.ts                # boot: booting class, router, initial render
-    state.ts               # S: the demo's state object, typed
-    dom.ts                 # $, $$, esc
-    motion.ts              # scramble, countUp, wrapWords, still (reduced motion), GLYPHS
-    highlight.ts           # highlight() and codeRows()
-    format.ts              # fmtTime, fmtClock, fmtShort, fmtDay, sameDay, nowIso, splitArgs, argNames, pyStr
-    copy.ts                # every user-facing string not coming from the server (§7)
-    render/
-      strip.ts             # STRIPS, initStrip, stripHtml, setNode, flow, retrying, updateRail
-      bench.ts             # renderIdle, renderBench, setLabel, setSig, setCaption, setActions, setBanner, bannerHtml
-      tabs.ts              # allTabs, tabsHtml, setTab, refreshTabs, placeInd
-      panels.ts            # panelHtml, codeHtml, testsHtml, attemptsHtml, callHtml, historyHtml, logPanelHtml, earlierHtml
-      log.ts               # logLineHtml, redrawLog, log, logStatus, logTone, typeCmd
-      conversation.ts      # addYou, addTalos (status, say, chip, append, stop), renderEmptyConvo, markRunLinks
-      dialogs.ts           # openDialog (focus trap, Esc), approvalDialog, keyDialog, readerDialog
-    views/
-      workbench.ts         # composer, submit wiring, updateComposer, setBusy, stopRun
-      vault.ts             # renderVault, vaultRows, renderDetail
-      sessions.ts          # renderSessions, sessCard, openSession, backToNow, setTitle
-      settings.ts          # renderSettings, switch
-      router.ts            # showView, hash routes: #workbench #vault #sessions #settings
+    styles.css               # the demo's <style> block, verbatim (§3), imported once in main.tsx
+    main.tsx                 # createRoot, providers, the booting class on <body>
+    App.tsx                  # <Header/>, the four views, <ModalRoot/>; hash router
+    lib/
+      format.ts              # fmtTime, fmtClock, fmtShort, fmtDay, sameDay, nowIso, splitArgs, argNames, pyStr
+      highlight.ts           # highlight(): returns the same HTML strings as the demo
+      motion.ts              # scramble, countUp, wrapWords, still (reduced motion), GLYPHS
+      copy.ts                # every user-facing string not coming from the server (§7)
+    hooks/
+      useScramble.ts         # runs scramble() on a ref when its text changes (idle heading, session title, saved banner name, log labels)
+      useCountUp.ts          # idle tool count
+      useRestartAnimation.ts # remove class, force reflow, re-add: for flash, panel-in, view enter, detail swap, link flow
+      useTabIndicator.ts     # placeInd(): slides .tab-ind from the previous tab to the selected one
+      useFocusTrap.ts        # dialogs: trap Tab, Esc handling, restore focus
+      usePointerGlow.ts      # sets --mx/--my on .try cards
+    store/
+      runs.ts                # reducer mirroring the demo's run object: nodes, links, caption, tabs, code, tests, attempts, smoke, call, banner, log
+      session.ts, vault.ts, settings.ts, ui.ts
+    components/
+      Header.tsx             # brand + busy ring, nav with vault badge, DemoControls (demo mode only), GitHub pill
+      workbench/
+        Conversation.tsx     # head (title, New session / Back to now), messages, composer
+        Message.tsx          # You / Talos message; Talos: thinking (orbit spinner), streamed words, note, chip, "View this run"
+        Composer.tsx
+        Bench.tsx            # rail, head, strip + caption, banner, tabs, panel; or <Idle/>
+        Idle.tsx
+        Strip.tsx            # nodes and links, including the packet and the retry loop
+        Tabs.tsx
+        panels/CodePanel.tsx, TestsPanel.tsx, AttemptsPanel.tsx, CallPanel.tsx, HistoryPanel.tsx, LogPanel.tsx, Earlier.tsx
+        Banner.tsx
+      dialogs/ApprovalDialog.tsx, KeyDialog.tsx, ReaderDialog.tsx, ModalRoot.tsx
+      vault/VaultView.tsx, VaultTable.tsx, VaultDetail.tsx
+      sessions/SessionsView.tsx, SessionCard.tsx
+      settings/SettingsView.tsx
     transport/
-      types.ts             # the event contract as TypeScript types (overview §4)
-      live.ts              # REST calls + EventSource per run, with Last-Event-ID reconnect
-      player.ts            # applies events to the renderer, with the pacing in §6
+      types.ts               # the event contract as TypeScript types (overview §4)
+      live.ts                # REST calls + EventSource per run, with Last-Event-ID reconnect
+      demo.ts                # DemoTransport: the demo's scripted flows, emitting contract events (§8.3)
+      player.ts              # queue with pacing (§6); dispatches store actions
     demo/
-      flows.ts             # the demo's scripted flows, kept (§8.3)
-      data.ts              # VAULT_DATA, seeded sessions, CAESAR/WEATHER metadata, source text
+      data.ts                # VAULT_DATA, seeded sessions, CAESAR/WEATHER metadata, source text
 ```
 
-Every function named above exists in the reference file with the same name. Port each one with the same behaviour and the same DOM output, adding types and imports only.
+### 2.1 How React keeps the demo's DOM
 
-Build output is `frontend/dist`, which FastAPI serves (stage 2 §4) and which the Docker image copies in (stage 3 §3).
+The demo builds its markup with template strings. The React port must produce the same DOM: same elements, same nesting, same class names, same attributes (including `aria-*`, `data-*`, `role`, `hidden`), and same text.
+
+- Each component's JSX is transcribed from the matching demo function (`stripHtml` → `Strip`, `callHtml` → `CallPanel`, and so on). Class names are kept literally. `class` becomes `className` and `for` becomes `htmlFor`, and nothing else changes.
+- `highlight()` returns HTML strings exactly as in the demo. Code rows use `dangerouslySetInnerHTML` for the highlighted line only. The input is always escaped first by `esc()`, as in the demo. The same applies to server `html` fields (overview §4.3 allowlist), which are sanitised with a small allowlist sanitiser before they are inserted.
+- Animations in the demo fire because an element gets a class or is newly inserted. React must reproduce the same moments:
+  - Keyed elements that the demo re-creates, such as a new log line or a new message, are new React keys, so their CSS entry animation runs once.
+  - Elements whose class changes, such as step state, keep a stable key and get the new `className`. The CSS animation then triggers the same way it does in the demo.
+  - One-shot restarts (code-line flash, `panel-in`, `view.enter`, `v-detail.swap`, `link.flow`) go through `useRestartAnimation`, which does what the demo does by hand.
+  - Imperative effects (`scramble`, `countUp`, tab indicator, pointer glow, the orbit spinner status swap, word-by-word fade) run in `useEffect`/`useLayoutEffect` on refs, with the same timings.
+  - The demo re-renders the whole code or test panel on each reveal tick. React renders the same result from store state; tests that were drawn once keep the `done` class, as the demo does with `x.drawn`.
+- Every demo function named in the reference file maps to one component, hook or store action. §4's inventory and §9's parity tests cover them.
 
 ## 3. Styles
 
@@ -158,9 +181,9 @@ The session with the newest `updated_at` opens on load, or a new one is created 
 
 ## 6. Event player and pacing
 
-`player.ts` turns events into the demo's renderer calls:
+`player.ts` turns events into store actions. Each action has the same effect as the demo renderer call named here, which is how its component was specified:
 
-| Event | Renderer call |
+| Event | Store action (equivalent demo call) |
 |---|---|
 | `run.started` | new run object, `addYou`, `addTalos`, `initStrip` with the provisional variant, `renderBench` |
 | `log.cmd` | `typeCmd` |
@@ -231,16 +254,21 @@ Nothing else changes: layout, spacing, colours, motion, focus behaviour and all 
 
 ### 8.3 Demo mode is kept
 
-`/?demo` (or building with `VITE_DEMO=1`) runs the scripted flows from `demo/flows.ts` with no backend, including the seeded sessions, speed control and Reset. It is the reference file's behaviour, reproduced inside the real app. This keeps the approved experience runnable forever, and it's the baseline for the parity tests.
+`/?demo` (or building with `VITE_DEMO=1`) runs with no backend, including the seeded sessions, speed control and Reset.
+
+`transport/demo.ts` is the reference file's scripted flows (`flowCaesar`, `executeCaesar`, `flowPython`, `flowWeather`, `flowVaultList`, `flowChat`, `flowUnknown`, `forgeTool`, `humanCheck`, `learn`, `planner`). They're rewritten to emit contract events instead of calling renderer functions, keeping every step, value and string. They go through the same `player.ts` as live runs, so demo mode also exercises the real rendering path. The demo's vault and session mutations become store actions.
+
+Demo mode is the baseline for the parity tests, and it keeps the approved experience runnable forever.
 
 ## 9. Tests
 
-- Unit (Vitest):
+- Unit (Vitest + React Testing Library):
   - `styles.css` equals the reference `<style>` block.
   - `copy.ts` strings exist in the reference.
   - `highlight()` output for the real `caesar_cipher.py` matches the reference function's output. The fixture is generated once by running the reference function.
   - `wrapWords`, `splitArgs`, `argNames`, `caesar`, `classify`, `parseCaesar`.
   - The player's pacing math under normal and reduced motion.
+  - DOM parity per component: for a set of fixed run states, render the component and compare its `outerHTML` with the reference function's output for the same state (for example `Strip` vs `stripHtml(run)`), after normalising attribute order and whitespace. The reference outputs are generated once from `artifact-body.html` in a headless browser and stored as fixtures.
 - Visual parity (Playwright): demo mode against the reference `index.html`, same seeded state, at 1440×900 and 390×844, with animations frozen (`prefers-reduced-motion: reduce` plus a CSS override that jumps to animation end). One screenshot per inventory item in §4 that is reachable by script. The pixel-diff threshold is 0.1%.
 - End-to-end (Playwright, live mode against `TALOS_FAKE_GRAPH=1` and Postgres):
   - The Caesar forge, reuse and failure (with prune after 2) flows.

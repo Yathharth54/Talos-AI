@@ -48,7 +48,7 @@ Success looks like:
 ## 3. Architecture
 
 ```
-Browser (frontend/, Vite + TypeScript, no framework)
+Browser (frontend/, React 18 + TSX, Vite)
    │  REST (JSON)                 SSE (run events)
    ▼                               ▲
 FastAPI app (talos/web/)  ──►  RunManager ──► graph.astream(...)  ──► talos graph (unchanged nodes)
