@@ -3,7 +3,20 @@ name = "talos-ai"
 version = "0.1.0"
 description = "A LangGraph-based self-evolving agent that forges, tests, and accumulates reusable tools at runtime."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Yathharth Karanjikar" }]
 requires-python = ">=3.11"
+keywords = ["langgraph", "langchain", "llm", "agents", "self-improving", "tool-learning"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "langgraph>=0.2.0",
     "langchain>=0.3.0",
@@ -14,6 +27,14 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "requests>=2.32.0",
 ]
+
+[project.urls]
+Homepage = "https://talos-ai-umber.vercel.app"
+Repository = "https://github.com/Yathharth54/Talos-AI"
+Issues = "https://github.com/Yathharth54/Talos-AI/issues"
+
+[project.scripts]
+talos = "talos.main:main"
 
 [project.optional-dependencies]
 dev = [
