@@ -1,0 +1,198 @@
+[
+ [
+  [],
+  "tasks",
+  {
+   "id": "c2a22544-9532-f307-143e-af46df945980",
+   "name": "orchestrator_in",
+   "triggers": [
+    "branch:to:orchestrator_in"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "orchestrator_in": {
+    "plan": null,
+    "current_sub_task": null,
+    "sub_task_results": [],
+    "skill_matches": [],
+    "forged_tool": null,
+    "test_result": null,
+    "smoke_result": null,
+    "retry_count": 0,
+    "execution_result": null,
+    "needs_forge": false,
+    "needs_human_input": false,
+    "human_input_request": null
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "c2a22544-9532-f307-143e-af46df945980",
+   "name": "orchestrator_in",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "bc0d3e9d-98db-5914-9adc-cee29100326f",
+   "name": "planner",
+   "triggers": [
+    "branch:to:planner"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "planner": {
+    "plan": {
+     "sub_tasks": [
+      {
+       "id": 1,
+       "action": "Run the Python code",
+       "needs": "primitive",
+       "tool_hint": "python_exec",
+       "keywords": [
+        "python"
+       ],
+       "input_description": "the code after the colon",
+       "depends_on": [],
+       "input_schema": {},
+       "output_schema": "",
+       "param_bindings": {}
+      }
+     ],
+     "verdict": "feasible",
+     "verdict_category": "",
+     "verdict_reason": ""
+    },
+    "current_sub_task": {
+     "id": 1,
+     "action": "Run the Python code",
+     "needs": "primitive",
+     "tool_hint": "python_exec",
+     "keywords": [
+      "python"
+     ],
+     "input_description": "the code after the colon",
+     "depends_on": [],
+     "input_schema": {},
+     "output_schema": "",
+     "param_bindings": {}
+    },
+    "sub_task_results": []
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "bc0d3e9d-98db-5914-9adc-cee29100326f",
+   "name": "planner",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "d8418949-2d0c-585b-5875-e3812a720c77",
+   "name": "_dispatch",
+   "triggers": [
+    "branch:to:_dispatch"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "_dispatch": null
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "d8418949-2d0c-585b-5875-e3812a720c77",
+   "name": "_dispatch",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "90015bde-ffb4-1e9b-dfda-04022ab0c973",
+   "name": "executor",
+   "triggers": [
+    "branch:to:executor"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "__interrupt__": [
+    {
+     "__lg_interrupt__": {
+      "value": {
+       "type": "confirm_exec",
+       "tool": "python_exec",
+       "preview": "print(sum(range(1, 101)))",
+       "args": [],
+       "kwargs": {
+        "code": "print(sum(range(1, 101)))"
+       },
+       "message": "Talos wants to run python_exec. Allow it? [y/N]"
+      },
+      "id": "36a928335ddad281fdb483fc41ccc1d6"
+     }
+    }
+   ]
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "90015bde-ffb4-1e9b-dfda-04022ab0c973",
+   "name": "executor",
+   "error": null,
+   "interrupts": [
+    {
+     "value": {
+      "type": "confirm_exec",
+      "tool": "python_exec",
+      "preview": "print(sum(range(1, 101)))",
+      "args": [],
+      "kwargs": {
+       "code": "print(sum(range(1, 101)))"
+      },
+      "message": "Talos wants to run python_exec. Allow it? [y/N]"
+     },
+     "id": "36a928335ddad281fdb483fc41ccc1d6"
+    }
+   ]
+  }
+ ]
+]

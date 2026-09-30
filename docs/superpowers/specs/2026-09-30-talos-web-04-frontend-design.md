@@ -232,6 +232,7 @@ The session with the newest `updated_at` opens on load, or a new one is created 
 - All strings are verbatim from the reference file. `copy.ts` holds those the frontend owns: suggestion cards, idle heading and lede, dialog text, vault and settings copy, empty states, composer hints, the session read-only note.
 - A unit test asserts every `copy.ts` string appears in `artifact-body.html`.
 - Strings from the server (captions, log lines, chips, summaries) are checked by the backend test in overview §4.5.
+- A few server strings have no counterpart in the reference file because the demo never needed them. They live in `talos/web/copy.py` `NEW_COPY` and render like any other server string: `{n} sub-tasks. Talos works through them in order.` (caption) and `{n} sub-tasks` (plan log line) for multi-sub-task plans; `The Forger used all {max} attempts. Nothing was saved to the vault.` and `gave up after {n} attempts` when a forge runs out of attempts; `{passed} of {total} passed` on the last failed attempt; `failed` for a failed smoke test; `Attempt {n} failed a test. Trying again` after attempt 2+; `{k} tools forged`; `1 tool forged, 1 attempt`; `Done in 1 attempt. No API key was needed, so Human check passed straight through.`; `Done in {attempts}. Your key is saved to .env.`
 
 ## 8. Allowed differences from the demo
 

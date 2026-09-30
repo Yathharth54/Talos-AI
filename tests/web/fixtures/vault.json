@@ -1,0 +1,678 @@
+[
+ [
+  [],
+  "tasks",
+  {
+   "id": "d3a5b11b-5128-a363-1bd2-00fac4cf76c7",
+   "name": "orchestrator_in",
+   "triggers": [
+    "branch:to:orchestrator_in"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "orchestrator_in": {
+    "plan": null,
+    "current_sub_task": null,
+    "sub_task_results": [],
+    "skill_matches": [],
+    "forged_tool": null,
+    "test_result": null,
+    "smoke_result": null,
+    "retry_count": 0,
+    "execution_result": null,
+    "needs_forge": false,
+    "needs_human_input": false,
+    "human_input_request": null
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "d3a5b11b-5128-a363-1bd2-00fac4cf76c7",
+   "name": "orchestrator_in",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "2c556401-1b8e-03e4-8ca1-6b90c4a54dba",
+   "name": "planner",
+   "triggers": [
+    "branch:to:planner"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "planner": {
+    "plan": {
+     "sub_tasks": [
+      {
+       "id": 1,
+       "action": "Decrypt with the Caesar cipher tool",
+       "needs": "vault",
+       "tool_hint": "caesar_cipher",
+       "keywords": [
+        "caesar",
+        "cipher",
+        "decrypt"
+       ],
+       "input_description": "quoted text, shift 7, decrypt",
+       "depends_on": [],
+       "input_schema": {},
+       "output_schema": "",
+       "param_bindings": {}
+      }
+     ],
+     "verdict": "feasible",
+     "verdict_category": "",
+     "verdict_reason": ""
+    },
+    "current_sub_task": {
+     "id": 1,
+     "action": "Decrypt with the Caesar cipher tool",
+     "needs": "vault",
+     "tool_hint": "caesar_cipher",
+     "keywords": [
+      "caesar",
+      "cipher",
+      "decrypt"
+     ],
+     "input_description": "quoted text, shift 7, decrypt",
+     "depends_on": [],
+     "input_schema": {},
+     "output_schema": "",
+     "param_bindings": {}
+    },
+    "sub_task_results": []
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "2c556401-1b8e-03e4-8ca1-6b90c4a54dba",
+   "name": "planner",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "4feac846-7524-de10-6377-41826ef20d2d",
+   "name": "_dispatch",
+   "triggers": [
+    "branch:to:_dispatch"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "_dispatch": null
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "4feac846-7524-de10-6377-41826ef20d2d",
+   "name": "_dispatch",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "c2c8c503-c649-acce-8db4-cc61a49df5c6",
+   "name": "executor",
+   "triggers": [
+    "branch:to:executor"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "custom",
+  {
+   "type": "call.args",
+   "data": {
+    "tool": "caesar_cipher",
+    "args": [
+     [
+      "text",
+      "'AHSVZ HNLUA'",
+      false
+     ],
+     [
+      "shift",
+      "7",
+      false
+     ],
+     [
+      "mode",
+      "'decrypt'",
+      false
+     ]
+    ],
+    "caption": null
+   }
+  }
+ ],
+ [
+  [],
+  "custom",
+  {
+   "type": "call.result",
+   "data": {
+    "repr": "'TALOS AGENT'",
+    "type": "str",
+    "small": true
+   }
+  }
+ ],
+ [
+  [],
+  "updates",
+  {
+   "executor": {
+    "execution_result": "TALOS AGENT",
+    "sub_task_results": [
+     {
+      "sub_task_id": 1,
+      "ok": true,
+      "output": "TALOS AGENT",
+      "error": null
+     }
+    ]
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "c2c8c503-c649-acce-8db4-cc61a49df5c6",
+   "name": "executor",
+   "error": null,
+   "interrupts": []
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "ad671fde-4ca1-2364-b20d-3b9093b33b98",
+   "name": "orchestrator_out",
+   "triggers": [
+    "branch:to:orchestrator_out"
+   ],
+   "input": null
+  }
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "It",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "decrypts",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "to",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "TALOS",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": " ",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "AIMessageChunk",
+     "data": {
+      "content": "AGENT.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "AIMessageChunk",
+      "name": null,
+      "id": "lc_run--01a0f33c-c1ed-7eb1-ae34-b765a4328f37",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null,
+      "tool_call_chunks": [],
+      "chunk_position": "last"
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langchain_chat_model",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "ls_provider": "genericfakechatmodel",
+    "ls_model_type": "chat"
+   }
+  ]
+ ],
+ [
+  [],
+  "messages",
+  [
+   {
+    "__message__": {
+     "type": "ai",
+     "data": {
+      "content": "It decrypts to TALOS AGENT.",
+      "additional_kwargs": {},
+      "response_metadata": {},
+      "type": "ai",
+      "name": null,
+      "id": "97104817-c13b-4b52-9f29-1db7152b774e",
+      "tool_calls": [],
+      "invalid_tool_calls": [],
+      "usage_metadata": null
+     }
+    }
+   },
+   {
+    "thread_id": "capture-vault",
+    "ls_integration": "langgraph",
+    "langgraph_step": 5,
+    "langgraph_node": "orchestrator_out",
+    "langgraph_triggers": [
+     "branch:to:orchestrator_out"
+    ],
+    "langgraph_path": [
+     "__pregel_pull",
+     "orchestrator_out"
+    ],
+    "langgraph_checkpoint_ns": "orchestrator_out:ad671fde-4ca1-2364-b20d-3b9093b33b98",
+    "LANGSMITH_TRACING": "true",
+    "LANGSMITH_PROJECT": "talos-ai",
+    "revision_id": "fa99a83"
+   }
+  ]
+ ],
+ [
+  [],
+  "updates",
+  {
+   "orchestrator_out": {
+    "messages": [
+     {
+      "__message__": {
+       "type": "ai",
+       "data": {
+        "content": "It decrypts to TALOS AGENT.",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "ai",
+        "name": null,
+        "id": "97104817-c13b-4b52-9f29-1db7152b774e",
+        "tool_calls": [],
+        "invalid_tool_calls": [],
+        "usage_metadata": null
+       }
+      }
+     }
+    ]
+   }
+  }
+ ],
+ [
+  [],
+  "tasks",
+  {
+   "id": "ad671fde-4ca1-2364-b20d-3b9093b33b98",
+   "name": "orchestrator_out",
+   "error": null,
+   "interrupts": []
+  }
+ ]
+]
