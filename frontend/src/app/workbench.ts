@@ -1,19 +1,29 @@
+import { effectiveSelected } from "../components/vault/VaultView";
 import { clearTestMarks } from "../components/workbench/panels/TestsPanel";
+import { LiveDataSource } from "../data/live";
 import { USE_PRESETS } from "../demo/data";
 import { COPY, fill } from "../lib/copy";
 import * as R from "../store/runOps";
 import { initialStates, updateRun, type Stores } from "../store/stores";
 import { curSession, openNewSession, rename, shownSession } from "../store/sessionOps";
 import type { TabId, UiState, View } from "../store/types";
-import { removeTool as dropTool } from "../store/vaultOps";
+import { removeTool as dropTool, vaultRows } from "../store/vaultOps";
 import type { Services } from "../services";
+import { ApiError } from "../transport/api";
 import { Player } from "../transport/player";
+import type { RunEvent } from "../transport/types";
 
 const VIEWS: View[] = ["workbench", "vault", "sessions", "settings"];
+/** Re-attach: a waiting run's dialog opens from GET /api/runs/{id}.pending once its backlog has been quiet this long (ruling 3). */
+const BACKLOG_QUIET_MS = 150;
 
 /** Every user action, with the reference's guards. Components call these; nothing else writes stores. */
 export class Workbench {
   private players = new Map<string, Player>();
+  /** Live: runs whose full state is in the store (replayed, re-attached or played live), not just a stub. */
+  private hydrated = new Set<string>();
+  private hydrating = new Map<string, Promise<void>>();
+  private viewSeq = 0;
 
   constructor(
     private readonly stores: Stores,
@@ -22,6 +32,10 @@ export class Workbench {
 
   get mode() {
     return this.services.mode;
+  }
+
+  private get live(): LiveDataSource | null {
+    return this.services.mode === "live" && this.services.data instanceof LiveDataSource ? this.services.data : null;
   }
 
   private ui = (patch: Partial<UiState>) => this.stores.ui.set(patch);
@@ -62,13 +76,147 @@ export class Workbench {
         source: (tool) => this.services.data.toolSource(tool),
       });
       this.players.set(started.runId, player);
+      this.hydrated.add(started.runId);
       this.ui({ benchKey: this.stores.ui.get().benchKey + 1 });
-      this.services.transport.subscribe(started.runId, player.push);
+      this.services.transport.subscribe(started.runId, this.live ? this.liveSink(player) : player.push);
     } catch (e) {
       // submit()'s catch and finally (lines 1476-1479): the run couldn't start, so the app isn't busy.
-      console.error(e);
       this.ui({ busy: false });
+      // Ruling 10: a run is already going. Follow it when it's in this session; there's no copy for the rest.
+      if (e instanceof ApiError && e.code === "run_active") {
+        if (e.sessionId === sid && e.runId && !this.players.has(e.runId)) await this.reattach(e.runId);
+        return;
+      }
+      console.error(e);
     }
+  }
+
+  /** Live only: show the current session's last run, or re-attach to it if it is still going (spec 04 §6). */
+  async boot(): Promise<void> {
+    if (!this.live) return;
+    const lastId = curSession(this.stores.session.get()).runIds.at(-1);
+    if (!lastId) return;
+    const last = this.stores.runs.get().byId[lastId];
+    if (last && (last.status === "running" || last.status === "waiting")) return this.reattach(lastId);
+    await this.hydrate(lastId);
+    this.rebench(lastId);
+    this.markRunLinks();
+  }
+
+  /** Live: a finished run that is still a stub is replayed from its event log into the same run id (ruling 4). */
+  private hydrate(id: string): Promise<void> {
+    const live = this.live;
+    if (!live || this.hydrated.has(id)) return Promise.resolve();
+    let p = this.hydrating.get(id);
+    if (!p) {
+      p = this.replay(live, id).finally(() => this.hydrating.delete(id));
+      this.hydrating.set(id, p);
+    }
+    return p;
+  }
+
+  private async replay(live: LiveDataSource, id: string): Promise<void> {
+    const stub = this.stores.runs.get().byId[id];
+    if (!stub || stub.status === "running" || stub.status === "waiting") return;
+    try {
+      const events = await live.runEvents(id);
+      const player = new Player(this.stores, { runId: id, sessionId: stub.sessionId, momentDwell: false, replay: true, source: (t) => live.toolSource(t) });
+      for (const e of events) await player.push(e);
+      this.hydrated.add(id);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  /**
+   * Live: follow a running or waiting run from seq 0 (ruling 3). Its backlog applies at once; later
+   * events are paced. A waiting run's dialog comes from GET /api/runs/{id}.pending once the backlog has
+   * gone quiet, never from the replayed interrupt (the backlog may hold earlier, answered ones).
+   */
+  private async reattach(runId: string): Promise<void> {
+    const live = this.live;
+    if (!live || this.players.has(runId)) return;
+    let info: Awaited<ReturnType<LiveDataSource["getRun"]>>;
+    try {
+      info = await live.getRun(runId);
+    } catch (err) {
+      console.error(err);
+      return;
+    }
+    const sid = this.stores.session.get().curId;
+    const cutoff = new Date().toISOString();
+    const player = new Player(this.stores, { runId, sessionId: sid, momentDwell: true, source: (t) => live.toolSource(t), catchUpUntil: cutoff });
+    this.players.set(runId, player);
+    this.hydrated.add(runId);
+    this.ui({ busy: true, currentRunId: runId, viewingRunId: runId, benchKey: this.stores.ui.get().benchKey + 1 });
+    let quiet: ReturnType<typeof setTimeout> | null = null;
+    let settled = info.status !== "waiting";
+    const openPending = () => {
+      settled = true;
+      const p = info.pending;
+      const run = this.stores.runs.get().byId[runId];
+      if (!p || run?.status !== "waiting" || this.stores.ui.get().dialog) return;
+      this.ui({
+        dialog:
+          p.kind === "confirm_exec"
+            ? { kind: "approval", runId, tool: p.payload.tool, code: p.payload.preview }
+            : { kind: "key", runId, toolName: p.payload.tool_name, envVar: p.payload.env_var, service: p.payload.service },
+      });
+    };
+    const sink = this.liveSink(player);
+    this.services.transport.subscribe(runId, async (e) => {
+      await sink(e);
+      if (settled) return;
+      if (quiet) clearTimeout(quiet);
+      quiet = setTimeout(openPending, BACKLOG_QUIET_MS);
+    });
+  }
+
+  /** Wraps a live player's sink: after run.finished the vault store is reloaded (the API owns counts and freshness). */
+  private liveSink(player: Player): (e: RunEvent) => Promise<void> {
+    return async (e) => {
+      await player.push(e);
+      if (e.type === "run.finished") await this.refreshVault().catch((err: unknown) => console.error(err));
+    };
+  }
+
+  /** Live: GET /api/vault. Sources are kept, except those of tools that are gone. */
+  private async refreshVault(): Promise<void> {
+    const live = this.live;
+    if (!live) return;
+    const tools = await live.vault();
+    const names = new Set(tools.map((t) => t.name));
+    this.stores.vault.update((v) => ({ ...v, tools, sources: Object.fromEntries(Object.entries(v.sources).filter(([k]) => names.has(k))) }));
+  }
+
+  /** Live: sessions the store doesn't have yet (e.g. from another tab) join as past sessions with stub runs. */
+  private async refreshSessions(): Promise<void> {
+    const live = this.live;
+    if (!live) return;
+    const list = await live.listSessions();
+    const known = new Set(this.stores.session.get().sessions.map((x) => x.id));
+    const fresh = list.filter((x) => !known.has(x.id));
+    if (!fresh.length) return;
+    const loaded = await live.loadSessions(fresh);
+    const runs = loaded.flatMap((l) => l.runs);
+    this.stores.runs.update((st) => ({ byId: { ...st.byId, ...Object.fromEntries(runs.map((r) => [r.id, r])) } }));
+    this.stores.session.update((st) => {
+      const ids = new Set(st.sessions.map((x) => x.id));
+      const add = loaded.map((l) => l.rec).filter((r) => !ids.has(r.id));
+      return { ...st, sessions: [...add.map((r) => ({ ...r, live: false })), ...st.sessions] };
+    });
+  }
+
+  /** Live: the store a view shows is refreshed from the API before the view renders. */
+  private async refreshView(live: LiveDataSource, v: View): Promise<void> {
+    if (v === "vault") {
+      await this.refreshVault();
+      const { filter, query, selected } = this.stores.ui.get();
+      const tools = this.stores.vault.get().tools;
+      const first = effectiveSelected(tools, vaultRows(tools, filter, query), selected);
+      if (first && first !== selected) await this.loadSource(first);
+    } else if (v === "sessions") await this.refreshSessions();
+    else if (v === "settings") this.stores.settings.set(await live.settings());
   }
 
   /**
@@ -114,47 +262,76 @@ export class Workbench {
     if (id) updateRun(this.stores, id, (r) => R.setTab({ ...r, codeScroll: null }, tab));
   }
 
-  viewRun(n: number): void {
+  viewRun(n: number): Promise<void> | void {
     if (this.stores.ui.get().busy) return;
     const shown = shownSession(this.stores.session.get());
     const id = shown.runIds.find((rid) => this.stores.runs.get().byId[rid]?.n === n);
     if (!id) return;
-    this.rebench(id);
-    const bench = document.getElementById("bench");
-    if (bench) bench.scrollTop = 0;
-    this.markRunLinks();
+    return this.thenShow(this.live ? () => this.hydrate(id) : null, () => {
+      if (this.stores.ui.get().busy) return;
+      this.rebench(id);
+      const bench = document.getElementById("bench");
+      if (bench) bench.scrollTop = 0;
+      this.markRunLinks();
+    });
+  }
+
+  /**
+   * Runs `show` after the live-only `prep` (a replay or an API refresh). With no `prep` it runs at once and
+   * nothing is returned, so demo actions stay synchronous, as part A's callers (and act()) expect.
+   */
+  private thenShow(prep: (() => Promise<void>) | null, show: () => void): Promise<void> | void {
+    if (!prep) return show();
+    return prep().then(show);
   }
 
   async newSession(): Promise<void> {
     if (this.stores.ui.get().busy) return;
-    if (this.stores.session.get().viewId) this.backToNow();
-    const rec = await this.services.data.newSession(this.stores.session.get().count + 1);
+    if (this.stores.session.get().viewId) await this.backToNow();
+    const live = this.live;
+    const rec = live ? await live.newSession() : await this.services.data.newSession(this.stores.session.get().count + 1);
+    if (live) {
+      // "New this session" follows the new session.
+      live.setCurrentStarted(rec.started);
+      // Ruling 7: the server reuses the newest empty session, so the current one may come back.
+      if (rec.id === this.stores.session.get().curId) {
+        this.ui(this.titleAnimated());
+        return;
+      }
+    }
     this.stores.session.update((s) => openNewSession(s, rec));
     const ui = this.stores.ui.get();
     this.rebench(null, { currentRunId: null, ...(ui.booted ? this.titleAnimated() : { titleAnimate: false }) });
   }
 
-  openSession(id: string): void {
+  openSession(id: string): Promise<void> | void {
     if (this.stores.ui.get().busy) return;
     const ss = this.stores.session.get();
     const sess = ss.sessions.find((x) => x.id === id);
     if (!sess) return;
     window.location.hash = "workbench";
     if (id === ss.curId) return this.backToNow();
-    this.stores.session.set({ viewId: id });
-    this.rebench(sess.runIds.at(-1) ?? null, this.titleAnimated());
-    this.markRunLinks();
-    // msgs.scrollTop = 0 (line 2191), also when this session was already the one being read.
-    const msgs = document.getElementById("msgs");
-    if (msgs) msgs.scrollTop = 0;
+    const target = sess.runIds.at(-1) ?? null;
+    return this.thenShow(this.live && target ? () => this.hydrate(target) : null, () => {
+      if (this.stores.ui.get().busy) return;
+      this.stores.session.set({ viewId: id });
+      this.rebench(target, this.titleAnimated());
+      this.markRunLinks();
+      // msgs.scrollTop = 0 (line 2191), also when this session was already the one being read.
+      const msgs = document.getElementById("msgs");
+      if (msgs) msgs.scrollTop = 0;
+    });
   }
 
-  backToNow(): void {
+  backToNow(): Promise<void> | void {
     const ss = this.stores.session.get();
     if (!ss.viewId) return;
-    this.stores.session.set({ viewId: null });
-    this.rebench(curSession(ss).runIds.at(-1) ?? null, this.titleAnimated());
-    this.markRunLinks();
+    const target = curSession(ss).runIds.at(-1) ?? null;
+    return this.thenShow(this.live && target ? () => this.hydrate(target) : null, () => {
+      this.stores.session.set({ viewId: null });
+      this.rebench(target, this.titleAnimated());
+      this.markRunLinks();
+    });
   }
 
   /** markRunLinks() (line 2232): marks the link of the run on the bench, if any. */
@@ -163,14 +340,24 @@ export class Workbench {
     this.ui({ markedRunN: id ? (this.stores.runs.get().byId[id]?.n ?? null) : null });
   }
 
-  showView(hash: string): void {
+  showView(hash: string): Promise<void> | void {
     const v = (VIEWS as string[]).includes(hash) ? (hash as View) : "workbench";
-    const ui = this.stores.ui.get();
-    const changed = ui.view !== v;
-    const patch: Partial<UiState> = { view: v };
-    if (changed) patch.viewEnter = ui.viewEnter + 1;
-    if (v === "vault") Object.assign(patch, { badge: false, stagger: changed, vaultRender: ui.vaultRender + 1, confirmRemove: null });
-    this.ui(patch);
+    // Live: entering Vault, Sessions or Settings refreshes its store first. A later showView wins a race.
+    const seq = ++this.viewSeq;
+    const live = this.live;
+    const prep =
+      live && v !== "workbench" && this.stores.ui.get().view !== v
+        ? () => this.refreshView(live, v).catch((err: unknown) => console.error(err))
+        : null;
+    return this.thenShow(prep, () => {
+      if (seq !== this.viewSeq) return;
+      const ui = this.stores.ui.get();
+      const changed = ui.view !== v;
+      const patch: Partial<UiState> = { view: v };
+      if (changed) patch.viewEnter = ui.viewEnter + 1;
+      if (v === "vault") Object.assign(patch, { badge: false, stagger: changed, vaultRender: ui.vaultRender + 1, confirmRemove: null });
+      this.ui(patch);
+    });
   }
 
   setDraft(v: string): void {
@@ -193,10 +380,14 @@ export class Workbench {
   setFilter(f: UiState["filter"]): void {
     this.rerenderVault(true, { filter: f });
   }
-  selectTool(name: string): void {
-    this.rerenderVault(false, { selected: name });
-    const sel = globalThis.CSS?.escape?.(name) ?? name;
-    setTimeout(() => document.querySelector<HTMLElement>(`[data-tool-btn="${sel}"]`)?.focus(), 0);
+  selectTool(name: string): Promise<void> | void {
+    // Live: the source is in place before the detail cross-fades, so it renders once.
+    const prep = this.live ? () => this.loadSource(name).then(() => undefined, (err: unknown) => console.error(err)) : null;
+    return this.thenShow(prep, () => {
+      this.rerenderVault(false, { selected: name });
+      const sel = globalThis.CSS?.escape?.(name) ?? name;
+      setTimeout(() => document.querySelector<HTMLElement>(`[data-tool-btn="${sel}"]`)?.focus(), 0);
+    });
   }
   fallbackSelect(name: string | null): void {
     this.ui({ selected: name });
@@ -253,6 +444,8 @@ export class Workbench {
 
   /** resetDemo() (line 2280). */
   async reset(): Promise<void> {
+    // The Reset button is a Demo control (spec 04 §8.1): live mode never renders it.
+    if (this.services.mode !== "demo") return;
     // if (S.busy) stopRun(). In demo mode the stop's events are dropped by the reset below; in live mode
     // (part B) this is what tells the server to stop the run before the stores are reloaded.
     // The demo stop then ends early (its run is silenced), so its rejection is expected and dropped.

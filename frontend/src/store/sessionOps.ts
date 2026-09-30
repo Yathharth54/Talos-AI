@@ -35,8 +35,9 @@ export function updateTalos(s: SessionState, runN: number, fn: (m: TalosMessage)
 }
 
 export const rename = (s: SessionState, sessionId: string, name: string): SessionState => mapSession(s, sessionId, (x) => ({ ...x, name }));
+/** Adds a run to a session once: a re-attached live run is already listed (from its stub) when run.started arrives. */
 export const attachRun = (s: SessionState, sessionId: string, runId: string): SessionState =>
-  mapSession(s, sessionId, (x) => ({ ...x, runIds: [...x.runIds, runId] }));
+  mapSession(s, sessionId, (x) => (x.runIds.includes(runId) ? x : { ...x, runIds: [...x.runIds, runId] }));
 
 /** newSession() (line 2157): keep the old current session if it has runs, else drop it. */
 export function openNewSession(s: SessionState, rec: { id: string; name: string; started: string }): SessionState {

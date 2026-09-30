@@ -87,6 +87,8 @@ export interface PlayerOptions {
   replay?: boolean;
   /** Tool source for vault runs' Code tab. */
   source?: (tool: string) => Promise<string[] | null>;
+  /** Reattach (spec 04 §6): events stamped at or before this ISO time apply without pacing or dialogs. */
+  catchUpUntil?: string;
 }
 
 /** Turns contract events into store updates, with the reference's pacing (spec 04 §6). */
@@ -98,6 +100,7 @@ export class Player {
   private startedAt = new Map<StepKey, number>();
   private callTool: string | null = null;
   private testsCount: number | undefined;
+  private catching = false;
 
   constructor(
     private readonly stores: Stores,
@@ -124,7 +127,11 @@ export class Player {
   }
 
   private get fast(): boolean {
-    return this.aborted || !!this.opts.replay;
+    return this.aborted || !!this.opts.replay || this.catching;
+  }
+  /** Replays and caught-up events describe the past: the vault store is reloaded from the API instead. */
+  private get quiet(): boolean {
+    return !!this.opts.replay || this.catching;
   }
   private sleep(ms: number): Promise<void> {
     if (this.fast || ms <= 0) return Promise.resolve();
@@ -153,6 +160,7 @@ export class Player {
   }
 
   private async apply(e: RunEvent): Promise<void> {
+    this.catching = !!this.opts.catchUpUntil && Date.parse(e.ts) <= Date.parse(this.opts.catchUpUntil);
     if (this.opts.momentDwell) {
       if (e.type === "node.finished") {
         const min = MIN_ACTIVE[e.data.step];
@@ -244,6 +252,10 @@ export class Player {
       }
       case "vault.saved": {
         const tool = V.fromVaultEntry(e.data.tool, true);
+        if (this.quiet) {
+          this.up((r) => R.setBanner(r, { kind: "saved", name: tool.name, sub: e.data.sub }));
+          return;
+        }
         this.stores.vault.update((v) => ({ ...v, tools: V.addTool(v.tools, tool) }));
         this.stores.ui.set({ selected: tool.name, badge: true });
         this.up((r) => R.setBanner(r, { kind: "saved", name: tool.name, sub: e.data.sub }));
@@ -262,7 +274,8 @@ export class Player {
         const d = e.data;
         const runId = this.opts.runId;
         this.up((r) => R.patch(r, { status: "waiting" }));
-        if (this.opts.replay) return;
+        // A caught-up interrupt's dialog comes from GET /api/runs/{id}.pending (the Workbench's reattach).
+        if (this.opts.replay || this.catching) return;
         this.stores.ui.set({
           dialog:
             d.kind === "confirm_exec"
@@ -374,7 +387,7 @@ export class Player {
   private failure(e: EventOf<"vault.failure">): void {
     const { tool, streak, pruned, error } = e.data;
     const now = nowIso();
-    this.stores.vault.update((v) => ({ ...v, tools: pruned ? V.removeTool(v.tools, tool) : V.recordFailure(v.tools, tool, streak, error, now) }));
+    if (!this.quiet) this.stores.vault.update((v) => ({ ...v, tools: pruned ? V.removeTool(v.tools, tool) : V.recordFailure(v.tools, tool, streak, error, now) }));
     const r0 = this.run();
     // The retry button (lines 1717–1718, 1731): a word where the tool wanted a number.
     let retry: { q: string; label: string } | null = null;
@@ -443,7 +456,8 @@ export class Player {
     const tool = this.callTool;
     let record: CallState["record"];
     if (tool && r0.strip !== "primitive") {
-      this.stores.vault.update((v) => ({ ...v, tools: V.recordUse(v.tools, tool, nowIso()) }));
+      // The Uses shown for a past call are today's count: the only one the API has.
+      if (!this.quiet) this.stores.vault.update((v) => ({ ...v, tools: V.recordUse(v.tools, tool, nowIso()) }));
       const t = V.findTool(this.stores.vault.get().tools, tool);
       if (t && r0.strip === "vault" && !small) {
         record = { forged: fmtTime(t.created), uses: fill(COPY.call.recordUses, { n: t.uses }), fails: t.fails ? fill(COPY.call.recordFails, { n: t.fails }) : COPY.call.recordNone };

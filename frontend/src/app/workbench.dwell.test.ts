@@ -18,8 +18,9 @@ beforeEach(() => void (seen.length = 0));
 
 test("the §6 moment dwells follow the transport: off for DemoTransport, on for any other, whatever the mode", async () => {
   for (const mode of ["demo", "live"] as const) {
-    const { stores, services } = await createServices(mode);
-    const wb = new Workbench(stores, services);
+    // Live services need the API (app/live.test.ts covers their dwells): here the mode alone changes.
+    const { stores, services } = await createServices("demo");
+    const wb = new Workbench(stores, { ...services, mode });
     await wb.submit("What can you do?");
     await wb.stop();
   }

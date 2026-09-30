@@ -159,6 +159,11 @@ export class LiveDataSource implements DataSource {
     await this.api.removeTool(name);
   }
 
+  /** GET /api/sessions: the sessions with runs, newest first. */
+  listSessions(): Promise<ApiSessionSummary[]> {
+    return this.api.listSessions();
+  }
+
   /** Reads each listed session: its record, its runs as stubs (sorted by n), and its active run if any. */
   async loadSessions(list: ApiSessionSummary[]): Promise<LoadedSession[]> {
     const details = await Promise.all(list.map((s) => this.api.getSession(s.id)));

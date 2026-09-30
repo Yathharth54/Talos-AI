@@ -225,3 +225,76 @@ test("run.finished leaves fresh alone when another tab is showing (renderSide on
   await p.push(ev("run.finished", { status: "done", summary: "Done", summary_gold: false, forged: [], used: [] }));
   expect(run(s).log.at(-1)).toMatchObject({ fresh: true });
 });
+
+// Reattach (spec 04 §6, ruling 3): events stamped at or before catchUpUntil are the backlog.
+const CUTOFF = "2026-09-30T12:00:05.000Z";
+const EARLY = "2026-09-30T12:00:01.000Z";
+const LATE = "2026-09-30T12:00:09.000Z";
+const at = <T extends EventType>(ts: string, type: T, data: EventData[T]): RunEvent => ({ run_id: "r", seq: ++seq, ts, type, data }) as RunEvent;
+
+test("catch-up: a backlog forge.code reveals at once, a later one at 24 ms per tick", async () => {
+  setReducedMotion(false);
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: true, catchUpUntil: CUTOFF });
+  const lines = Array.from({ length: 63 }, (_, i) => `line ${i}`);
+  await p.push(at(EARLY, "run.started", { session_id: "s1", query: "q", n: 6 }));
+  await p.push(at(EARLY, "forge.code", { tool: "t", attempt: 1, file: "t.py", lines, changed: null, note: null, tests: 5 }));
+  expect(run(s).code!.shown).toBe(63);
+  expect(vi.getTimerCount()).toBe(0);
+
+  const p2 = new Player(s, { runId: "r", sessionId: "s1", momentDwell: true, catchUpUntil: CUTOFF });
+  void p2.push(at(LATE, "run.started", { session_id: "s1", query: "q", n: 6 }));
+  void p2.push(at(LATE, "forge.code", { tool: "t", attempt: 1, file: "t.py", lines, changed: null, note: null, tests: 5 }));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(run(s).code!.shown).toBe(1);
+  await vi.advanceTimersByTimeAsync(24 * 9);
+  expect(run(s).code!.shown).toBe(10);
+  p2.dispose();
+});
+
+test("catch-up: a caught-up interrupt opens no dialog, a later one does", async () => {
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: true, catchUpUntil: CUTOFF });
+  const confirm = { kind: "confirm_exec" as const, payload: { tool: "python_exec" as const, preview: "print(1)" } };
+  await p.push(at(EARLY, "run.started", { session_id: "s1", query: "q", n: 6 }));
+  await p.push(at(EARLY, "interrupt", confirm));
+  expect(s.ui.get().dialog).toBeNull();
+  expect(run(s).status).toBe("waiting");
+  expect(vi.getTimerCount()).toBe(0);
+
+  void p.push(at(LATE, "interrupt.resolved", { kind: "confirm_exec", decision: "approve" }));
+  void p.push(at(LATE, "interrupt", confirm));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(s.ui.get().dialog).toMatchObject({ kind: "approval", runId: "r", tool: "python_exec", code: "print(1)" });
+  expect(run(s).status).toBe("waiting");
+});
+
+describe.each([
+  ["replay", { replay: true }],
+  ["catch-up", { catchUpUntil: CUTOFF }],
+] as const)("%s leaves the vault store and the badge alone", (_name, extra) => {
+  test("vault.saved, vault.failure and call.result", async () => {
+    const s = stores();
+    const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false, ...extra });
+    s.vault.update((v) => ({ ...v, tools: [...v.tools, { ...v.tools[0]!, name: "caesar_cipher", uses: 3 }] }));
+    const before = s.vault.get().tools;
+    const q = 'Decrypt this Caesar cipher message with shift seven: "AHSVZ HNLUA"';
+    await p.push(at(EARLY, "run.started", { session_id: "s1", query: q, n: 7 }));
+    expect(run(s).strip).toBe("vault");
+    await p.push(at(EARLY, "call.args", { tool: "caesar_cipher", args: [["text", '"AHSVZ HNLUA"', false], ["shift", "7", false]], caption: null }));
+    await p.push(at(EARLY, "call.result", { repr: '"TALOS AGENT"', type: "str", small: false }));
+    expect(run(s).call!.result).toBe('"TALOS AGENT"');
+    expect(run(s).call!.record).toMatchObject({ uses: "3, including this one" });
+    await p.push(at(EARLY, "vault.failure", { tool: "caesar_cipher", streak: 2, pruned: true, error: "TypeError" }));
+    expect(run(s).call!.health).toMatchObject({ streak: 2, tool: "caesar_cipher" });
+    expect(run(s).banner).toMatchObject({ kind: "removed", name: "caesar_cipher" });
+    const entry = {
+      name: "new_tool", args: "x", ret: "str", signature: "new_tool(x)", description: "d", keywords: [], uses: 0, failures: 0, streak: 0,
+      created_at: EARLY, last_used: null, last_failure: null, last_failed_at: null, web: false, file: "new_tool.py",
+    };
+    await p.push(at(EARLY, "vault.saved", { tool: entry, sub: "Saved." }));
+    expect(run(s).banner).toMatchObject({ kind: "saved", name: "new_tool" });
+    expect(s.vault.get().tools).toBe(before);
+    expect(s.ui.get()).toMatchObject({ badge: false, selected: "caesar_cipher" });
+  });
+});

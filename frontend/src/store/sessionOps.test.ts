@@ -1,4 +1,4 @@
-import { addTalos, addYou, openNewSession, updateTalos } from "./sessionOps";
+import { addTalos, addYou, attachRun, openNewSession, updateTalos } from "./sessionOps";
 import type { SessionState } from "./types";
 
 const empty = (): SessionState => ({ sessions: [{ id: "s1", name: "Session 1", started: "2026-09-30T12:00", live: true, runIds: [], messages: [] }], curId: "s1", viewId: null, count: 1 });
@@ -22,4 +22,10 @@ test("openNewSession drops an empty current session and keeps one with runs", ()
   s = openNewSession(s, { id: "s3", name: "Session 3", started: "2026-09-30T12:06" });
   expect(s.sessions.map((x) => [x.id, x.live])).toEqual([["s2", false], ["s3", true]]);
   expect(s.curId).toBe("s3");
+});
+
+test("attachRun adds a run once: a re-attached run's run.started finds it already listed", () => {
+  let s = attachRun(empty(), "s1", "run-1");
+  s = attachRun(s, "s1", "run-1");
+  expect(s.sessions[0]!.runIds).toEqual(["run-1"]);
 });

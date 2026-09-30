@@ -15,8 +15,9 @@ test("resolveMode", () => {
 
 test("demo mode shows the Demo controls; live mode doesn't", async () => {
   for (const mode of ["demo", "live"] as const) {
-    const { stores, services } = await createServices(mode);
-    const { unmount } = render(<App stores={stores} workbench={new Workbench(stores, services)} />);
+    // Live services need the API (app/live.test.ts): the Demo controls follow the mode alone.
+    const { stores, services } = await createServices("demo");
+    const { unmount } = render(<App stores={stores} workbench={new Workbench(stores, { ...services, mode })} />);
     expect(screen.getByText("Ask for something it can't do yet")).toBeInTheDocument();
     expect(screen.queryByText("Demo controls") !== null).toBe(mode === "demo");
     unmount();
