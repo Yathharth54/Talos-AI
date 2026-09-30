@@ -47,3 +47,7 @@ workspace/*
 /test_*.md
 /test_*.txt
 /https:/
+
+# Frontend (frontend/)
+frontend/node_modules/
+frontend/dist/
