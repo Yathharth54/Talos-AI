@@ -23,7 +23,7 @@ import inspect
 import logging
 import uuid
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from langchain_core.messages import HumanMessage
@@ -93,7 +93,7 @@ class Resume:
 
     kind: str
     decision: str
-    value: Any
+    value: Any = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -228,7 +228,10 @@ class RunManager:
             if run is not None and run.status == "waiting":
                 await asyncio.gather(task, return_exceptions=True)  # finishing its pause
             else:
-                await self.stop(run_id)
+                try:
+                    await self.stop(run_id)
+                except Exception:  # noqa: BLE001 - keep stopping the others
+                    log.exception("could not stop run %s at shutdown", run_id)
 
     # ---- start / resume / stop ------------------------------------------------------
 
@@ -276,6 +279,9 @@ class RunManager:
             pending = dict(run.pending_interrupt)
             resume = _resume_for(pending, decision, value)
             await self.join(run_id)  # the pausing task may still be publishing `interrupt`
+            run = await self.store.get_run(run_id)  # ...and may have failed meanwhile
+            if run is None or run.status != "waiting" or not run.pending_interrupt:
+                raise NotWaiting()
             session = await self.store.get_session(run.session_id)
             state = dict(run.translator_state or self.driver.initial_state())
             self._states[run_id] = state
@@ -299,9 +305,17 @@ class RunManager:
             if task is not None:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
+            run = await self.store.get_run(run_id)  # it may have finished meanwhile
+            if run is None or run.status in TERMINAL_STATUSES:
+                return
             state = self._states.pop(run_id, None) or dict(run.translator_state or {})
             board = Board(state)
             board.stop()
+            board.finished("stopped", copy.SUMMARY_STOPPED)
+            # run.finished is stored before the status turns terminal, so a
+            # subscriber that sees a terminal status has the whole tail.
+            for type_, data in board.drain():
+                await self._publish(run_id, type_, **data)
             await self.store.set_run_status(
                 run_id,
                 "stopped",
@@ -313,9 +327,6 @@ class RunManager:
                 used=board.state["used"],
                 failed=bool(board.state["failed"]),
             )
-            board.finished("stopped", copy.SUMMARY_STOPPED)
-            for type_, data in board.drain():
-                await self._publish(run_id, type_, **data)
             await self.store.add_message(
                 run.session_id, "assistant", "", note=copy.STOP_NOTE, run_id=run_id
             )
@@ -410,6 +421,7 @@ class RunManager:
                         run_id=run_id,
                     )
                 elif type_ == "run.finished":
+                    await self._publish(run_id, type_, **data)
                     await self.store.set_run_status(
                         run_id,
                         data["status"],
@@ -421,6 +433,7 @@ class RunManager:
                         used=data.get("used") or [],
                         failed=bool(state.get("failed")),
                     )
+                    continue
                 await self._publish(run_id, type_, **data)
         except asyncio.CancelledError:
             raise
@@ -428,6 +441,16 @@ class RunManager:
             log.exception("run %s failed", run_id)
             message = f"{type(e).__name__}: {e}"
             forged, used = list(state.get("forged") or []), list(state.get("used") or [])
+            await self._publish(run_id, "error", message=message)
+            await self._publish(
+                run_id,
+                "run.finished",
+                status="failed",
+                summary=copy.SUMMARY_FAILED,
+                summary_gold=False,
+                forged=forged,
+                used=used,
+            )
             await self.store.set_run_status(
                 run_id,
                 "failed",
@@ -439,16 +462,6 @@ class RunManager:
                 forged=forged,
                 used=used,
                 failed=True,
-            )
-            await self._publish(run_id, "error", message=message)
-            await self._publish(
-                run_id,
-                "run.finished",
-                status="failed",
-                summary=copy.SUMMARY_FAILED,
-                summary_gold=False,
-                forged=forged,
-                used=used,
             )
         finally:
             if self._tasks.get(run_id) is asyncio.current_task():

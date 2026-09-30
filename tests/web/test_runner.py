@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import uuid
 
 import pytest
@@ -153,8 +154,7 @@ async def test_resume_errors(manager, store):
     await manager.join(paused)
     with pytest.raises(BadDecision):
         await manager.resume(paused, "save", "x")
-    key = paused
-    await manager.stop(key)
+    await manager.stop(paused)
     key = (await manager.start(session.id, "key")).run.id
     await manager.join(key)
     with pytest.raises(BadDecision):
@@ -234,8 +234,12 @@ async def test_subscribe_replays_then_goes_live_then_closes(manager, store):
             seen.append(envelope["seq"])
 
     consumer = asyncio.create_task(consume())
-    await asyncio.sleep(0.01)
+    for _ in range(500):
+        if len(seen) == backlog - 2:
+            break
+        await asyncio.sleep(0.001)
     assert seen == list(range(3, backlog + 1))  # backlog after seq 2, then waits
+    assert not consumer.done()
     await manager.resume(run_id, "approve")
     await asyncio.wait_for(consumer, 2)
     total = len(await events(store, run_id))
@@ -307,3 +311,95 @@ async def test_a_closed_subscriber_is_forgotten(manager, store):
     assert manager._subscribers[run_id]
     await stream.aclose()
     assert run_id not in manager._subscribers
+
+
+class FinishInvariantStore(MemoryStore):
+    """Records a violation if a run is marked terminal before `run.finished` is stored."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.violations: list[str] = []
+
+    async def set_run_status(self, run_id, status, **fields):
+        if status in ("done", "stopped", "failed"):
+            events = await self.events_after(run_id)
+            if not events or events[-1].type != "run.finished":
+                self.violations.append(status)
+        return await super().set_run_status(run_id, status, **fields)
+
+
+async def test_run_finished_is_stored_before_the_run_turns_terminal():
+    store = FinishInvariantStore()
+    manager = RunManager(store, ScriptDriver())
+    session = await store.create_session()
+    await manager.join((await manager.start(session.id, "hi")).run.id)
+    await manager.join((await manager.start(session.id, "boom")).run.id)
+    blocked = (await manager.start(session.id, "block")).run.id
+    await manager.stop(blocked)
+    paused = (await manager.start(session.id, "pause")).run.id
+    await manager.join(paused)
+    await manager.stop(paused)
+    assert store.violations == []
+
+
+class SlowGetStore(MemoryStore):
+    """The first get_run returns the old row, then takes a moment."""
+
+    delay = False
+
+    async def get_run(self, run_id):
+        run = await super().get_run(run_id)
+        if self.delay and run is not None:
+            run = copy.copy(run)  # a stale snapshot, like a row read from a real database
+            self.delay = False
+            await asyncio.sleep(0.05)
+        return run
+
+
+async def test_stop_does_not_clobber_a_run_that_just_finished():
+    store = SlowGetStore()
+    manager = RunManager(store, ScriptDriver())
+    session = await store.create_session()
+    run_id = (await manager.start(session.id, "hi")).run.id
+    store.delay = True
+    await manager.stop(run_id)
+    await manager.join(run_id)
+    run = await store.get_run(run_id)
+    assert run.status == "done"
+    types = [t for _, t in await events(store, run_id)]
+    assert types.count("run.finished") == 1
+    notes = [m.note for m in await store.list_messages(session.id) if m.role == "assistant"]
+    assert notes == [None]
+
+
+class FailingInterruptStore(MemoryStore):
+    async def append_event(self, run_id, type_, data):
+        if type_ == "interrupt":
+            await asyncio.sleep(0.02)
+            raise RuntimeError("db hiccup")
+        return await super().append_event(run_id, type_, data)
+
+
+async def test_resume_does_not_revive_a_run_whose_pause_failed():
+    store = FailingInterruptStore()
+    manager = RunManager(store, ScriptDriver())
+    session = await store.create_session()
+    run_id = (await manager.start(session.id, "pause")).run.id
+    await until_waiting(store, run_id)
+    with pytest.raises(NotWaiting):
+        await manager.resume(run_id, "approve")
+    assert (await store.get_run(run_id)).status == "failed"
+
+
+async def test_shutdown_survives_a_failing_stop(manager, store, driver, monkeypatch):
+    session = await store.create_session()
+    run_id = (await manager.start(session.id, "block")).run.id
+    await driver.started.wait()
+
+    async def broken(_run_id):
+        raise RuntimeError("nope")
+
+    monkeypatch.setattr(manager, "stop", broken)
+    await manager.shutdown()  # must not raise
+    monkeypatch.undo()
+    await manager.stop(run_id)
