@@ -31,6 +31,7 @@ Talos runs code written by an LLM on your machine.
 - **`python_exec` and `shell_exec` ask before running.** The REPL shows you the exact code or command and waits for `y`. Anything else declines. Set `TALOS_AUTO_APPROVE_EXEC=true` to skip the prompt (the unattended benchmark runners do this).
 - **Forged tools are not sandboxed.** They are tested in a subprocess with a timeout, but once registered they run inside the Talos process, with your user's permissions and no timeout.
 - **There is no container isolation.** Run Talos in a VM, container, or throwaway account if you plan to point it at anything you care about.
+- **The web app has no login.** `talos-web` binds to `127.0.0.1` and anyone who can reach its port can run code through it. Keep it on localhost; don't set `TALOS_WEB_HOST=0.0.0.0` on a shared network.
 
 ## Quick start
 
@@ -140,6 +141,8 @@ Talos-AI/
 │   │   ├── orchestrator.py
 │   │   └── hitl.py
 │   ├── primitives/          # Built-in tools
+│   ├── persistence/         # Postgres models, repo, migrations (web app only)
+│   ├── web/                 # Web app API (`uv run talos-web`): FastAPI, runs, SSE
 │   ├── prompts/             # System prompts
 │   ├── vault/               # Forged tools live here (gitignored)
 │   │   ├── manager.py
@@ -171,6 +174,52 @@ Measured on the end-to-end suite in `benchmarks/talos_test_suite/` (62 queries, 
 
 Run it yourself with `uv run python -m benchmarks.talos_test_suite.run_suite` (live API calls; costs a little).
 
+## Web app (API)
+
+`talos-web` serves a local HTTP API with the same graph behind it: it starts runs, streams their events to the browser over Server-Sent Events, pauses for approvals and API keys, and serves sessions, the vault and settings. The frontend (stage 4) will be served from the same port.
+
+It needs Postgres (history and paused runs live there; tools stay on disk in the vault):
+
+```bash
+docker run -d --name talos-pg -e POSTGRES_USER=talos -e POSTGRES_PASSWORD=talos \
+  -e POSTGRES_DB=talos -p 5432:5432 postgres:16-alpine
+export DATABASE_URL=postgresql+psycopg://talos:talos@localhost:5432/talos
+uv run talos-web                       # http://127.0.0.1:8000, migrations run at startup
+TALOS_FAKE_GRAPH=1 uv run talos-web    # the demo's scripted runs: no model calls, no keys
+```
+
+| Method and path | What it does |
+|---|---|
+| `POST /api/sessions` | New session (an empty one is reused) |
+| `GET /api/sessions` | Sessions with runs, newest first |
+| `GET /api/sessions/{id}` / `PATCH` `{name}` | A session with its messages and runs / rename it |
+| `POST /api/sessions/{id}/messages` `{text}` | Start a run. `409 run_active` while any run is running or waiting |
+| `GET /api/runs/{id}` | Run summary, plus the pending approval or key request |
+| `GET /api/runs/{id}/events` | SSE event stream; resume with `Last-Event-ID` or `?after=N` |
+| `POST /api/runs/{id}/resume` | `{decision: "approve" \| "decline"}` or `{decision: "save", value}` / `{decision: "skip"}` |
+| `POST /api/runs/{id}/stop` | Stop a run, also while it waits |
+| `GET /api/vault`, `GET` / `DELETE /api/vault/{name}` | Tools, one tool with its source, remove from the manifest |
+| `GET` / `PATCH /api/settings` | Model and limits, which keys are set, the "Ask before running code" switch |
+| `GET /api/health` | `{ok, db, fake_graph, version}` |
+
+Try a run from the terminal:
+
+```bash
+B=http://127.0.0.1:8000/api
+SID=$(curl -s -X POST $B/sessions | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+RID=$(curl -s -X POST -H 'content-type: application/json' \
+  -d '{"text":"Encrypt \"TALOS AGENT\" with a Caesar cipher, shift of 7."}' \
+  $B/sessions/$SID/messages | python3 -c 'import sys,json;print(json.load(sys.stdin)["run"]["id"])')
+curl -N $B/runs/$RID/events
+```
+
+Notes:
+
+- Run one worker only (the default). Runs and the vault are per process, and at startup every run still marked `running` is failed, since the process that owned it is gone. Runs that were waiting for you stay waiting and can be resumed after a restart.
+- Every event is stored before it is sent, so a dropped connection resumes from `Last-Event-ID` with nothing missing.
+- Fake mode works on a temporary copy of the vault, so the demo runs never touch your real tools, and a key you "save" is only remembered in memory.
+- API key values sent to `/resume` are never logged, stored in the event history, or returned by any endpoint.
+
 ## Configuration
 
 All via `.env` (see `.env.example`):
@@ -193,6 +242,10 @@ All via `.env` (see `.env.example`):
 | `TALOS_VAULT_DIR` | no | Vault folder (`manifest.json` + `tools/`). Default `talos/vault` |
 | `TALOS_WORKSPACE_DIR` | no | Where relative `file_read`/`file_write` paths land. Default `workspace/` |
 | `TALOS_DOTENV_PATH` | no | The `.env` Talos loads and where Human check saves keys. Default `.env` in the repo. Must be set in the shell environment: it is read before `.env` is loaded |
+| `TALOS_WEB_HOST` | no | Web app bind address. Default `127.0.0.1`. There is no login: keep it local |
+| `TALOS_WEB_PORT` | no | Web app port. Default `8000` |
+| `TALOS_FAKE_GRAPH` | no | `1` runs the web app with the demo's scripted runs: no model calls, no keys, a temporary vault copy |
+| `TALOS_WEB_DEV` | no | `1` allows CORS from Vite's dev server at `http://127.0.0.1:5173` |
 
 ## Tests
 
@@ -213,6 +266,8 @@ docker run -d --name talos-pg-test -e POSTGRES_USER=talos -e POSTGRES_PASSWORD=t
   -e POSTGRES_DB=talos -p 55432:5432 postgres:16-alpine
 DATABASE_URL=postgresql+psycopg://talos:talos@localhost:55432/talos uv run pytest -m integration
 ```
+
+The web app's route, SSE and runner tests run in the default suite against an in-memory store and the fake graph; the same store contract, a full fake-graph run, and a restart mid-pause run against Postgres under `-m integration`. The translator's chunk fixtures are recorded from the real graph with mocked LLMs; regenerate them after a LangGraph upgrade with `uv run python -m tests.web.chunks`.
 
 ## Known limits (POC)
 

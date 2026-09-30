@@ -248,6 +248,19 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-01-persistence-design.md`. Pl
 - [x] Integration tests (`-m integration`, real Postgres): migrations round-trip, repo, 20 concurrent appends, interrupt survives a restart, HITL on Postgres, recovery
 - Moved to stage 2: the `copy.py` vs reference-demo test (spec 01 §8), since `copy.py` is a stage 2 file.
 
+## Web app stage 02 — API ✅
+
+Spec: `docs/superpowers/specs/2026-09-30-talos-web-02-api-design.md`. Plan: `docs/superpowers/plans/2026-09-30-talos-web-02-api.md`.
+
+- [x] `talos/web/`: FastAPI app (`create_app`, lifespan: migrations, Postgres checkpointer, recovery, stored settings), `talos-web` entry point, one worker on 127.0.0.1:8000
+- [x] `copy.py`: every caption, log line, chip and summary, checked word for word against the reference demo (the test moved here from stage 01)
+- [x] `EventTranslator`: `astream` chunks (`updates`, `custom`, `messages`, `tasks`, `subgraphs=True`) → contract events; fixtures recorded from the real graph with mocked LLMs, plus a live drift check
+- [x] `RunManager`: one active run app-wide, persist-then-publish, pause/resume/stop, exception path; SSE with backlog, `Last-Event-ID`, keep-alive, close after `run.finished`
+- [x] Endpoints: sessions, messages, runs, resume, stop, events, vault, settings, health; one error shape; 64 KB body limit; CORS only with `TALOS_WEB_DEV=1`
+- [x] `TALOS_FAKE_GRAPH=1`: the demo's Caesar forge/reuse/failure, `python_exec` approval and OpenWeatherMap key flows as the same events as the real graph, on a temporary vault copy
+- [x] API key values never logged (record-factory redaction), stored in events, or returned
+- [x] Tests: unit suite needs no database (in-memory store contract-tested against Postgres); integration: full fake Caesar run, restart mid-pause and resume (fake and real graph)
+
 ## Session log
 A short bullet per session — what we did, what's next. Append-only.
 
