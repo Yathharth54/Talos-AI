@@ -1,3 +1,4 @@
+import { COPY } from "../lib/copy";
 import { freshVault } from "../store/vaultOps";
 import { VAULT_ROWS } from "../demo/data";
 import { createStores, updateRun, type Stores } from "../store/stores";
@@ -322,4 +323,57 @@ test("run.started lands the messages a microtask before the bench switches, as s
   expect(benchAtFlush[0]).toBeNull();
   expect(s.session.get().sessions[0]!.messages.map((m) => m.kind)).toEqual(["you", "talos"]);
   expect(s.ui.get()).toMatchObject({ currentRunId: "r", viewingRunId: "r", busy: true });
+});
+
+/* Final wave I1: Stop hurries the player; only a run that really ended "stopped" keeps its half-drawn state. */
+
+const wholeRun = (status: "done" | "stopped"): RunEvent[] => [
+  ev("run.started", { session_id: "s1", query: "q", n: 6 }),
+  ev("log.cmd", { text: "talos forge --tool caesar_cipher --tests 2 --and-a-long-tail" }),
+  ev("forge.code", { tool: "t", attempt: 1, file: "t.py", lines: Array.from({ length: 40 }, (_, i) => `line ${i}`), changed: null, note: null, tests: 2 }),
+  ev("forge.tests", { tool: "t", attempt: 1, results: [{ name: "a", passed: true, why: null }, { name: "b", passed: false, why: "boom" }] }),
+  ev("forge.smoke", { call: "t('x')", result: "'y'", passed: true }),
+  ev("call.args", { tool: "t", args: [["a", "1", false], ["b", "2", false]], caption: null }),
+  ev("answer.done", { html: "It is <b>done</b>.", note: "a note", chips: [{ kind: "forged", text: "t" }] }),
+  ev("run.finished", { status, summary: status === "done" ? "Done" : "Stopped", summary_gold: false, forged: [], used: [] }),
+];
+
+test.each([false, true])("Stop mid-reveal on a run the server already finished ends in its full done state (reduced motion %s)", async (still) => {
+  setReducedMotion(still);
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: true });
+  for (const e of wholeRun("done")) void p.push(e);
+  // Every event is delivered; the player is still typing the command or revealing the code.
+  await vi.advanceTimersByTimeAsync(still ? 100 : 700);
+  expect(run(s).code?.shown ?? 0).toBeLessThan(40);
+  p.abort();
+  await vi.advanceTimersByTimeAsync(0);
+  const r = run(s);
+  expect(r.status).toBe("done");
+  expect(r.code!.shown).toBe(40);
+  expect(r.tests!.list.map((t) => [t.state, t.why])).toEqual([["passed", ""], ["failed", "boom"]]);
+  expect(r.smoke).toEqual({ call: "t('x')", result: "'y'" });
+  expect(r.log.filter((l) => l.kind === "cmd").map((l) => l.kind === "cmd" && [l.typing, l.shown])).toEqual([[false, null]]);
+  expect(r.call!.shownArgs ?? 2).toBe(2);
+  const talos = s.session.get().sessions[0]!.messages[1]!;
+  expect(talos).toMatchObject({ html: "It is <b>done</b>.", wordsOn: 4, note: "a note", chips: [{ kind: "forged", text: "t" }], stopNote: null, runLink: true });
+  expect(s.ui.get()).toMatchObject({ busy: false, live: "Talos: It is done." });
+});
+
+test("Stop mid-reveal on a run that ends stopped keeps the stopped say and the frozen animations", async () => {
+  setReducedMotion(false);
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: true });
+  for (const e of wholeRun("stopped")) void p.push(e);
+  await vi.advanceTimersByTimeAsync(700);
+  const shown = run(s).code?.shown ?? 0;
+  p.abort();
+  await vi.advanceTimersByTimeAsync(0);
+  const r = run(s);
+  expect(r.status).toBe("stopped");
+  expect(r.code?.shown ?? 0).toBe(shown);
+  expect(r.tests!.list.map((t) => t.state)).toEqual(["waiting", "waiting"]);
+  expect(r.smoke).toEqual({ call: "t('x')", result: null });
+  const talos = s.session.get().sessions[0]!.messages[1]!;
+  expect(talos).toMatchObject({ wordsOn: 4, note: null, chips: [], stopNote: COPY.convo.stopped });
 });

@@ -101,6 +101,11 @@ export class Player {
   private callTool: string | null = null;
   private testsCount: number | undefined;
   private catching = false;
+  /**
+   * Final states of the animations Stop cut short. The server may have finished the run anyway (the player
+   * lags it by design, spec 04 §6): run.finished applies them unless the run really ended "stopped".
+   */
+  private cutShort: (() => void)[] = [];
 
   constructor(
     private readonly stores: Stores,
@@ -115,7 +120,10 @@ export class Player {
     return this.queue;
   };
 
-  /** Stop: animations stay where they are; later events apply without pacing. */
+  /**
+   * Stop: later events apply without pacing, and animations stay where they are until run.finished says
+   * whether the run was stopped (they stay) or had already finished on the server (they complete).
+   */
   abort(): void {
     this.aborted = true;
     this.wake?.();
@@ -250,9 +258,10 @@ export class Player {
       case "forge.smoke": {
         const { call, result } = e.data;
         this.up((r) => ({ ...r, smoke: { call, result: null } }));
+        const done = () => this.up((r) => ({ ...r, smoke: { call, result } }));
         await this.sleep(PACE.smokeRun);
-        if (this.aborted) return;
-        this.up((r) => ({ ...r, smoke: { call, result } }));
+        if (this.aborted) return this.later(done);
+        done();
         return;
       }
       case "vault.saved": {
@@ -332,7 +341,7 @@ export class Player {
         const s = shown;
         this.up((r) => R.typeCmd(r, s));
         await this.sleep(PACE.typeStep);
-        if (this.aborted) return;
+        if (this.aborted) return this.later(() => this.up(R.endCmd));
       }
     }
     this.up(R.endCmd);
@@ -370,7 +379,7 @@ export class Player {
       const s = shown;
       this.up((r) => R.patchCode(r, { shown: s }));
       await this.sleep(PACE.revealTick);
-      if (this.aborted) return;
+      if (this.aborted) return this.later(() => this.up((r) => (r.code?.lines === d.lines ? R.patchCode(r, { shown: d.lines.length }) : r)));
     }
   }
 
@@ -382,19 +391,24 @@ export class Player {
     );
     const set = (i: number, state: "running" | "passed" | "failed", why = "") =>
       this.up((r) => ({ ...r, tests: { ...r.tests!, list: r.tests!.list.map((x, j) => (j === i ? { ...x, state, why } : x)) } }));
-    for (let i = 0; i < d.results.length; i++) {
+    const final = (i: number) => {
       const res = d.results[i]!;
-      const final = res.passed ? "passed" : "failed";
+      set(i, res.passed ? "passed" : "failed", res.passed ? "" : (res.why ?? ""));
+    };
+    const settleAll = () => {
+      if (this.run().tests?.attempt === d.attempt) d.results.forEach((_, i) => final(i));
+    };
+    for (let i = 0; i < d.results.length; i++) {
+      if (this.aborted) return this.later(settleAll);
       if (this.fast) {
-        if (!this.aborted) set(i, final, res.passed ? "" : (res.why ?? ""));
+        final(i);
         continue;
       }
       set(i, "running");
       await this.sleep(PACE.testRun);
-      if (this.aborted) return;
-      set(i, final, res.passed ? "" : (res.why ?? ""));
+      if (this.aborted) return this.later(settleAll);
+      final(i);
       await this.sleep(PACE.testGap);
-      if (this.aborted) return;
     }
   }
 
@@ -451,7 +465,7 @@ export class Player {
     const each = args.length === 1 ? PACE.argSingle : PACE.argEach;
     for (let i = 1; i <= args.length; i++) {
       await this.sleep(each);
-      if (this.aborted) return;
+      if (this.aborted) return this.later(() => this.up((r) => (r.call?.args === args ? R.patchCall(r, { shownArgs: args.length }) : r)));
       this.up((r) => R.patchCall(r, { shownArgs: i }));
     }
   }
@@ -493,17 +507,29 @@ export class Player {
         if (this.aborted) break;
       }
     }
+    const rest = () => {
+      this.talos((m) => ({ ...m, note: d.note, chips: d.chips, suggest: !!d.suggest }));
+      this.stores.ui.set({ live: COPY.convo.livePrefix + textOf(d.html) });
+    };
     // A stopped say (line 967): every word on, and no note, chips or live text, since say() never got past its wait.
     if (this.aborted) {
       this.talos((m) => ({ ...m, wordsOn: total }));
-      return;
+      return this.later(rest);
     }
-    this.talos((m) => ({ ...m, note: d.note, chips: d.chips, suggest: !!d.suggest }));
-    this.stores.ui.set({ live: COPY.convo.livePrefix + textOf(d.html) });
+    rest();
+  }
+
+  /** An animation Stop cut short: its final state waits for run.finished. */
+  private later(fn: () => void): void {
+    this.cutShort.push(fn);
   }
 
   private finished(e: EventOf<"run.finished">): void {
     const d = e.data;
+    const cut = this.cutShort;
+    this.cutShort = [];
+    // Stop reached a run the server had already finished: it ends as drawn in full, not half-way.
+    if (d.status !== "stopped") for (const fn of cut) fn();
     // The run's finally (line 1482) calls renderSide(run), which redraws the Log tab and drops `fresh`.
     this.up((r) => ({
       ...(r.tab === "log" ? R.clearFresh(r) : r),
