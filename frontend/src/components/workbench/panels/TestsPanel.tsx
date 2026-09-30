@@ -3,18 +3,25 @@ import { COPY, fill } from "../../../lib/copy";
 import type { Attempt, Smoke, TestsState } from "../../../store/types";
 import { TickIcon, XIcon } from "../../icons";
 
-/* What earlier renders drew: the reference's `x.drawn = true` / `x.flashed = true` (lines 1188–1191), kept out of the store. */
+/* What earlier renders drew: the reference's `x.drawn = true` / `x.flashed = true` (lines 1188–1191), kept out of the store.
+   Keyed by run id, attempt and test name. */
 const drawnSet = new Set<string>();
 const flashedSet = new Set<string>();
 
-type TestsPanelProps = { runN: number; tests: TestsState | undefined; smoke: Smoke | null | undefined; attempts: Attempt[] | undefined };
+/** Forgets every draw mark. The demo reset calls it, because the run counter (and so the run ids) restart there. */
+export function clearTestMarks(): void {
+  drawnSet.clear();
+  flashedSet.clear();
+}
+
+type TestsPanelProps = { runId: string; tests: TestsState | undefined; smoke: Smoke | null | undefined; attempts: Attempt[] | undefined };
 
 /** The tests panel (testsHtml, lines 1181–1200). */
-export function TestsPanel({ runN, tests, smoke, attempts }: TestsPanelProps) {
+export function TestsPanel({ runId, tests, smoke, attempts }: TestsPanelProps) {
   useEffect(() => {
     if (!tests) return;
     for (const x of tests.list) {
-      const k = `${runN}:${tests.attempt}:${x.name}`;
+      const k = `${runId}:${tests.attempt}:${x.name}`;
       if (x.state === "passed") drawnSet.add(k);
       if (x.state === "failed") flashedSet.add(k);
     }
@@ -33,7 +40,7 @@ export function TestsPanel({ runN, tests, smoke, attempts }: TestsPanelProps) {
         </figcaption>
         <ul className="tests">
           {tests.list.map((x) => {
-            const k = `${runN}:${tests.attempt}:${x.name}`;
+            const k = `${runId}:${tests.attempt}:${x.name}`;
             const flash = x.state === "failed" && !(x.flashed || flashedSet.has(k)) ? " just-failed" : "";
             return (
               <li key={x.name} className={`${x.state}${flash}`}>

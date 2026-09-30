@@ -4,6 +4,7 @@ import { asRun } from "../../../test/parity/runs";
 import { ssr } from "../../../test/ssr";
 import type { VaultTool } from "../../../store/types";
 import { earlierData, Panel } from "./Panel";
+import { clearTestMarks } from "./TestsPanel";
 
 const noop = () => {};
 
@@ -63,4 +64,37 @@ test("a test drawn once keeps the done tick on the next render", () => {
   const ticks = [...container.querySelectorAll("svg.tick")].map((s) => s.getAttribute("class"));
   expect(ticks).toEqual(["tick done", "tick"]);
   expect(container.querySelector("li.failed")!.className).toBe("failed");
+});
+
+const unmarked = (run: ReturnType<typeof asRun>) => ({
+  ...run,
+  tests: { ...run.tests!, list: run.tests!.list.map((t) => ({ ...t, drawn: undefined, flashed: undefined })) },
+});
+const drawnState = (container: HTMLElement) => ({
+  ticks: [...container.querySelectorAll("svg.tick")].map((s) => s.getAttribute("class")),
+  failed: container.querySelector("li.failed")!.className,
+});
+
+test("after clearTestMarks() (demo reset), a replayed run's tests animate again", () => {
+  const run = unmarked(asRun(fixtureCase("panel/tests-mixed").state.run));
+  const first = render(<Panel run={run} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
+  first.unmount();
+  clearTestMarks();
+  const { container } = render(<Panel run={run} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
+  expect(drawnState(container)).toEqual({ ticks: ["tick"], failed: "failed just-failed" });
+});
+
+test("a different run with the same test names animates its own tests", () => {
+  const base = unmarked(asRun(fixtureCase("panel/tests-mixed").state.run));
+  const first = render(<Panel run={{ ...base, id: "run-a" }} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
+  first.unmount();
+  const { container } = render(<Panel run={{ ...base, id: "run-b" }} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
+  expect(drawnState(container)).toEqual({ ticks: ["tick"], failed: "failed just-failed" });
+});
+
+test("server rendering a panel with layout effects prints no warnings", () => {
+  const spy = vi.spyOn(console, "error");
+  ssr(<Panel run={asRun(fixtureCase("panel/code-typing").state.run)} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
+  expect(spy).not.toHaveBeenCalled();
+  spy.mockRestore();
 });

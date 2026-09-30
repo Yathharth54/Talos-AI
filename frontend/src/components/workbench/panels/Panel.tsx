@@ -33,7 +33,7 @@ export function Panel({ run, isCurrent, tool, earlier, onAsk, onOpenTool, onRun 
     case "code":
       return <CodePanel code={run.code} codeScroll={run.codeScroll} />;
     case "tests":
-      return <TestsPanel runN={run.n} tests={run.tests} smoke={run.smoke} attempts={run.attempts} />;
+      return <TestsPanel runId={run.id} tests={run.tests} smoke={run.smoke} attempts={run.attempts} />;
     case "attempts":
       return <AttemptsPanel attempts={run.attempts} />;
     case "call":
