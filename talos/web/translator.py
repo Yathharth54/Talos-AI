@@ -109,6 +109,7 @@ class EventTranslator:
             "resuming_executor": False,
             "human": "none",
             "approval": "none",
+            "exec_running_line": False,
             "forge_failed": False,
             "failure": None,
             "answer": "",
@@ -149,7 +150,7 @@ class EventTranslator:
                 self.state["human"] = "saved"
                 b.log(copy.LOG_CHECK_SAVED)
                 b.finish("human", "done")
-                b.caption(copy.CAPTION_HUMAN_SAVED.format(env=env))
+                b.caption(copy.CAPTION_HUMAN_SAVED.format(env=html.escape(env)))
             else:
                 self.state["human"] = "skipped"
                 b.log(copy.LOG_CHECK_SKIPPED)
@@ -161,6 +162,7 @@ class EventTranslator:
             self.state["resuming_executor"] = True
             if decision == "approve":
                 self.state["approval"] = "approved"
+                self.state["exec_running_line"] = True
                 b.log(copy.LOG_EXEC_RUNNING, "g", caret=True)
             else:
                 self.state["approval"] = "declined"
@@ -202,6 +204,7 @@ class EventTranslator:
                     else:
                         s["intro_pending"] = True
                 else:
+                    s["intro_pending"] = False
                     b.finish("tester", "forge")
                     b.start("forger")
                     b.caption(
@@ -255,7 +258,11 @@ class EventTranslator:
             if s["intro_pending"] and s["tool"]:
                 self._forge_intro()
             changed = data.get("changed")
-            if int(data.get("attempt") or s["attempt"]) > 1 and changed:
+            if (
+                int(data.get("attempt") or s["attempt"]) > 1
+                and changed
+                and changed <= len(s["code"])
+            ):
                 data["note"] = copy.NOTE_CHANGED_LINE.format(line=changed, n=s["attempt"])
             b.emit("forge.code", **data)
         elif type_ == "forge.tests":
@@ -270,7 +277,10 @@ class EventTranslator:
                 self._settle_attempt(True)
             else:
                 b.emit("log.line", label="smoke", text=copy.new("LOG_SMOKE_FAILED"), tone="w")
-                self._settle_attempt(False, f"Smoke test failed: {data.get('call') or 'no call'}")
+                self._settle_attempt(
+                    False,
+                    f"Smoke test failed: {data.get('error') or data.get('call') or 'no call'}",
+                )
         elif type_ == "vault.saved":
             entry = data.get("tool") or {}
             tool = str(entry.get("name") or s["tool"] or "")
@@ -299,7 +309,8 @@ class EventTranslator:
                 caption = copy.ARGS_CAPTION
             b.emit("call.args", **{**data, "caption": data.get("caption") or caption})
         elif type_ == "call.result":
-            if s["approval"] == "approved":
+            if s.get("exec_running_line"):
+                s["exec_running_line"] = False
                 b.pop()
             b.emit("call.result", **data)
             b.finish("executor", "done", "Executor")
@@ -311,7 +322,8 @@ class EventTranslator:
                 b.log(copy.LOG_EXEC_DECLINED, "w")
                 b.status(copy.STATUS_NOT_RUN)
                 return
-            if s["approval"] == "approved":
+            if s.get("exec_running_line"):
+                s["exec_running_line"] = False
                 b.pop()
             kind = error_type(data.get("error"))
             tool = s["tool"] or self._subtask().get("tool_hint") or "tool"
@@ -354,7 +366,7 @@ class EventTranslator:
                 return
             if s["env_vars"]:
                 b.finish("human", "skip")
-                b.caption(copy.CAPTION_HUMAN_KEY_SET.format(env=s["env_vars"][0]))
+                b.caption(copy.CAPTION_HUMAN_KEY_SET.format(env=html.escape(s["env_vars"][0])))
                 b.log(copy.LOG_CHECK_KEY_SET)
             else:
                 b.finish("human", "skip")
@@ -385,14 +397,15 @@ class EventTranslator:
         self.pause = (kind, value)
         if kind == "missing_api_key":
             env = str(value.get("env_var") or "")
-            if env and env not in s["env_vars"]:
-                s["env_vars"] = [env, *s["env_vars"]]
-            elif env:
+            if env:
                 s["env_vars"] = [env, *[v for v in s["env_vars"] if v != env]]
             s["human"] = "waiting"
             b.start("human")
             b.caption(
-                copy.CAPTION_HUMAN_WAIT.format(tool=value.get("tool_name") or s["tool"], env=env)
+                copy.CAPTION_HUMAN_WAIT.format(
+                    tool=html.escape(str(value.get("tool_name") or s["tool"] or "")),
+                    env=html.escape(env),
+                )
             )
             b.log(copy.LOG_CHECK_WAITING, "g", caret=True)
             b.status(copy.STATUS_WAITING, gold=True)
@@ -607,7 +620,12 @@ class EventTranslator:
         test = update.get("test_result") or {}
         smoke = update.get("smoke_result") or {"passed": True}
         ok = bool(test.get("passed")) and bool(smoke.get("passed"))
-        self._settle_attempt(ok, None if ok else "Smoke test failed")
+        detail = None
+        if not ok:
+            detail = "Smoke test failed"
+            if smoke.get("error") and test.get("passed"):
+                detail = f"Smoke test failed: {smoke['error']}"
+        self._settle_attempt(ok, detail)
         if ok:
             b.finish("tester", "forge")
             b.flow("tester", "human")

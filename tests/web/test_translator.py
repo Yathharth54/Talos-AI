@@ -381,3 +381,79 @@ def test_multi_subtask_plan_resets_the_strip_per_subtask():
     assert events[1][1]["subtask"]["label"] == "Sub-task 2 of 2, found in the vault"
     assert events[2] == ("node.finished", {"step": "planner", "status": "done"})
     assert ("log.line", {"label": "vault", "text": "slugify", "tone": "plain"}) in events
+
+
+def test_approval_does_not_pop_log_lines_of_later_subtasks():
+    tr = EventTranslator()
+    plan = {
+        "sub_tasks": [
+            {"id": 1, "action": "run", "needs": "primitive", "tool_hint": "python_exec"},
+            {"id": 2, "action": "slug", "needs": "vault", "tool_hint": "slugify"},
+        ]
+    }
+    tr.feed(((), "updates", {"planner": {"plan": plan}}))
+    tr.feed(((), "tasks", {"name": "executor", "input": None}))
+    value = {"type": "confirm_exec", "tool": "python_exec", "kwargs": {"code": "1"}}
+    tr.feed(((), "updates", {"__interrupt__": (Interrupt(value=value, id="1"),)}))
+    tr.resumed("confirm_exec", "approve")
+    events = tr.feed(((), "custom", {"type": "call.result", "data": {"result": "1"}}))
+    assert "log.pop" in [t for t, _ in events]
+    tr.feed(((), "updates", {"advance": {}}))
+    tr.feed(((), "tasks", {"name": "executor", "input": None}))
+    events = tr.feed(((), "custom", {"type": "call.result", "data": {"result": "x"}}))
+    assert "log.pop" not in [t for t, _ in events]
+    events = tr.finish()
+    assert events[-1][1]["summary"] == "Built-in, approved"
+
+
+def test_key_captions_escape_model_derived_names():
+    tr = EventTranslator()
+    value = {"type": "missing_api_key", "env_var": "<b>X</b>", "tool_name": "<i>t</i>"}
+    events = tr.feed(((), "updates", {"__interrupt__": (Interrupt(value=value, id="1"),)}))
+    html_ = "".join(d["html"] for t, d in events if t == "caption")
+    assert "<b>X</b>" not in html_ and "&lt;b&gt;X&lt;/b&gt;" in html_
+    assert "<i>t</i>" not in html_
+    events = tr.resumed("missing_api_key", "save")
+    html_ = "".join(d["html"] for t, d in events if t == "caption")
+    assert "<b>X</b>" not in html_ and "&lt;b&gt;X&lt;/b&gt;" in html_
+
+
+def test_no_changed_line_note_for_an_empty_file():
+    tr = EventTranslator()
+    tr.state["attempt"] = 2
+    code = {"tool": "", "attempt": 2, "file": "t.py", "lines": [], "changed": 1, "note": None}
+    events = tr.feed((("forge_subgraph:a",), "custom", {"type": "forge.code", "data": code}))
+    assert first(events, "forge.code")["note"] is None
+
+
+def test_failed_first_attempt_does_not_replay_the_intro_on_retry():
+    tr = EventTranslator()
+    tr.feed(((), "updates", {"planner": {"plan": {"sub_tasks": [
+        {"id": 1, "action": "x", "needs": "forge"}]}}}))  # fmt: skip
+    ns = ("forge_subgraph:a",)
+    tr.feed((ns, "tasks", {"name": "forge", "input": None}))
+    assert tr.state["intro_pending"] is True
+    tr.feed((ns, "tasks", {"name": "forge", "input": None}))
+    assert tr.state["intro_pending"] is False
+    code = {
+        "tool": "f",
+        "attempt": 2,
+        "file": "t.py",
+        "lines": ["x"],
+        "changed": None,
+        "note": None,
+    }
+    events = tr.feed((ns, "custom", {"type": "forge.code", "data": code}))
+    assert not any(
+        "Attempt" in d.get("html", "") and "first" in d.get("html", "") for t, d in events
+    )
+    assert [t for t, _ in events] == ["forge.code"]
+
+
+def test_smoke_failure_detail_uses_the_error():
+    tr = EventTranslator()
+    tr.state["pending_attempt"] = "5 of 5 passed"
+    tr.state["attempt"] = 1
+    data = {"call": "f(1)", "result": None, "passed": False, "error": "load error: SyntaxError"}
+    events = tr.feed((("forge_subgraph:a",), "custom", {"type": "forge.smoke", "data": data}))
+    assert first(events, "forge.attempt")["detail"] == "Smoke test failed: load error: SyntaxError"
