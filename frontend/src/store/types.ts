@@ -207,6 +207,16 @@ export interface SettingsState {
   /** Demo: keys pasted into the key dialog, kept in memory. Live: names of keys that are set. */
   env: Record<string, string>;
   model: string;
+  /** Live mode only: Settings and the idle setup line read these; demo mode keeps the reference's fixed rows. */
+  live?: LiveSettings;
+}
+/** Stage 2's settings facts (GET /api/settings). Keys carry whether they're set, never a value. */
+export interface LiveSettings {
+  keys: { name: string; set: boolean; required: boolean; description: string }[];
+  forgeRetries: number;
+  testTimeoutS: number;
+  llmTimeoutS: number;
+  pruneAfter: number;
 }
 export interface UiState {
   view: View;
