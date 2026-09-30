@@ -1,11 +1,13 @@
 import type { Page } from "@playwright/test";
+import { pinFonts } from "./fonts";
 import { FREEZE_CSS } from "./freeze";
 
 /** 30 Sep 2026, 14:20 UTC: "Today", after the seeded sessions on 28 Sep. */
 export const T0 = Date.parse("2026-09-30T14:20:00Z");
 
-/** Open the page with the clock paused, let boot finish, freeze animations, wait for fonts. */
+/** Open the page with pinned fonts and the clock paused, let boot finish, freeze animations, wait for fonts. */
 export async function bootFrozen(page: Page, settleMs = 2000): Promise<void> {
+  await pinFonts(page);
   await page.clock.install({ time: T0 });
   await page.clock.pauseAt(T0 + 10);
   await page.goto("");
