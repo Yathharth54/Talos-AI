@@ -57,6 +57,41 @@ export class LiveApp {
     return () => this.page.evaluate(() => (window as unknown as { __nodes: Record<string, string[]> }).__nodes);
   }
 
+  /**
+   * Record every caption `#b-cap` shows from now on. A caption is replaced by the next step's within a few
+   * dwells, so one that isn't the run's last is asserted from this record.
+   */
+  async trackCaptions(): Promise<() => Promise<string[]>> {
+    await this.page.evaluate(() => {
+      const w = window as unknown as { __caps: string[] };
+      w.__caps = [];
+      const scan = () => {
+        const t = document.querySelector("#b-cap")?.textContent ?? "";
+        if (t && w.__caps[w.__caps.length - 1] !== t) w.__caps.push(t);
+      };
+      new MutationObserver(scan).observe(document.body, { subtree: true, childList: true, characterData: true });
+      scan();
+    });
+    return () => this.page.evaluate(() => (window as unknown as { __caps: string[] }).__caps);
+  }
+
+  /** Record the method, path and body of every API request the page sends from now on. */
+  recordRequests(): { method: string; path: string; body: unknown }[] {
+    const seen: { method: string; path: string; body: unknown }[] = [];
+    this.page.on("request", (r) => {
+      const url = new URL(r.url());
+      if (!url.pathname.startsWith("/api/")) return;
+      let body: unknown = null;
+      try {
+        body = r.postDataJSON();
+      } catch {
+        body = r.postData();
+      }
+      seen.push({ method: r.method(), path: url.pathname, body });
+    });
+    return seen;
+  }
+
   async vaultNames(): Promise<string[]> {
     const v = (await (await this.api.get("/api/vault")).json()) as { tools: { name: string }[] };
     return v.tools.map((t) => t.name);
