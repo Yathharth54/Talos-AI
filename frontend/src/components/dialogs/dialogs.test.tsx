@@ -70,3 +70,29 @@ test("the reader copies, falls back, and closes on a click outside", async () =>
   expect(onClose).toHaveBeenCalled();
   vi.useRealTimers();
 });
+
+test("the reader copies the whole file and says so", async () => {
+  vi.useFakeTimers();
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  render(<ModalRoot dialog={{ kind: "reader", name: "caesar_cipher", lines: ["a", "b"] }} demo onApproval={noop} onKey={noop} onClose={noop} />);
+  await act(async () => void fireEvent.click(screen.getByText("Copy")));
+  expect(writeText).toHaveBeenCalledWith("a\nb");
+  expect(screen.getByText("Copied")).toBeInTheDocument();
+  act(() => void vi.advanceTimersByTime(1800));
+  expect(screen.getByText("Copy")).toBeInTheDocument();
+  vi.useRealTimers();
+});
+
+test("closing the reader clears every pending Copy timer", async () => {
+  vi.useFakeTimers();
+  Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
+  const { unmount } = render(<ModalRoot dialog={{ kind: "reader", name: "caesar_cipher", lines: ["a"] }} demo onApproval={noop} onKey={noop} onClose={noop} />);
+  const base = vi.getTimerCount();
+  await act(async () => void fireEvent.click(screen.getByText("Copy")));
+  await act(async () => void fireEvent.click(screen.getByText("Copied")));
+  expect(vi.getTimerCount()).toBe(base + 2);
+  unmount();
+  expect(vi.getTimerCount()).toBe(base);
+  vi.useRealTimers();
+});

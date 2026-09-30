@@ -1,4 +1,6 @@
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
+import { setReducedMotion } from "../../test/media";
+import { Conversation, type ConversationProps } from "./Conversation";
 import { expectParity, fixtureCase } from "../../test/parity";
 import { ssr } from "../../test/ssr";
 import { seedSessions } from "../../demo/seeds";
@@ -39,4 +41,63 @@ test("answer words fade in on the same elements", () => {
   rerender(<Message msg={talos({ status: null, html, wordsOn: 2 })} showPast viewingN={null} onRun={noop} onSuggest={noop} />);
   expect(container.querySelector(".wd")).toBe(first);
   expect([...container.querySelectorAll(".wd")].map((w) => w.className)).toEqual(["wd on", "wd on", "wd", "wd", "wd", "wd"]);
+});
+
+const you = (n: number) => ({ kind: "you" as const, key: `y${n}`, text: `q${n}`, past: false });
+const convo = (p: Partial<ConversationProps> = {}): ConversationProps => ({
+  title: "Session 1", animateTitle: false, readOnly: null, messages: [you(1)], empty: false, busy: false, viewingN: null, live: "",
+  composer: { value: "", disabled: false, hint: "", busy: false, onChange: noop, onSubmit: noop },
+  onNew: noop, onBack: noop, onRun: noop, onSuggest: noop, ...p,
+});
+/** jsdom has no layout: give #msgs a height and a real scrollTop. */
+function fakeScroll(el: HTMLElement): { top: () => number; set: (v: number) => void } {
+  let top = 0;
+  Object.defineProperty(el, "scrollHeight", { configurable: true, get: () => 500 });
+  Object.defineProperty(el, "scrollTop", { configurable: true, get: () => top, set: (v: number) => void (top = v) });
+  return { top: () => top, set: (v) => void (top = v) };
+}
+
+test("the conversation scrolls only when messages are added, not while typing or marking run links", () => {
+  const { container, rerender } = render(<Conversation {...convo()} />);
+  const s = fakeScroll(container.querySelector<HTMLElement>("#msgs")!);
+  s.set(100); // the reader scrolled up
+  rerender(<Conversation {...convo({ composer: { ...convo().composer, value: "typing" } })} />);
+  rerender(<Conversation {...convo({ viewingN: 3 })} />);
+  rerender(<Conversation {...convo({ busy: true, live: "Talos: hi" })} />);
+  expect(s.top()).toBe(100);
+  rerender(<Conversation {...convo({ messages: [you(1), you(2)] })} />);
+  expect(s.top()).toBe(500);
+  s.set(100);
+  const t = talos({ key: "t2", status: "Planning" });
+  rerender(<Conversation {...convo({ messages: [you(1), t] })} />);
+  expect(s.top()).toBe(500);
+  s.set(100);
+  rerender(<Conversation {...convo({ messages: [you(1), { ...t, status: "Forging" }] })} />);
+  expect(s.top()).toBe(500);
+});
+
+test("an old session opens at the top and Back to now returns to the bottom", () => {
+  const { container, rerender } = render(<Conversation {...convo()} />);
+  const s = fakeScroll(container.querySelector<HTMLElement>("#msgs")!);
+  s.set(250);
+  rerender(<Conversation {...convo({ readOnly: { name: "Fibonacci tools", started: "2026-09-28T14:20" }, messages: [you(9)] })} />);
+  expect(s.top()).toBe(0);
+  s.set(40);
+  rerender(<Conversation {...convo({ readOnly: { name: "Fibonacci tools", started: "2026-09-28T14:20" }, messages: [you(9)], viewingN: 2 })} />);
+  expect(s.top()).toBe(40);
+  rerender(<Conversation {...convo()} />);
+  expect(s.top()).toBe(500);
+});
+
+test("a title change without animation shows the new title, even mid-decode", () => {
+  setReducedMotion(false);
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+  const { container, rerender } = render(<Conversation {...convo({ title: "Session 1" })} />);
+  rerender(<Conversation {...convo({ title: "Caesar cipher", animateTitle: true })} />);
+  act(() => void vi.advanceTimersByTime(100));
+  rerender(<Conversation {...convo({ title: "Session 2", animateTitle: false })} />);
+  expect(container.querySelector("#session-title")!.textContent).toBe("Session 2");
+  act(() => void vi.advanceTimersByTime(1000));
+  expect(container.querySelector("#session-title")!.textContent).toBe("Session 2");
+  vi.useRealTimers();
 });

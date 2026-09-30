@@ -8,9 +8,15 @@ export function ReaderDialog({ name, lines, onClose }: { name: string; lines: st
   const ref = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [copyLabel, setCopyLabel] = useState<string>(COPY.reader.copy);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   useFocusTrap(ref, { onEscape: onClose, initialFocus: '[data-r="close"]' });
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      pending.forEach(clearTimeout);
+      pending.clear();
+    };
+  }, []);
 
   const copy = async () => {
     try {
@@ -27,7 +33,12 @@ export function ReaderDialog({ name, lines, onClose }: { name: string; lines: st
       }
       setCopyLabel(COPY.reader.selected);
     }
-    timer.current = setTimeout(() => setCopyLabel(COPY.reader.copy), 1800);
+    // Each click sets its own timer, as the reference does (line 2036); all of them die with the dialog.
+    const t = setTimeout(() => {
+      timers.current.delete(t);
+      setCopyLabel(COPY.reader.copy);
+    }, 1800);
+    timers.current.add(t);
   };
 
   return (
