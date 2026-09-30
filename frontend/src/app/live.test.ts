@@ -14,7 +14,10 @@ import type {
   EventType,
   RunEvent,
 } from "../transport/types";
+import { act, render } from "@testing-library/react";
+import { createElement } from "react";
 import type { Mock } from "vitest";
+import { App } from "../App";
 import { Workbench } from "./workbench";
 
 /* Live mode's controller paths (spec 04 §5–§6, rulings 3, 4, 7, 10) against a fake stage 2 API. */
@@ -205,7 +208,8 @@ test("boot with a waiting last run opens the dialog from GET /runs/{id}.pending 
   const pending = { kind: "confirm_exec" as const, payload: { tool: "python_exec" as const, preview: "print('pending')" } };
   const w: World = { sessions: [detail("A", "Python", [a1])], runs: { a1: { ...a1, status: "waiting", pending } }, events: {}, tools: [] };
   const { api, stores, wb } = await start(w);
-  expect(api.getRun).toHaveBeenCalledWith("a1");
+  // The dialog's source is GET /runs/{id}, read once the backlog is quiet, not at attach time.
+  expect(api.getRun).not.toHaveBeenCalled();
   const es = streamOf("a1")!;
   const old = { kind: "confirm_exec" as const, payload: { tool: "python_exec" as const, preview: "print('old')" } };
   es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
@@ -219,6 +223,7 @@ test("boot with a waiting last run opens the dialog from GET /runs/{id}.pending 
   expect(stores.ui.get().dialog).toBeNull();
   await vi.advanceTimersByTimeAsync(1);
   expect(stores.ui.get().dialog).toEqual({ kind: "approval", runId: "a1", tool: "python_exec", code: "print('pending')" });
+  expect(api.getRun).toHaveBeenCalledWith("a1");
 
   // Esc (cancel) stops the run; it never resumes it.
   wb.answerApproval("cancel");
@@ -277,17 +282,16 @@ test("a 409 run_active re-attaches when the active run is in this session, and d
   const send = vi.fn(async () => {
     throw new ApiError(409, "run_active", "busy", "other", "s-new");
   });
-  const { api, stores, wb } = await start(w, { send });
+  const { stores, wb } = await start(w, { send });
   await wb.submit("hello");
   await flush();
-  expect(api.getRun).toHaveBeenCalledWith("other");
   expect(streamOf("other")).toBeDefined();
   expect(stores.ui.get()).toMatchObject({ busy: true, currentRunId: "other" });
 
   const b = await start(w, { send: vi.fn(async () => Promise.reject(new ApiError(409, "run_active", "busy", "else", "other-session"))) });
   await b.wb.submit("hello");
   await flush();
-  expect(b.api.getRun).not.toHaveBeenCalled();
+  expect(streamOf("else")).toBeUndefined();
   expect(b.stores.ui.get().busy).toBe(false);
 
   const c = await start(w, { send: vi.fn(async () => Promise.reject(new ApiError(500, "http_500", "boom"))) });
@@ -379,4 +383,161 @@ test("Reset is demo-only", async () => {
   await wb.reset();
   expect(api.vault).toHaveBeenCalledTimes(1);
   expect(api.createSession).toHaveBeenCalledTimes(1);
+});
+
+/* Fix round 1: the re-attach dialog fallback, the navigation race and the smaller review findings. */
+
+const confirmOld = { kind: "confirm_exec" as const, payload: { tool: "python_exec" as const, preview: "print('old')" } };
+const confirmNow = { kind: "confirm_exec" as const, payload: { tool: "python_exec" as const, preview: "print('now')" } };
+const waitingWorld = (stubStatus: ApiRunSummary["status"]): World => {
+  const a1 = summary("a1", 1, stubStatus, "Run some python");
+  return { sessions: [detail("A", "Python", [a1])], runs: { a1: { ...a1, status: "waiting", pending: confirmNow } }, events: {}, tools: [] };
+};
+
+test("a pause of 150 ms or more in a waiting run's backlog still ends with the pending dialog", async () => {
+  const { stores } = await start(waitingWorld("waiting"));
+  const es = streamOf("a1")!;
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  es.emit(ev("a1", "interrupt", confirmOld));
+  es.emit(ev("a1", "interrupt.resolved", { kind: "confirm_exec", decision: "approve" }));
+  await vi.advanceTimersByTimeAsync(400); // e.g. a slow source fetch or a reconnect
+  expect(stores.ui.get().dialog).toBeNull();
+  es.emit(ev("a1", "interrupt", confirmOld));
+  await vi.advanceTimersByTimeAsync(150);
+  expect(stores.ui.get().dialog).toEqual({ kind: "approval", runId: "a1", tool: "python_exec", code: "print('now')" });
+});
+
+test("a run reported running whose interrupt is caught up still gets its dialog from pending", async () => {
+  // GET /runs/{id} said running when the page loaded; the run paused before the reattach cutoff.
+  const w = waitingWorld("running");
+  let paused = false;
+  const getRun = vi.fn(async () => (paused ? w.runs.a1! : { ...w.runs.a1!, status: "running" as const, pending: null }));
+  const { api, stores } = await start(w, { getRun });
+  const es = streamOf("a1")!;
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  paused = true;
+  es.emit(ev("a1", "interrupt", confirmOld)); // stamped before the cutoff
+  await flush();
+  expect(stores.ui.get().dialog).toBeNull();
+  await vi.advanceTimersByTimeAsync(150);
+  expect(api.getRun).toHaveBeenCalledWith("a1");
+  expect(stores.ui.get().dialog).toMatchObject({ kind: "approval", code: "print('now')" });
+});
+
+test("a live interrupt after re-attach opens its dialog once; an answered one never reopens", async () => {
+  const { api, stores, wb } = await start(waitingWorld("running"));
+  const es = streamOf("a1")!;
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  await vi.advanceTimersByTimeAsync(200);
+  const later = "2026-09-30T12:00:05.000Z";
+  vi.setSystemTime(new Date(later));
+  es.emit(ev("a1", "interrupt", confirmOld, later));
+  await vi.advanceTimersByTimeAsync(400); // the player's own dialog, after its 350 ms moment
+  expect(stores.ui.get().dialog).toMatchObject({ kind: "approval", code: "print('old')" });
+  wb.answerApproval("yes");
+  await vi.advanceTimersByTimeAsync(1000); // /resume is in flight: the run is still waiting
+  expect(stores.ui.get().dialog).toBeNull();
+  expect(api.resume).toHaveBeenCalledTimes(1);
+  es.emit(ev("a1", "interrupt.resolved", { kind: "confirm_exec", decision: "approve" }, later));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(stores.ui.get().dialog).toBeNull();
+});
+
+test("a dialog opened from pending and answered is not reopened, before or after interrupt.resolved", async () => {
+  const { api, stores, wb } = await start(waitingWorld("waiting"));
+  const es = streamOf("a1")!;
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  es.emit(ev("a1", "interrupt", confirmOld));
+  await vi.advanceTimersByTimeAsync(150);
+  expect(stores.ui.get().dialog).not.toBeNull();
+  wb.answerApproval("yes");
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(stores.ui.get().dialog).toBeNull();
+  es.emit(ev("a1", "interrupt.resolved", { kind: "confirm_exec", decision: "approve" }, NOW));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(stores.ui.get().dialog).toBeNull();
+  expect(api.resume).toHaveBeenCalledTimes(1);
+});
+
+test("Stop before the backlog has gone quiet opens no dialog", async () => {
+  const { api, stores, wb } = await start(waitingWorld("waiting"));
+  const es = streamOf("a1")!;
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  es.emit(ev("a1", "interrupt", confirmOld));
+  await vi.advanceTimersByTimeAsync(100);
+  await wb.stop();
+  await vi.advanceTimersByTimeAsync(500);
+  expect(api.stop).toHaveBeenCalledWith("a1");
+  expect(stores.ui.get().dialog).toBeNull();
+});
+
+test("a failing GET /runs/{id} doesn't stop the re-attach: the stream opens and run.started restores the messages", async () => {
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  const { stores } = await start(waitingWorld("running"), { getRun: vi.fn(async () => Promise.reject(new Error("down"))) });
+  const es = streamOf("a1")!;
+  expect(es).toBeDefined();
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  await vi.advanceTimersByTimeAsync(200);
+  expect(cur(stores).messages.map((m) => m.kind)).toEqual(["you", "talos"]);
+  expect(stores.ui.get().busy).toBe(true);
+  err.mockRestore();
+});
+
+test("the last bench navigation wins over a slower replay", async () => {
+  const a1 = summary("a1", 1, "done");
+  const a2 = summary("a2", 2, "done");
+  const b1 = summary("b1", 1, "done");
+  const w: World = {
+    sessions: [detail("A", "Now", [a1, a2]), detail("B", "Older", [b1])],
+    runs: {},
+    events: { a1: finishedEvents(a1), a2: finishedEvents(a2), b1: finishedEvents(b1) },
+    tools: [],
+  };
+  const { api, stores, wb } = await start(w);
+  await wb.openSession("B");
+  await wb.backToNow();
+  let release: () => void = () => {};
+  api.runEvents.mockImplementationOnce(() => new Promise<RunEvent[]>((res) => (release = () => res(w.events.a1!))));
+  const slow = wb.viewRun(1);
+  await wb.openSession("B");
+  expect(stores.ui.get().viewingRunId).toBe("b1");
+  release();
+  await slow;
+  await flush();
+  expect(stores.session.get().viewId).toBe("B");
+  expect(stores.ui.get().viewingRunId).toBe("b1");
+});
+
+test("a stub listed as running that has finished since is replayed when viewed", async () => {
+  const a1 = summary("a1", 1, "done");
+  const c1 = summary("c1", 1, "running");
+  const w: World = { sessions: [detail("A", "Now", [a1])], runs: {}, events: { a1: finishedEvents(a1) }, tools: [] };
+  const { api, stores, wb } = await start(w);
+  w.sessions = [detail("C", "Other tab", [c1]), ...w.sessions];
+  await wb.showView("sessions");
+  w.runs.c1 = { ...c1, status: "done", pending: null };
+  w.events.c1 = finishedEvents(c1);
+  await wb.openSession("C");
+  expect(api.getRun).toHaveBeenCalledWith("c1");
+  expect(api.runEvents).toHaveBeenLastCalledWith("c1");
+  expect(stores.runs.get().byId.c1).toMatchObject({ status: "done", caption: "Replayed 1" });
+});
+
+test("New session logs an API error instead of rejecting", async () => {
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  const { api, stores, wb } = await start({ sessions: [], runs: {}, events: {}, tools: [] });
+  api.createSession.mockImplementation(async () => Promise.reject(new ApiError(500, "http_500", "boom")));
+  await expect(wb.newSession()).resolves.toBeUndefined();
+  expect(err).toHaveBeenCalled();
+  expect(stores.session.get().curId).toBe("s-new");
+});
+
+test("the App with real live services hides the Demo controls (spec 04 §8.1)", async () => {
+  vi.useRealTimers();
+  const { stores, services } = await createLiveServices(fakeApi({ sessions: [], runs: {}, events: {}, tools: [] }), FakeES);
+  const r = render(createElement(App, { stores, workbench: new Workbench(stores, services) }));
+  await act(async () => {});
+  expect(document.querySelector("#demo-toggle")).toBeNull();
+  expect(document.querySelector("#demo-pop")).toBeNull();
+  r.unmount();
 });

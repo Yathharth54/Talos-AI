@@ -24,6 +24,8 @@ export class Workbench {
   private hydrated = new Set<string>();
   private hydrating = new Map<string, Promise<void>>();
   private viewSeq = 0;
+  /** Bench navigation (boot, viewRun, openSession, backToNow, runs): the last one wins over a slower replay. */
+  private navSeq = 0;
 
   constructor(
     private readonly stores: Stores,
@@ -58,6 +60,7 @@ export class Workbench {
     const text = raw.trim();
     const ui = this.stores.ui.get();
     if (!text || ui.busy || this.stores.session.get().viewId) return;
+    this.navSeq++;
     this.ui({ busy: true });
     if (ui.view !== "workbench") window.location.hash = "workbench";
     const sid = this.stores.session.get().curId;
@@ -84,7 +87,7 @@ export class Workbench {
       this.ui({ busy: false });
       // Ruling 10: a run is already going. Follow it when it's in this session; there's no copy for the rest.
       if (e instanceof ApiError && e.code === "run_active") {
-        if (e.sessionId === sid && e.runId && !this.players.has(e.runId)) await this.reattach(e.runId);
+        if (e.sessionId === sid && e.runId) this.reattach(e.runId);
         return;
       }
       console.error(e);
@@ -98,7 +101,9 @@ export class Workbench {
     if (!lastId) return;
     const last = this.stores.runs.get().byId[lastId];
     if (last && (last.status === "running" || last.status === "waiting")) return this.reattach(lastId);
+    const seq = ++this.navSeq;
     await this.hydrate(lastId);
+    if (seq !== this.navSeq) return;
     this.rebench(lastId);
     this.markRunLinks();
   }
@@ -117,8 +122,11 @@ export class Workbench {
 
   private async replay(live: LiveDataSource, id: string): Promise<void> {
     const stub = this.stores.runs.get().byId[id];
-    if (!stub || stub.status === "running" || stub.status === "waiting") return;
+    if (!stub) return;
+    const active = (st: string) => st === "running" || st === "waiting";
     try {
+      // A stub listed while its run was going may have finished since (e.g. a run from another tab).
+      if (active(stub.status) && (this.players.has(id) || active((await live.getRun(id)).status))) return;
       const events = await live.runEvents(id);
       const player = new Player(this.stores, { runId: id, sessionId: stub.sessionId, momentDwell: false, replay: true, source: (t) => live.toolSource(t) });
       for (const e of events) await player.push(e);
@@ -130,32 +138,41 @@ export class Workbench {
 
   /**
    * Live: follow a running or waiting run from seq 0 (ruling 3). Its backlog applies at once; later
-   * events are paced. A waiting run's dialog comes from GET /api/runs/{id}.pending once the backlog has
-   * gone quiet, never from the replayed interrupt (the backlog may hold earlier, answered ones).
+   * events are paced. The player opens no dialog for a caught-up interrupt, so whenever the stream goes
+   * quiet while the run is paused on one that has no dialog yet, the dialog opens from
+   * GET /api/runs/{id}.pending: once per interrupt, never after it was resolved, and not after Stop.
    */
-  private async reattach(runId: string): Promise<void> {
+  private reattach(runId: string): void {
     const live = this.live;
     if (!live || this.players.has(runId)) return;
-    let info: Awaited<ReturnType<LiveDataSource["getRun"]>>;
-    try {
-      info = await live.getRun(runId);
-    } catch (err) {
-      console.error(err);
-      return;
-    }
     const sid = this.stores.session.get().curId;
     const cutoff = new Date().toISOString();
+    const cut = Date.parse(cutoff);
     const player = new Player(this.stores, { runId, sessionId: sid, momentDwell: true, source: (t) => live.toolSource(t), catchUpUntil: cutoff });
     this.players.set(runId, player);
     this.hydrated.add(runId);
+    this.navSeq++;
     this.ui({ busy: true, currentRunId: runId, viewingRunId: runId, benchKey: this.stores.ui.get().benchKey + 1 });
+    /* The seq of the unresolved interrupt, and of the last interrupt whose dialog was shown. */
+    let open: number | null = null;
+    let shown: number | null = null;
     let quiet: ReturnType<typeof setTimeout> | null = null;
-    let settled = info.status !== "waiting";
-    const openPending = () => {
-      settled = true;
+    const unanswered = (want: number) =>
+      open === want && shown !== want && !player.stopped && !this.stores.ui.get().dialog && this.stores.runs.get().byId[runId]?.status === "waiting";
+    const openPending = async () => {
+      quiet = null;
+      const want = open;
+      if (want === null || !unanswered(want)) return;
+      let info: Awaited<ReturnType<LiveDataSource["getRun"]>>;
+      try {
+        info = await live.getRun(runId);
+      } catch (err) {
+        console.error(err);
+        return;
+      }
       const p = info.pending;
-      const run = this.stores.runs.get().byId[runId];
-      if (!p || run?.status !== "waiting" || this.stores.ui.get().dialog) return;
+      if (info.status !== "waiting" || !p || !unanswered(want)) return;
+      shown = want;
       this.ui({
         dialog:
           p.kind === "confirm_exec"
@@ -165,10 +182,14 @@ export class Workbench {
     };
     const sink = this.liveSink(player);
     this.services.transport.subscribe(runId, async (e) => {
+      // Tracked on arrival, in stream order. A later interrupt's dialog is the player's own.
+      if (e.type === "interrupt") {
+        open = e.seq;
+        if (!(Date.parse(e.ts) <= cut)) shown = e.seq;
+      } else if (e.type === "interrupt.resolved" || e.type === "run.finished") open = null;
       await sink(e);
-      if (settled) return;
       if (quiet) clearTimeout(quiet);
-      quiet = setTimeout(openPending, BACKLOG_QUIET_MS);
+      quiet = open === null || shown === open ? null : setTimeout(() => void openPending(), BACKLOG_QUIET_MS);
     });
   }
 
@@ -267,8 +288,9 @@ export class Workbench {
     const shown = shownSession(this.stores.session.get());
     const id = shown.runIds.find((rid) => this.stores.runs.get().byId[rid]?.n === n);
     if (!id) return;
+    const seq = ++this.navSeq;
     return this.thenShow(this.live ? () => this.hydrate(id) : null, () => {
-      if (this.stores.ui.get().busy) return;
+      if (seq !== this.navSeq || this.stores.ui.get().busy) return;
       this.rebench(id);
       const bench = document.getElementById("bench");
       if (bench) bench.scrollTop = 0;
@@ -289,7 +311,15 @@ export class Workbench {
     if (this.stores.ui.get().busy) return;
     if (this.stores.session.get().viewId) await this.backToNow();
     const live = this.live;
-    const rec = live ? await live.newSession() : await this.services.data.newSession(this.stores.session.get().count + 1);
+    let rec: { id: string; name: string; started: string };
+    try {
+      rec = live ? await live.newSession() : await this.services.data.newSession(this.stores.session.get().count + 1);
+    } catch (err) {
+      // Ruling 10: API errors are logged; there is no copy for them.
+      console.error(err);
+      return;
+    }
+    this.navSeq++;
     if (live) {
       // "New this session" follows the new session.
       live.setCurrentStarted(rec.started);
@@ -312,8 +342,9 @@ export class Workbench {
     window.location.hash = "workbench";
     if (id === ss.curId) return this.backToNow();
     const target = sess.runIds.at(-1) ?? null;
+    const seq = ++this.navSeq;
     return this.thenShow(this.live && target ? () => this.hydrate(target) : null, () => {
-      if (this.stores.ui.get().busy) return;
+      if (seq !== this.navSeq || this.stores.ui.get().busy) return;
       this.stores.session.set({ viewId: id });
       this.rebench(target, this.titleAnimated());
       this.markRunLinks();
@@ -327,7 +358,9 @@ export class Workbench {
     const ss = this.stores.session.get();
     if (!ss.viewId) return;
     const target = curSession(ss).runIds.at(-1) ?? null;
+    const seq = ++this.navSeq;
     return this.thenShow(this.live && target ? () => this.hydrate(target) : null, () => {
+      if (seq !== this.navSeq) return;
       this.stores.session.set({ viewId: null });
       this.rebench(target, this.titleAnimated());
       this.markRunLinks();

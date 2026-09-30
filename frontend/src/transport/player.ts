@@ -120,6 +120,10 @@ export class Player {
     this.aborted = true;
     this.wake?.();
   }
+  /** Whether Stop (or Reset) has aborted this player. */
+  get stopped(): boolean {
+    return this.aborted;
+  }
   /** Reset: nothing more is applied. */
   dispose(): void {
     this.gone = true;
