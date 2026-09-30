@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { COPY, fill } from "../../../lib/copy";
 import type { Attempt, Smoke, TestsState } from "../../../store/types";
 import { TickIcon, XIcon } from "../../icons";
@@ -19,6 +19,12 @@ type TestsPanelProps = { runId: string; tests: TestsState | undefined; smoke: Sm
 
 /** The tests panel (testsHtml, lines 1181–1200). */
 export function TestsPanel({ runId, tests, smoke, attempts }: TestsPanelProps) {
+  // The reference redraws this panel only when it calls renderPanel(): for this tab, when the tests or
+  // the smoke test change, or when the panel is drawn afresh (a mount here). A React re-render for
+  // anything else (a caption, a node, a dialog) must show what the last redraw showed, so the marks
+  // are read once per redraw rather than on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const marks = useMemo(() => ({ drawn: new Set(drawnSet), flashed: new Set(flashedSet) }), [runId, tests, smoke]);
   useEffect(() => {
     if (!tests) return;
     for (const x of tests.list) {
@@ -42,14 +48,14 @@ export function TestsPanel({ runId, tests, smoke, attempts }: TestsPanelProps) {
         <ul className="tests">
           {tests.list.map((x) => {
             const k = `${runId}:${tests.attempt}:${x.name}`;
-            const flash = x.state === "failed" && !(x.flashed || flashedSet.has(k)) ? " just-failed" : "";
+            const flash = x.state === "failed" && !(x.flashed || marks.flashed.has(k)) ? " just-failed" : "";
             return (
               <li key={x.name} className={`${x.state}${flash}`}>
                 <span>{x.name}</span>
                 <span className="st">
                   {x.state === "passed" ? (
                     <>
-                      <TickIcon done={!!x.drawn || drawnSet.has(k)} />
+                      <TickIcon done={!!x.drawn || marks.drawn.has(k)} />
                       {COPY.tests.passed}
                     </>
                   ) : x.state === "failed" ? (

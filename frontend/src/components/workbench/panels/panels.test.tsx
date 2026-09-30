@@ -75,6 +75,15 @@ const drawnState = (container: HTMLElement) => ({
   failed: container.querySelector("li.failed")!.className,
 });
 
+test("a re-render that doesn't change the tests isn't a renderPanel(): the tick stays undrawn (weather-save flow)", () => {
+  const run = { ...unmarked(asRun(fixtureCase("panel/tests-mixed").state.run)), id: "run-redraw" };
+  const { rerender, container } = render(<Panel run={run} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
+  rerender(<Panel run={{ ...run, caption: "something else" }} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
+  expect(drawnState(container)).toEqual({ ticks: ["tick"], failed: "failed just-failed" });
+  rerender(<Panel run={{ ...run, tests: { ...run.tests! } }} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
+  expect(drawnState(container)).toEqual({ ticks: ["tick done"], failed: "failed" });
+});
+
 test("after clearTestMarks() (demo reset), a replayed run's tests animate again", () => {
   const run = unmarked(asRun(fixtureCase("panel/tests-mixed").state.run));
   const first = render(<Panel run={run} isCurrent={false} tool={undefined} earlier={null} onAsk={noop} onOpenTool={noop} onRun={noop} />);
