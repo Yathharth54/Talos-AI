@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import string
 from pathlib import Path
 
@@ -52,11 +53,62 @@ def test_there_is_copy_to_check():
     assert len(copy_templates()) > 100
 
 
+# A fieldless string must be a whole JS string literal or a whole HTML text node.
+_QUOTES = ('"', "'", "`")
+
+
+def appears_whole(literal: str, text: str) -> bool:
+    """`literal` is a whole quoted literal ("x", 'x', `x`) or a whole text node (>x<)."""
+    if any(f"{q}{literal}{q}" in text for q in _QUOTES):
+        return True
+    return re.search(r">\s*" + re.escape(literal) + r"\s*<", text) is not None
+
+
+def template_pattern(template: str) -> re.Pattern[str]:
+    """Literal parts in order; each `{field}` matches `${...}` or any concrete text."""
+    pattern = ""
+    for text, field, *_ in string.Formatter().parse(template):
+        pattern += re.escape(text)
+        if field is not None:
+            pattern += r"(?:\$\{[^}]*\}|[^\n]*?)"
+    return re.compile(pattern)
+
+
+def has_fields(template: str) -> bool:
+    return any(field is not None for _, field, *_ in string.Formatter().parse(template))
+
+
 @pytest.mark.parametrize("name", sorted(copy_templates()))
 def test_every_copy_string_appears_verbatim_in_the_reference(name):
-    text = reference_text()
-    for part in literal_parts(copy_templates()[name]):
-        assert part in text, f"{name}: {part!r} is not in the reference demo"
+    template, text = copy_templates()[name], reference_text()
+    if not template:
+        return
+    if has_fields(template):
+        assert template_pattern(template).search(text), (
+            f"{name}: {template!r} does not match the reference demo"
+        )
+    else:
+        literal = "".join(literal_parts(template))
+        assert appears_whole(literal, text), (
+            f"{name}: {literal!r} is not a whole string or text node in the reference demo"
+        )
+
+
+def test_appears_whole_rejects_fragments():
+    assert appears_whole("Saved", '<b>"Saved"</b>')
+    assert appears_whole("Saved", "<b> Saved </b>")
+    assert not appears_whole("Saved by", '"Saved by Human check this session."')
+
+
+def test_template_fields_match_interpolations_or_text():
+    pattern = template_pattern("Writing {tool} now")
+    assert pattern.search("`Writing ${S.tool} now`")
+    assert pattern.search('"Writing caesar_cipher now"')
+    assert not pattern.search('"Writing\nnow"')
+
+
+def test_key_saved_by_human_check_is_the_demo_sentence():
+    assert copy.KEY_SAVED_BY_HUMAN_CHECK == "Saved by Human check this session."
 
 
 def test_recovery_summary_matches_the_copy():

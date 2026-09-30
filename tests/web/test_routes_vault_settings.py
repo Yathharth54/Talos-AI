@@ -108,7 +108,7 @@ async def test_settings_shape_and_key_rows(client, dotenv, monkeypatch):
         "name": "OPENWEATHERMAP_API_KEY",
         "set": True,
         "required": False,
-        "description": "Saved by Human check",
+        "description": "Saved by Human check this session.",
     }
     assert "OTHER" not in keys
     text = (await client.get("/api/settings")).text

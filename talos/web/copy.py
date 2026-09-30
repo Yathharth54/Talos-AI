@@ -226,7 +226,7 @@ KEY_DESCRIPTIONS = {
     "JINA_API_KEY": "Optional. Raises web-reading limits.",
     "LANGSMITH_API_KEY": "Optional. Traces every node in LangSmith.",
 }
-KEY_SAVED_BY_HUMAN_CHECK = "Saved by Human check"
+KEY_SAVED_BY_HUMAN_CHECK = "Saved by Human check this session."
 
 # ---- strings the demo never needed (frontend spec §7) ---------------------------------------
 
