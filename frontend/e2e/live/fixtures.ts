@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 // frontend/ is an ES module package, so there is no __dirname. npm scripts run in frontend/ (part A's convention).
 export const DOTENV = resolve(process.cwd(), ".e2e-tmp/.env");
 
-type RunInfo = { id: string; n: number; status: string };
+export type RunInfo = { id: string; n: number; status: string; sessionId: string };
 
 export class LiveApp {
   runs: RunInfo[] = [];
@@ -23,9 +23,12 @@ export class LiveApp {
     const posted = this.page.waitForResponse((r) => /\/api\/sessions\/[^/]+\/messages$/.test(r.url()) && r.request().method() === "POST");
     await this.page.locator("#ask").fill(text);
     await this.page.locator("#ask").press("Enter");
-    const body = (await (await posted).json()) as { run: RunInfo };
-    this.runs.push(body.run);
-    return body.run;
+    const res = await posted;
+    const body = (await res.json()) as { run: Omit<RunInfo, "sessionId"> };
+    const sessionId = /\/api\/sessions\/([^/]+)\/messages$/.exec(res.url())?.[1] ?? "";
+    const run = { ...body.run, sessionId };
+    this.runs.push(run);
+    return run;
   }
 
   /** Wait until the run is finished on the server and its "View this run" link is on the page. */
@@ -59,18 +62,22 @@ export class LiveApp {
 
   /**
    * Record every caption `#b-cap` shows from now on. A caption is replaced by the next step's within a few
-   * dwells, so one that isn't the run's last is asserted from this record.
+   * dwells, so one that isn't the run's last is asserted from this record. The caption already on the bench
+   * (the previous run's) isn't recorded, unless a new bench shows it again.
    */
   async trackCaptions(): Promise<() => Promise<string[]>> {
     await this.page.evaluate(() => {
       const w = window as unknown as { __caps: string[] };
       w.__caps = [];
+      const el0 = document.querySelector("#b-cap");
+      const t0 = el0?.textContent ?? "";
       const scan = () => {
-        const t = document.querySelector("#b-cap")?.textContent ?? "";
-        if (t && w.__caps[w.__caps.length - 1] !== t) w.__caps.push(t);
+        const el = document.querySelector("#b-cap");
+        const t = el?.textContent ?? "";
+        if (!t || (el === el0 && t === t0)) return;
+        if (w.__caps[w.__caps.length - 1] !== t) w.__caps.push(t);
       };
       new MutationObserver(scan).observe(document.body, { subtree: true, childList: true, characterData: true });
-      scan();
     });
     return () => this.page.evaluate(() => (window as unknown as { __caps: string[] }).__caps);
   }
@@ -119,6 +126,15 @@ export class LiveApp {
     }
     await this.setAskBeforeExec(true);
   }
+}
+
+/** The final state of a Caesar forge with one retry (01-caesar's forge test, and 06's reload into one). */
+export async function expectCaesarForged(page: Page): Promise<void> {
+  for (const [k, s] of Object.entries({ planner: "done", forger: "forge", tester: "forge", human: "skip", learn: "done", executor: "done", answer: "answer" }))
+    await expect(page.locator(`[data-node="${k}"]`)).toHaveClass(new RegExp(`\\b${s}\\b`));
+  const talos = page.locator(".msg.talos").last();
+  await expect(talos).toContainText('"TALOS AGENT" encrypted with a shift of 7 is AHSVZ HNLUA.');
+  await expect(talos.locator(".chip.forged")).toHaveText("Forged caesar_cipher");
 }
 
 export const test = base.extend<{ app: LiveApp }>({

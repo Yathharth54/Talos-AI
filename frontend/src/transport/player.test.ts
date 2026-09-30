@@ -277,6 +277,8 @@ test("an interrupt that arrives after Stop opens no dialog", async () => {
   p.abort();
   await p.push(ev("interrupt", { kind: "missing_api_key", payload: { tool_name: "get_current_temperature", env_var: "OPENWEATHERMAP_API_KEY", service: "OpenWeatherMap" } }));
   expect(s.ui.get().dialog).toBeNull();
+  // The run is still marked paused; run.finished(stopped) settles it.
+  expect(run(s).status).toBe("waiting");
 });
 
 describe.each([

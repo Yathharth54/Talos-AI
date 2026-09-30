@@ -280,6 +280,8 @@ export class Player {
         this.up((r) => R.patch(r, { status: "waiting" }));
         // A caught-up interrupt's dialog comes from GET /api/runs/{id}.pending (the Workbench's reattach).
         // After Stop the run is being stopped on the server, so its interrupt asks nothing (stopRun, line 1485).
+        // This assumes the /stop request reaches the server: if it fails, the run stays paused with no dialog
+        // (the re-attach fallback is gated on Stop too), and Stop is the way out. There's no error copy (ruling 10).
         if (this.opts.replay || this.catching || this.aborted) return;
         this.stores.ui.set({
           dialog:

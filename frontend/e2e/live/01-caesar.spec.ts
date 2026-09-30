@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, expectCaesarForged } from "./fixtures";
 import { Q } from "../support/queries";
 
 test.describe.serial("Caesar: forge, reuse, failure and prune", () => {
@@ -8,13 +8,9 @@ test.describe.serial("Caesar: forge, reuse, failure and prune", () => {
     const run = await app.ask(Q.forge);
     await app.finished(run);
     expect((await nodes()).planner?.some((c) => /\bactive\b/.test(c))).toBe(true);
-    for (const [k, s] of Object.entries({ planner: "done", forger: "forge", tester: "forge", human: "skip", learn: "done", executor: "done", answer: "answer" }))
-      await expect(page.locator(`[data-node="${k}"]`)).toHaveClass(new RegExp(`\\b${s}\\b`));
+    await expectCaesarForged(page);
     await expect(page.locator(".banner:not(.removed)")).toContainText("caesar_cipher is in the vault");
     await expect(page.locator("#vault-badge")).toBeVisible();
-    const talos = page.locator(".msg.talos").last();
-    await expect(talos).toContainText('"TALOS AGENT" encrypted with a shift of 7 is AHSVZ HNLUA.');
-    await expect(talos.locator(".chip.forged")).toHaveText("Forged caesar_cipher");
     await page.locator('[data-tab="attempts"]').click();
     await expect(page.locator(".attempts li")).toHaveCount(2);
     await expect(page.locator(".attempts li").nth(1)).toContainText("Passed every test");
