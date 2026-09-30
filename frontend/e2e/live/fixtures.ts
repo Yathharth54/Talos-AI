@@ -36,6 +36,27 @@ export class LiveApp {
     return (await (await this.api.get(`/api/runs/${run.id}`)).json()).status as string;
   }
 
+  /**
+   * Record every class a strip node takes from now on. In reduced motion a node can be active for about 40 ms,
+   * which is shorter than an expect() poll, so a live state is asserted from this record instead.
+   */
+  async trackNodes(): Promise<() => Promise<Record<string, string[]>>> {
+    await this.page.evaluate(() => {
+      const w = window as unknown as { __nodes: Record<string, string[]> };
+      w.__nodes = {};
+      const scan = () => {
+        for (const el of document.querySelectorAll("#b-strip [data-node]")) {
+          const k = el.getAttribute("data-node") ?? "";
+          const seen = (w.__nodes[k] ??= []);
+          if (seen[seen.length - 1] !== el.className) seen.push(el.className);
+        }
+      };
+      new MutationObserver(scan).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+      scan();
+    });
+    return () => this.page.evaluate(() => (window as unknown as { __nodes: Record<string, string[]> }).__nodes);
+  }
+
   async vaultNames(): Promise<string[]> {
     const v = (await (await this.api.get("/api/vault")).json()) as { tools: { name: string }[] };
     return v.tools.map((t) => t.name);

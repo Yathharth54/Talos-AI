@@ -1,0 +1,51 @@
+import { test, expect } from "./fixtures";
+import { Q } from "../support/queries";
+
+test.describe.serial("Caesar: forge, reuse, failure and prune", () => {
+  test("forge with one retry", async ({ app, page }) => {
+    await app.dropTool("caesar_cipher");
+    const nodes = await app.trackNodes();
+    const run = await app.ask(Q.forge);
+    await app.finished(run);
+    expect((await nodes()).planner?.some((c) => /\bactive\b/.test(c))).toBe(true);
+    for (const [k, s] of Object.entries({ planner: "done", forger: "forge", tester: "forge", human: "skip", learn: "done", executor: "done", answer: "answer" }))
+      await expect(page.locator(`[data-node="${k}"]`)).toHaveClass(new RegExp(`\\b${s}\\b`));
+    await expect(page.locator(".banner:not(.removed)")).toContainText("caesar_cipher is in the vault");
+    await expect(page.locator("#vault-badge")).toBeVisible();
+    const talos = page.locator(".msg.talos").last();
+    await expect(talos).toContainText('"TALOS AGENT" encrypted with a shift of 7 is AHSVZ HNLUA.');
+    await expect(talos.locator(".chip.forged")).toHaveText("Forged caesar_cipher");
+    await page.locator('[data-tab="attempts"]').click();
+    await expect(page.locator(".attempts li")).toHaveCount(2);
+    await expect(page.locator(".attempts li").nth(1)).toContainText("Passed every test");
+    expect(await app.vaultNames()).toContain("caesar_cipher");
+  });
+
+  test("reuse from the vault", async ({ app, page }) => {
+    const run = await app.ask(Q.reuse);
+    await app.finished(run);
+    await expect(page.locator('[data-node="vault"]')).toHaveClass(/\bdone\b/);
+    await expect(page.locator('[data-node="skip"]')).toHaveClass(/\bskip\b/);
+    const talos = page.locator(".msg.talos").last();
+    await expect(talos).toContainText("It decrypts to TALOS AGENT.");
+    await expect(talos.locator(".chip.reused")).toHaveText("Reused caesar_cipher from the vault");
+    await page.locator('[data-tab="log"]').click();
+    await expect(page.locator("#term")).toHaveClass(/\bwarm\b/);
+    await expect(page.locator("#term-status")).toHaveText("0 tools forged");
+  });
+
+  test("a word shift fails once, then the second failure prunes the tool", async ({ app, page }) => {
+    let run = await app.ask(Q.fail);
+    await app.finished(run);
+    await expect(page.locator('[data-node="executor"]')).toHaveClass(/\bfail\b/);
+    await expect(page.locator(".fig.alert .result")).toHaveText("TypeError: shift must be an int, got str");
+    await expect(page.locator(".args .bad")).toHaveText('"seven"');
+    await expect(page.getByRole("button", { name: "Ask again with shift 7" })).toBeVisible();
+    await expect(page.locator(".msg.talos").last().locator(".chip.failed")).toHaveText("caesar_cipher raised a TypeError");
+
+    run = await app.ask(Q.fail);
+    await app.finished(run);
+    await expect(page.locator(".banner.removed")).toContainText("caesar_cipher was removed from the vault");
+    expect(await app.vaultNames()).not.toContain("caesar_cipher");
+  });
+});
