@@ -10,7 +10,7 @@ import { bareZeros } from "../../lib/style";
 export interface VaultDetailProps {
   tool: VaultTool | undefined;
   source: string[] | null;
-  demo?: boolean;
+  demo: boolean;
   confirmRemove: string | null;
   onRead(name: string): void;
   onUse(name: string): void;
@@ -18,7 +18,7 @@ export interface VaultDetailProps {
 }
 
 /** renderDetail (lines 1984–2013). The `swap` class appears with the first tool shown (kept from then on) and is replayed when the selection changes. */
-export function VaultDetail({ tool: t, source: src, demo = true, confirmRemove, onRead, onUse, onRemove }: VaultDetailProps) {
+export function VaultDetail({ tool: t, source: src, demo, confirmRemove, onRead, onUse, onRemove }: VaultDetailProps) {
   const ref = useRef<HTMLElement>(null);
   useRestartAnimation(ref, "swap", t?.name ?? null);
   // The reference adds `swap` the first time a tool is shown and never removes it (it only replays it).

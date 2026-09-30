@@ -55,7 +55,7 @@ export function Idle(props: IdleProps) {
         </div>
         <p className="setup-line">
           {fill(COPY.idle.setup, {
-            keys: keys ? `${keys.set} of ${keys.total}` : weatherKeySet ? COPY.idle.keysWithWeather : COPY.idle.keysWithout,
+            keys: keys ? fill(COPY.idle.keysOfTotal, keys) : weatherKeySet ? COPY.idle.keysWithWeather : COPY.idle.keysWithout,
             state: askExec ? COPY.idle.on : COPY.idle.off,
           })}
           <a href="#settings">{COPY.idle.settings}</a>

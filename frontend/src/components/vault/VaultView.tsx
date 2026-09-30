@@ -16,8 +16,8 @@ export interface VaultViewProps {
   renderKey: number;
   confirmRemove: string | null;
   source: string[] | null;
-  /** Demo mode only: shows the "source lives at" line. Defaults to true so part A callers are unchanged. */
-  demo?: boolean;
+  /** Demo mode only shows the "source lives at" line. Required so live mode can never fall back to demo copy. */
+  demo: boolean;
   onQuery(q: string): void;
   onFilter(f: Filter): void;
   onSelect(name: string): void;
@@ -108,7 +108,7 @@ export function VaultView(p: VaultViewProps) {
       <VaultDetail
         tool={findTool(p.tools, effective)}
         source={p.source}
-        demo={p.demo ?? true}
+        demo={p.demo}
         confirmRemove={p.confirmRemove}
         onRead={p.onRead}
         onUse={p.onUse}

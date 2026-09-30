@@ -14,6 +14,7 @@ const view = (s: Record<string, unknown>, extra: Partial<VaultViewProps> = {}) =
     selected={(s.selected as string | null) ?? null}
     stagger={!!s.stagger}
     renderKey={0}
+    demo
     confirmRemove={null}
     source={(s.source as string[] | undefined) ?? null}
     onQuery={noop} onFilter={noop} onSelect={noop} onFallbackSelect={noop} onRead={noop} onUse={noop} onRemove={noop}
@@ -64,4 +65,13 @@ test("search, filters, selection, read and use call back", () => {
   expect(onFilter).toHaveBeenCalledWith("web");
   expect(onSelect).toHaveBeenCalledWith("slugify");
   expect(onUse).toHaveBeenCalledWith("hex_to_rgb");
+});
+
+test("live mode (demo=false) never shows the demo's source line, demo mode does", () => {
+  const tools = [{ name: "t", args: "x", ret: "str", desc: "d", kw: [], uses: 0, fails: 0, streak: 0, created: "2026-09-30T10:00:00.000Z", last: "", lastFail: "", lastFailAt: "", web: false, fresh: false }];
+  for (const demo of [true, false]) {
+    const { container, unmount } = render(view({ tools, selected: "t" }, { demo }));
+    expect(container.textContent?.includes("This demo only bundles")).toBe(demo);
+    unmount();
+  }
 });

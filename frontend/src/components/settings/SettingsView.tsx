@@ -18,15 +18,16 @@ export function SettingsView({ askExec, env, model, onToggleAsk, live }: Setting
   const swRef = useRef<HTMLButtonElement>(null);
   const weather = !!env.OPENWEATHERMAP_API_KEY;
   const desc = t.keyDesc as Record<string, string | undefined>;
-  const keys: [string, boolean, string][] = live
-    ? live.keys.map((k) => [k.name, k.set, desc[k.name] ?? t.keyDesc.savedByHuman])
-    : [
+  const fixed: [string, boolean, string][] = [
     ["OPENROUTER_API_KEY", true, t.keyDesc.OPENROUTER_API_KEY],
     ["TAVILY_API_KEY", true, t.keyDesc.TAVILY_API_KEY],
     ["JINA_API_KEY", false, t.keyDesc.JINA_API_KEY],
     ["LANGSMITH_API_KEY", false, t.keyDesc.LANGSMITH_API_KEY],
     ["OPENWEATHERMAP_API_KEY", weather, weather ? t.keyDesc.savedByHuman : t.keyDesc.askedWhenNeeded],
-      ];
+  ];
+  const keys: [string, boolean, string][] = live
+    ? live.keys.map((k) => [k.name, k.set, desc[k.name] ?? t.keyDesc.savedByHuman])
+    : fixed;
   return (
     <>
       <h1>{t.title}</h1>
@@ -90,11 +91,11 @@ export function SettingsView({ askExec, env, model, onToggleAsk, live }: Setting
           </div>
           <div>
             <dt>{t.testLimit}</dt>
-            <dd>{live ? `${live.testTimeoutS} seconds` : t.testLimitValue}</dd>
+            <dd>{live ? fill(t.secondsValue, { n: live.testTimeoutS }) : t.testLimitValue}</dd>
           </div>
           <div>
             <dt>{t.modelLimit}</dt>
-            <dd>{live ? `${Math.round(live.llmTimeoutS)} seconds` : t.modelLimitValue}</dd>
+            <dd>{live ? fill(t.secondsValue, { n: Math.round(live.llmTimeoutS) }) : t.modelLimitValue}</dd>
           </div>
           <div>
             <dt>{t.pruneAfter}</dt>
