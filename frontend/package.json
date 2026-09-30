@@ -1,0 +1,10 @@
+{
+  "name": "talos-workbench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder until stage 04 ports the Workbench. Stage 04 replaces this file.",
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && cp placeholder.html dist/index.html",
+    "dev": "echo 'The Workbench frontend arrives in stage 04.' && exit 1"
+  }
+}
