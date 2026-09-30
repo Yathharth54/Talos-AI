@@ -54,6 +54,11 @@ def _keys() -> list[KeyOut]:
 
 
 def current_settings() -> SettingsOut:
+    """The Settings page: model, limits, the "Ask before running code" switch and key rows.
+
+    Returns:
+        The settings as this process applies them now. Key values are never included.
+    """
     return SettingsOut(
         model=settings.TALOS_MODEL,
         ask_before_exec=not settings.auto_approve_exec(),
@@ -67,6 +72,7 @@ def current_settings() -> SettingsOut:
 
 @router.get("/settings", response_model=SettingsOut)
 async def get_settings() -> SettingsOut:
+    """The current settings (see `current_settings`)."""
     return current_settings()
 
 

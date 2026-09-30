@@ -43,6 +43,14 @@ class ApiError(Exception):
 
 
 def not_found(what: str) -> ApiError:
+    """A 404 `not_found` error.
+
+    Args:
+        what: The missing thing, e.g. "Session".
+
+    Returns:
+        An ApiError with the message "{what} not found."
+    """
     return ApiError(404, "not_found", f"{what} not found.")
 
 
@@ -79,16 +87,20 @@ def install_error_handlers(app: FastAPI) -> None:
 
 
 def get_services(request: Request) -> Services:
+    """The services bundle built at startup (FastAPI dependency)."""
     return request.app.state.services
 
 
 def get_store(request: Request) -> Store:
+    """The app's Store (FastAPI dependency)."""
     return request.app.state.services.store
 
 
 def get_vault(request: Request) -> SkillManager:
+    """The vault the app runs against (FastAPI dependency)."""
     return request.app.state.services.vault
 
 
 def get_manager(request: Request) -> RunManager:
+    """The app's RunManager (FastAPI dependency)."""
     return request.app.state.manager

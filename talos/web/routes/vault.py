@@ -36,6 +36,11 @@ async def list_vault(vault: SkillManager = Depends(get_vault)) -> VaultListOut:
 
 @router.get("/vault/{name}", response_model=VaultDetail)
 async def get_tool(name: str, vault: SkillManager = Depends(get_vault)) -> VaultDetail:
+    """One tool with its source file and line count.
+
+    Raises:
+        ApiError: 404 `not_found` when the manifest has no such tool.
+    """
     entry = vault.get(name)
     if entry is None:
         raise not_found("Tool")
@@ -46,7 +51,11 @@ async def get_tool(name: str, vault: SkillManager = Depends(get_vault)) -> Vault
 
 @router.delete("/vault/{name}", status_code=204)
 async def remove_tool(name: str, vault: SkillManager = Depends(get_vault)) -> Response:
-    """Take a tool out of the manifest. Its .py file stays on disk."""
+    """Take a tool out of the manifest. Its .py file stays on disk.
+
+    Raises:
+        ApiError: 404 `not_found` when the manifest has no such tool.
+    """
     if not vault.remove(name):
         raise not_found("Tool")
     return Response(status_code=204)

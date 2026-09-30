@@ -42,6 +42,11 @@ async def list_sessions(store: Store = Depends(get_store)) -> list[SessionSummar
 
 @router.get("/sessions/{session_id}", response_model=SessionDetailOut)
 async def get_session(session_id: uuid.UUID, store: Store = Depends(get_store)) -> SessionDetailOut:
+    """One session with its messages and runs.
+
+    Raises:
+        ApiError: 404 `not_found` when there is no such session.
+    """
     session = await store.get_session(session_id)
     if session is None:
         raise not_found("Session")
@@ -56,6 +61,11 @@ async def get_session(session_id: uuid.UUID, store: Store = Depends(get_store)) 
 async def rename_session(
     session_id: uuid.UUID, body: RenameIn, store: Store = Depends(get_store)
 ) -> SessionOut:
+    """Rename a session.
+
+    Raises:
+        ApiError: 404 `not_found` when there is no such session.
+    """
     session = await store.rename_session(session_id, body.name)
     if session is None:
         raise not_found("Session")

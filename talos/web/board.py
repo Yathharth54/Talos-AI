@@ -122,6 +122,11 @@ class Board:
     # ---- narration ---------------------------------------------------------------
 
     def caption(self, html: str) -> None:
+        """`caption`: the text under the graph strip.
+
+        Args:
+            html: Caption HTML from `copy` (user text already escaped).
+        """
         self.emit("caption", html=html)
 
     def log(
@@ -158,14 +163,25 @@ class Board:
     # ---- outcome ------------------------------------------------------------------
 
     def add_forged(self, tool: str) -> None:
+        """Record a tool this run forged (once each, in order).
+
+        Args:
+            tool: The tool name; empty names are ignored.
+        """
         if tool and tool not in self.state["forged"]:
             self.state["forged"].append(tool)
 
     def add_used(self, tool: str) -> None:
+        """Record a tool this run used (once each, in order).
+
+        Args:
+            tool: The tool name; empty names are ignored.
+        """
         if tool and tool not in self.state["used"]:
             self.state["used"].append(tool)
 
     def mark_failed(self) -> None:
+        """Mark the run as having a failure (stored as `runs.failed`)."""
         self.state["failed"] = True
 
     def stop(self) -> None:

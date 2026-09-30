@@ -49,6 +49,14 @@ def error_type(error: str | None) -> str:
 
 
 def attempts_phrase(n: int) -> str:
+    """`1 attempt` or `N attempts`.
+
+    Args:
+        n: The number of forge attempts.
+
+    Returns:
+        The phrase used in summaries and captions.
+    """
     return "1 attempt" if n == 1 else f"{n} attempts"
 
 

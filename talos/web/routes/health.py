@@ -13,6 +13,11 @@ router = APIRouter()
 
 
 def app_version() -> str:
+    """The installed talos-ai package version.
+
+    Returns:
+        The version string, or "0.0.0" when the package isn't installed.
+    """
     try:
         return version("talos-ai")
     except PackageNotFoundError:
