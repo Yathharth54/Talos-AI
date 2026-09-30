@@ -31,6 +31,8 @@ FORGE_MAX_RETRIES = int(os.environ.get("TALOS_FORGE_MAX_RETRIES", "3"))
 # Per-request LLM timeout (seconds). The OpenAI SDK default is 600s, so a
 # stalled provider response would otherwise hang a query for minutes.
 LLM_TIMEOUT = float(os.environ.get("TALOS_LLM_TIMEOUT", "120"))
+# Wall-clock limit (seconds) for one sandboxed forged-tool call.
+TOOL_TIMEOUT = float(os.environ.get("TALOS_TOOL_TIMEOUT", "30"))
 
 
 # Set by the web app from its "Ask before running code" setting. None means
