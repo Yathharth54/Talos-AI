@@ -91,6 +91,7 @@ export const COPY = {
     argsCap: "Filled in by the Executor",
     resolving: "resolving",
     errorCap: "The tool raised an error",
+    declinedWhen: "You chose Don't run",
     result: "Result",
     waiting: "Waiting for the Executor",
     output: "Output",

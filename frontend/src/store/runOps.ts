@@ -53,21 +53,32 @@ export function log(run: Run, label: string, text: string, tone = "", opts: { ca
 }
 export const logPop = (run: Run): Run => ({ ...run, log: run.log.slice(0, -1) });
 
-/** typeCmd() (line 1296), in three steps so the player can pace it. */
-export const startCmd = (run: Run, text: string): Run => ({ ...run, log: [...run.log, { kind: "cmd", text, shown: 0, typing: true, key: nextKey() }] });
+/**
+ * The reference's log() sets `fresh` back to false right after drawing the line (line 1285), so the
+ * class stays on screen only until the log is next redrawn (log(), typeCmd(), renderPanel on the Log tab).
+ */
+export const clearFresh = (run: Run): Run =>
+  run.log.some((l) => l.kind !== "cmd" && l.fresh) ? { ...run, log: run.log.map((l) => (l.kind !== "cmd" && l.fresh ? { ...l, fresh: false } : l)) } : run;
+
+/** typeCmd() (line 1296), in three steps so the player can pace it. Each step redraws the log. */
+export const startCmd = (run: Run, text: string): Run => {
+  const r = clearFresh(run);
+  return { ...r, log: [...r.log, { kind: "cmd", text, shown: 0, typing: true, key: nextKey() }] };
+};
 export function typeCmd(run: Run, shown: number): Run {
-  const log = run.log.slice();
+  const log = clearFresh(run).log.slice();
   const i = log.length - 1;
   const last = log[i];
   if (last?.kind === "cmd") log[i] = { ...last, shown };
   return { ...run, log };
 }
 export function endCmd(run: Run): Run {
-  const log = run.log.map((l) => (l.kind === "cmd" && l.typing ? { ...l, typing: false, shown: null } : l));
+  const log = clearFresh(run).log.map((l) => (l.kind === "cmd" && l.typing ? { ...l, typing: false, shown: null } : l));
   return { ...run, log };
 }
 
-export const setTab = (run: Run, tab: TabId): Run => ({ ...run, tab });
+/** setTab() (line 1135); showing the Log tab redraws it, which drops `fresh`. */
+export const setTab = (run: Run, tab: TabId): Run => ({ ...(tab === "log" ? clearFresh(run) : run), tab });
 export const setCaption = (run: Run, caption: string): Run => ({ ...run, caption });
 export const setLabel = (run: Run, label: string): Run => ({ ...run, label });
 export const setSig = (run: Run, sig: Sig | null): Run => ({ ...run, sig });

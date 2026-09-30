@@ -1,6 +1,6 @@
 import { fixtureCase, snap } from "../test/parity";
 import { asRun } from "../test/parity/runs";
-import { flow, initStrip, log, logPop, newRun, railPercent, setNode, startCmd, typeCmd, endCmd } from "./runOps";
+import { clearFresh, flow, initStrip, log, logPop, newRun, railPercent, setNode, setTab, startCmd, typeCmd, endCmd } from "./runOps";
 
 const base = () => newRun({ id: "run-6", n: 6, query: "q", sessionId: "s" });
 
@@ -57,4 +57,13 @@ test("railPercent matches updateRail()", () => {
   expect(railPercent(asRun(planning.run))).toBe(7);
   expect(planning.regions["#bench"]).toContain("width: 7%");
   expect(railPercent(asRun(fixtureCase("bench/chat-done").state.run))).toBe(100);
+});
+
+test("a fresh line loses its flag when the log redraws: typing a command or showing the Log tab", () => {
+  const withLine = () => log(base(), "plan", "one", "");
+  expect(withLine().log[0]).toMatchObject({ fresh: true });
+  expect(setTab(withLine(), "code").log[0]).toMatchObject({ fresh: true });
+  expect(setTab(withLine(), "log").log[0]).toMatchObject({ fresh: false });
+  expect(startCmd(withLine(), "ls").log[0]).toMatchObject({ fresh: false });
+  expect(clearFresh(base())).toEqual(base());
 });
