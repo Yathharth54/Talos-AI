@@ -1,2 +1,6 @@
-/** Jump every animation and transition to its end state (spec 04 §9, with prefers-reduced-motion). */
-export const FREEZE_CSS = `*,*::before,*::after{animation-delay:-1ms!important;animation-duration:1ms!important;animation-iteration-count:1!important;animation-fill-mode:both!important;transition-duration:0s!important;transition-delay:0s!important}`;
+/**
+ * Jump every animation and transition to its end state (spec 04 §9, with prefers-reduced-motion).
+ * `scroll-behavior` too: `.msgs { scroll-behavior: smooth }` animates on the compositor's real clock,
+ * which Playwright's paused clock doesn't drive, so a shot could catch it mid-scroll.
+ */
+export const FREEZE_CSS = `*,*::before,*::after{animation-delay:-1ms!important;animation-duration:1ms!important;animation-iteration-count:1!important;animation-fill-mode:both!important;transition-duration:0s!important;transition-delay:0s!important;scroll-behavior:auto!important}`;
