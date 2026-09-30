@@ -18,6 +18,12 @@ from talos.web.store import Store
 router = APIRouter()
 
 HEARTBEAT_S = 15
+SEP = "\n"
+
+
+def ping_message_factory() -> ServerSentEvent:
+    """The heartbeat sent every HEARTBEAT_S seconds: a `: keep-alive` comment."""
+    return ServerSentEvent(comment="keep-alive", sep=SEP)
 
 
 @router.get("/runs/{run_id}", response_model=RunOut)
@@ -71,6 +77,7 @@ async def run_events(
                     id=str(envelope["seq"]),
                     event=envelope["type"],
                     data=json.dumps(envelope, separators=(",", ":")),
+                    sep=SEP,
                 )
         finally:
             await events.aclose()  # a client disconnect must release the subscriber queue
@@ -78,8 +85,8 @@ async def run_events(
     return EventSourceResponse(
         stream(),
         ping=HEARTBEAT_S,
-        ping_message_factory=lambda: ServerSentEvent(comment="keep-alive"),
-        sep="\n",
+        ping_message_factory=ping_message_factory,
+        sep=SEP,
     )
 
 

@@ -211,12 +211,18 @@ async def test_sse_backlog_then_live_through_a_pause(client):
 
 
 def test_heartbeat_is_a_keep_alive_comment():
-    from sse_starlette.sse import ServerSentEvent
-
-    from talos.web.routes.runs import HEARTBEAT_S
+    from talos.web.routes.runs import HEARTBEAT_S, ping_message_factory
 
     assert HEARTBEAT_S == 15
-    assert ServerSentEvent(comment="keep-alive", sep="\n").encode() == b": keep-alive\n\n"
+    assert ping_message_factory().encode() == b": keep-alive\n\n"
+
+
+async def test_events_use_plain_newlines(client):
+    sid = await new_session(client)
+    run_id = (await send(client, sid, CAESAR_Q))["run"]["id"]
+    await wait_for_status(client, run_id, "done")
+    raw = (await client.get(f"/api/runs/{run_id}/events")).text
+    assert "\r" not in raw and raw.startswith("id: 1\nevent: run.started\ndata: ")
 
 
 async def test_get_run_pending_is_built_from_the_interrupt_not_the_row(client, services):
