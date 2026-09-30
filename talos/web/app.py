@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import shutil
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -25,6 +26,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
+from starlette.datastructures import Headers
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from talos.config import settings
@@ -45,6 +48,9 @@ log = logging.getLogger(__name__)
 MAX_BODY = 64 * 1024
 DEV_ORIGIN = "http://127.0.0.1:5173"
 STATIC_DIR = settings.PROJECT_ROOT / "frontend" / "dist"
+LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]")
+WRITE_METHODS = frozenset({"POST", "PATCH", "DELETE"})
+_ORIGIN = re.compile(r"^https?://(?P<host>\[[0-9a-fA-F:.]+\]|[^/:\[\]]+)(?::\d+)?$")
 
 ServicesFactory = Callable[[], Awaitable[Services]]
 
@@ -61,6 +67,45 @@ class BodySizeLimit:
             length = dict(scope.get("headers") or []).get(b"content-length")
             if length is not None and length.isdigit() and int(length) > self.max_bytes:
                 response = error_response(413, "too_large", "Request body is over 64 KB.")
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+class LocalOriginOnly:
+    """Refuse writes (POST, PATCH, DELETE) whose `Origin` isn't a local page, with 403.
+
+    A browser sends `Origin` on cross-site writes; a page on another site
+    must not be able to start runs or save keys through the local API.
+    Requests without `Origin` (curl, same-origin GETs) pass.
+
+    Args:
+        app: The wrapped ASGI app.
+        hosts: Hosts an origin may name (any port, http or https).
+        extra_origins: Exact origins also allowed (the Vite dev server).
+    """
+
+    def __init__(
+        self, app: ASGIApp, hosts: tuple[str, ...], extra_origins: tuple[str, ...] = ()
+    ) -> None:
+        self.app = app
+        self.hosts = frozenset(h.lower() for h in hosts)
+        self.extra_origins = frozenset(extra_origins)
+
+    def allowed(self, origin: str) -> bool:
+        """Whether `origin` is an http(s) origin on one of the allowed hosts."""
+        if origin in self.extra_origins:
+            return True
+        match = _ORIGIN.match(origin)
+        return match is not None and match.group("host").lower() in self.hosts
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["method"] in WRITE_METHODS:
+            origin = Headers(scope=scope).get("origin")
+            if origin is not None and not self.allowed(origin):
+                response = error_response(
+                    403, "bad_origin", "Requests from other sites can't change Talos."
+                )
                 await response(scope, receive, send)
                 return
         await self.app(scope, receive, send)
@@ -127,6 +172,9 @@ def create_app(
             (Postgres). Tests pass a factory with MemoryStore and FakeDriver.
         static_dir: The built frontend; served at / when it exists.
         dev: Allow CORS from Vite's dev server (default TALOS_WEB_DEV).
+
+    Only local Host headers are answered (127.0.0.1, localhost, [::1] and
+    TALOS_WEB_ALLOWED_HOSTS), and writes from non-local origins get 403.
     """
     factory = services or open_services
 
@@ -163,11 +211,18 @@ def create_app(
         settings_routes.router,
     ):
         app.include_router(router, prefix="/api")
-    if settings.WEB_DEV if dev is None else dev:
+    dev_mode = settings.WEB_DEV if dev is None else dev
+    hosts = (*LOCAL_HOSTS, *settings.WEB_ALLOWED_HOSTS)
+    # add_middleware wraps: the last one added is the outermost.
+    app.add_middleware(
+        LocalOriginOnly, hosts=hosts, extra_origins=(DEV_ORIGIN,) if dev_mode else ()
+    )
+    app.add_middleware(BodySizeLimit)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(hosts))
+    if dev_mode:  # outermost, so 413 and 403 responses carry CORS headers too
         app.add_middleware(
             CORSMiddleware, allow_origins=[DEV_ORIGIN], allow_methods=["*"], allow_headers=["*"]
         )
-    app.add_middleware(BodySizeLimit)
     if static_dir is not None:
         _serve_frontend(app, static_dir)
     return app

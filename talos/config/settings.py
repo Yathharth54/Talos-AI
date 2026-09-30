@@ -86,6 +86,13 @@ WEB_HOST = os.environ.get("TALOS_WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
 WEB_PORT = int(os.environ.get("TALOS_WEB_PORT", "").strip() or "8000")
 FAKE_GRAPH = os.environ.get("TALOS_FAKE_GRAPH", "").strip().lower() in {"1", "true", "yes"}
 WEB_DEV = os.environ.get("TALOS_WEB_DEV", "").strip().lower() in {"1", "true", "yes"}
+# Host headers the web app answers besides 127.0.0.1, localhost and [::1]
+# (DNS-rebinding guard). Comma-separated, e.g. "talos.lan,box.local".
+WEB_ALLOWED_HOSTS = tuple(
+    host.strip()
+    for host in os.environ.get("TALOS_WEB_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+)
 
 
 def key_status() -> dict[str, bool]:
