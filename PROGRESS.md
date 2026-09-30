@@ -261,6 +261,18 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-02-api-design.md`. Plan: `doc
 - [x] API key values never logged (record-factory redaction), stored in events, or returned
 - [x] Tests: unit suite needs no database (in-memory store contract-tested against Postgres); integration: full fake Caesar run, restart mid-pause and resume (fake and real graph)
 
+## Web app stage 03 — Docker, sandbox, CI ✅
+
+Spec: `docs/superpowers/specs/2026-09-30-talos-web-03-docker-sandbox-design.md`. Plan: `docs/superpowers/plans/2026-09-30-talos-web-03-docker-sandbox.md`.
+
+- [x] `talos/sandbox/`: tagged-JSON codec, `run_tool` (subprocess per call, `TALOS_TOOL_TIMEOUT` default 30 s, process-group kill), `SandboxedTool` (signature read with `ast`, no in-process exec)
+- [x] Executor runs vault and forged tools through the sandbox; a timeout is a recorded failure. `SkillManager.locate()`; `load()` kept but unused by the executor
+- [x] Smoke gate runs unregistered forged code from a temp file through the sandbox
+- [x] `Dockerfile` (frontend, deps, test, runtime), `docker/entrypoint.sh` (DB wait, `alembic upgrade head`, `talos-web`), `.dockerignore`
+- [x] `compose.yml`, `compose.dev.yml`, `compose.test.yml`; `Makefile` aliases; `make test-int` uses its own compose project (`talos-test`)
+- [x] CI: `integration` (Postgres service) and `docker` (`docker build .`) jobs
+- Placeholder `frontend/` (package.json, lockfile, placeholder.html) until stage 04 replaces it. The CI `frontend` job is added by stage 04.
+
 ## Session log
 A short bullet per session — what we did, what's next. Append-only.
 
@@ -315,3 +327,5 @@ A short bullet per session — what we did, what's next. Append-only.
 - **2026-09-30** — Open-source readiness pass on branch `chore/open-source-readiness`. (1) MIT `LICENSE` plus license/authors/urls/classifiers in `pyproject.toml` and a `talos` console script. (2) `python_exec`/`shell_exec` now pause via `interrupt()` with a preview and run only on `y`; approval echoes the shown args back, so a re-resolved call on resume can't run different code. `TALOS_AUTO_APPROVE_EXEC=true` skips it; both benchmark runners set it. (3) `ruff check` + `ruff format` clean (prompts exempt from E501 so their text is unchanged). (4) GitHub Actions CI: lint + mocked pytest on 3.11/3.12. The default suite now runs with no keys: live web_search/web_read tests moved behind `RUN_LIVE=1`, researcher tests fake the LLM key. README rewritten (safety section, badges, current layout/config, credits, license); `.env.example` defaults tracing off. Removed the stale unchecked Phase 9/10 duplicates. Unit 160 passed / 7 skipped. Still open: process isolation + timeout for forged vault tools; suite failures Q01/Q43 (stale checks), Q33 (time budget), Q46, Q64, Q65.
 
 - **2026-09-30** — Web app stage 01 (persistence) on branch `feat/web-01-persistence`. Postgres storage for sessions, messages, runs, run events and settings (SQLAlchemy 2 async + Alembic `0001_initial`), `AsyncPostgresSaver` with the pickle-fallback serializer, startup recovery, and the core changes stage 2 needs: `emit()` events from forger/tester/smoke/executor/learn, per-test results, `changed`, `SkillManager.remove`, env-driven paths, `build_app(checkpointer)`. The CLI is unchanged and needs no database. Unit 258 passed / 33 skipped (26 of the skips are integration tests); integration 26 passed against `postgres:16-alpine`.
+
+- **2026-09-30** — Web app stage 03 complete: forged-tool sandbox (`talos/sandbox/`), executor and smoke switched to it, Docker image, compose stack, Makefile, CI `integration` and `docker` jobs. Next: stage 04 (frontend), which replaces the placeholder `frontend/` and adds the CI `frontend` job.
