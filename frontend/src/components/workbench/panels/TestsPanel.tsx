@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { COPY, fill } from "../../../lib/copy";
 import type { Attempt, Smoke, TestsState } from "../../../store/types";
 import { TickIcon, XIcon } from "../../icons";
+import { bareZeros } from "../../../lib/style";
 
 /* What earlier renders drew: the reference's `x.drawn = true` / `x.flashed = true` (lines 1188–1191), kept out of the store.
    Keyed by run id, attempt and test name. */
@@ -89,14 +90,14 @@ export function TestsPanel({ runId, tests, smoke, attempts }: TestsPanelProps) {
           </figure>
         ) : null}
         {failedAttempt ? (
-          <div className="stack" style={{ gap: "6px", padding: "0 4px" }}>
-            <p style={{ margin: "0", fontSize: "14px" }}>{fill(COPY.tests.prevFailed, { n: failedAttempt.n })}</p>
-            <p className="mono muted" style={{ margin: "0", fontSize: "12px", lineHeight: "1.6", overflowWrap: "anywhere" }}>
+          <div className="stack" style={{ gap: "6px", padding: "0 4px" }} ref={bareZeros}>
+            <p style={{ margin: "0", fontSize: "14px" }} ref={bareZeros}>{fill(COPY.tests.prevFailed, { n: failedAttempt.n })}</p>
+            <p className="mono muted" style={{ margin: "0", fontSize: "12px", lineHeight: "1.6", overflowWrap: "anywhere" }} ref={bareZeros}>
               {failedAttempt.detail}
             </p>
           </div>
         ) : null}
-        <p className="muted" style={{ margin: "0", fontSize: "13px", lineHeight: "1.55", padding: "0 4px" }}>
+        <p className="muted" style={{ margin: "0", fontSize: "13px", lineHeight: "1.55", padding: "0 4px" }} ref={bareZeros}>
           {fill(COPY.tests.note, { s: 10 })}
         </p>
       </div>

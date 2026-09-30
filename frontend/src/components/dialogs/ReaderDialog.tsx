@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { COPY, fill } from "../../lib/copy";
 import { CodeRows } from "../vault/CodeRows";
+import { bareZeros } from "../../lib/style";
 
 /** The full-source reader (readerDialog, lines 2016–2040; codeRows, line 2015). */
 export function ReaderDialog({ name, lines, onClose }: { name: string; lines: string[]; onClose(): void }) {
@@ -44,7 +45,7 @@ export function ReaderDialog({ name, lines, onClose }: { name: string; lines: st
   return (
     <div className="dialog reader" role="dialog" aria-modal="true" aria-labelledby="rd-t" ref={ref}>
       <div className="r-head">
-        <div style={{ minWidth: "0" }}>
+        <div style={{ minWidth: "0" }} ref={bareZeros}>
           <h2 id="rd-t">{fill(COPY.reader.title, { name })}</h2>
           <p>{fill(COPY.reader.sub, { n: lines.length })}</p>
         </div>

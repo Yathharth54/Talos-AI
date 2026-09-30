@@ -1,5 +1,6 @@
 import { COPY, fill } from "../../../lib/copy";
 import type { Attempt } from "../../../store/types";
+import { bareZeros } from "../../../lib/style";
 
 /** The attempts panel (attemptsHtml, lines 1201–1205). */
 export function AttemptsPanel({ attempts }: { attempts: Attempt[] | undefined }) {
@@ -18,7 +19,7 @@ export function AttemptsPanel({ attempts }: { attempts: Attempt[] | undefined })
           </li>
         ))}
       </ol>
-      <p className="muted" style={{ margin: "0", fontSize: "13px" }}>
+      <p className="muted" style={{ margin: "0", fontSize: "13px" }} ref={bareZeros}>
         {COPY.attempts.note}
       </p>
     </>

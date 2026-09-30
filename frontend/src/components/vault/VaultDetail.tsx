@@ -5,6 +5,7 @@ import { PRUNE_AT } from "../../lib/routing";
 import { useRestartAnimation } from "../../hooks/useRestartAnimation";
 import type { VaultTool } from "../../store/types";
 import { CodeRows } from "./CodeRows";
+import { bareZeros } from "../../lib/style";
 
 export interface VaultDetailProps {
   tool: VaultTool | undefined;
@@ -104,7 +105,7 @@ export function VaultDetail({ tool: t, source: src, confirmRemove, onRead, onUse
               </div>
             </figure>
           ) : (
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+            <p className="muted" style={{ margin: 0, fontSize: 13 }} ref={bareZeros}>
               {fill(COPY.vault.noSource, { name: t.name })}
             </p>
           )}

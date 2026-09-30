@@ -1,6 +1,7 @@
 import { COPY, fill } from "../../lib/copy";
 import { fmtClock } from "../../lib/format";
 import type { Run, SessionRec } from "../../store/types";
+import { bareZeros } from "../../lib/style";
 
 export interface SessionCardProps {
   session: SessionRec;
@@ -40,7 +41,7 @@ export function SessionCard({ session, runs, index, isCur, onOpen }: SessionCard
             ) : null}
           </ol>
         ) : (
-          <p className="sess-empty" style={{ margin: 0 }}>
+          <p className="sess-empty" style={{ margin: 0 }} ref={bareZeros}>
             {t.empty}
           </p>
         )}
