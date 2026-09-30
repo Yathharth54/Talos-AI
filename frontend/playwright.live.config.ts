@@ -4,7 +4,10 @@ export default defineConfig({
   testDir: "e2e/live",
   fullyParallel: false,
   workers: 1, // one active run at a time across the app (stage 2 §4); state carries between files
-  retries: process.env.CI ? 1 : 0,
+  // No retries, in CI or locally. The fake graph keeps a saved key in memory for the server's lifetime, and 09-keys
+  // runs last and saves one. A retry after "Save key" would run against a server that already has the key, so it
+  // could not recover the flake and would only hide it. A fresh run (new database, vault, server) is the retry.
+  retries: 0,
   timeout: 90_000,
   expect: { timeout: 20_000 },
   reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report/live" }]],
