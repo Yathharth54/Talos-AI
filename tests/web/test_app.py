@@ -62,7 +62,12 @@ async def test_frontend_is_served_with_an_index_fallback(services, tmp_path: Pat
         assert "Talos" in (await client.get("/")).text
         assert (await client.get("/assets/app.js")).text == "console.log(1)"
         assert "Talos" in (await client.get("/sessions/whatever")).text
-        assert "no" != (await client.get("/../secret.txt")).text
+        for path in ("/%2e%2e/secret.txt", "/assets/%2e%2e/%2e%2e/secret.txt"):
+            traversal = await client.get(path)
+            assert traversal.status_code == 200
+            assert traversal.text == "<!doctype html><title>Talos</title>"
+        nul = await client.get("/%00")  # Path.resolve raises ValueError on a NUL byte
+        assert (nul.status_code, nul.text) == (200, "<!doctype html><title>Talos</title>")
         api = await client.get("/api/nope")
         assert api.status_code == 404 and api.json()["error"]["code"] == "not_found"
 
@@ -128,3 +133,57 @@ async def test_413_carries_cors_headers_in_dev(services):
         )
         assert response.status_code == 413
         assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
+class Closer:
+    """Records whether `aclose` ran."""
+
+    def __init__(self) -> None:
+        self.closed = 0
+
+    async def __call__(self) -> None:
+        self.closed += 1
+
+
+async def boom(*_a, **_k):
+    raise RuntimeError("boom")
+
+
+@pytest.mark.parametrize("method", ["recover", "get_setting"])
+async def test_startup_failures_still_close_the_services(services, monkeypatch, method):
+    closer = Closer()
+    services.aclose = closer
+    monkeypatch.setattr(services.store, method, boom)
+    with pytest.raises(RuntimeError, match="boom"):
+        async for _client in open_client(make_app(services)):
+            pass
+    assert closer.closed == 1
+
+
+async def test_a_failing_shutdown_still_resets_and_closes(services, monkeypatch):
+    from talos.web import app as app_mod
+
+    closer = Closer()
+    services.aclose = closer
+    await services.store.set_setting("ask_before_exec", False)
+    monkeypatch.setattr(app_mod.RunManager, "shutdown", boom)
+    with pytest.raises(RuntimeError, match="boom"):
+        async for _client in open_client(make_app(services)):
+            assert settings._auto_approve_override is True
+    assert settings._auto_approve_override is None
+    assert closer.closed == 1
+
+
+async def test_open_services_disposes_the_engine_when_the_saver_fails(monkeypatch):
+    from talos.persistence import checkpoint, db, migrations
+
+    disposed = Closer()
+    monkeypatch.setattr(settings, "DATABASE_URL", "postgresql+psycopg://x")
+    monkeypatch.setattr(settings, "FAKE_GRAPH", False)
+    monkeypatch.setattr(migrations, "upgrade_head", lambda *a, **k: None)
+    monkeypatch.setattr(db, "init_db", lambda *a, **k: object())
+    monkeypatch.setattr(db, "dispose_db", disposed)
+    monkeypatch.setattr(checkpoint, "open_postgres_saver", boom)
+    with pytest.raises(RuntimeError, match="boom"):
+        await open_services()
+    assert disposed.closed == 1

@@ -145,7 +145,11 @@ async def open_services() -> Services:
             fake_graph=True,
             aclose=close_fake,
         )
-    saver = await open_postgres_saver()
+    try:
+        saver = await open_postgres_saver()
+    except BaseException:
+        await dispose_db()
+        raise
 
     async def close_real() -> None:
         await close_postgres_saver(saver)
@@ -182,22 +186,26 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         install_log_redaction()
         built = await factory()
-        manager = RunManager(built.store, built.driver)
-        recovered = await built.store.recover()
-        if recovered:
-            log.warning("marked %d interrupted run(s) as failed", len(recovered))
-        ask = await built.store.get_setting(ASK_BEFORE_EXEC)
-        if ask is not None:
-            settings.set_auto_approve_override(not bool(ask))
-        app.state.services = built
-        app.state.manager = manager
+        manager: RunManager | None = None
         try:
+            manager = RunManager(built.store, built.driver)
+            recovered = await built.store.recover()
+            if recovered:
+                log.warning("marked %d interrupted run(s) as failed", len(recovered))
+            ask = await built.store.get_setting(ASK_BEFORE_EXEC)
+            if ask is not None:
+                settings.set_auto_approve_override(not bool(ask))
+            app.state.services = built
+            app.state.manager = manager
             yield
         finally:
-            await manager.shutdown()
-            settings.set_auto_approve_override(None)
-            if built.aclose is not None:
-                await built.aclose()
+            try:
+                if manager is not None:
+                    await manager.shutdown()
+            finally:
+                settings.set_auto_approve_override(None)
+                if built.aclose is not None:
+                    await built.aclose()
 
     app = FastAPI(
         title="Talos", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json"
@@ -239,7 +247,11 @@ def _serve_frontend(app: FastAPI, root: Path) -> None:
         index = root / "index.html"
         if not index.is_file():
             raise ApiError(404, "not_found", "The frontend isn't built (frontend/dist).")
-        target = (root / path).resolve()
-        if path and target.is_file() and target.is_relative_to(root):
-            return FileResponse(target)
+        if path:
+            try:
+                target = (root / path).resolve()
+                if target.is_relative_to(root) and target.is_file():
+                    return FileResponse(target)
+            except (ValueError, OSError):  # e.g. a NUL byte from %00
+                pass
         return FileResponse(index)
