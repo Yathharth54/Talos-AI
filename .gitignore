@@ -51,3 +51,7 @@ workspace/*
 # Frontend (frontend/)
 frontend/node_modules/
 frontend/dist/
+frontend/.e2e-tmp/
+frontend/test-results/
+frontend/playwright-report/
+frontend/e2e/visual/__screenshots__/
