@@ -50,7 +50,7 @@ async def test_vault_detail_has_the_source_and_404s(client, services):
     seed(services.vault)
     detail = (await client.get("/api/vault/slugify")).json()
     assert detail["source"].startswith("def slugify")
-    assert detail["lines"] == 3
+    assert detail["lines"] == 2  # two lines of code; the trailing newline ends the last one
     assert detail["file"] == "tools/slugify.py"
     response = await client.get("/api/vault/nope")
     assert response.status_code == 404 and response.json()["error"]["code"] == "not_found"
@@ -73,7 +73,7 @@ async def test_fake_forge_shows_up_in_the_vault(client):
     await wait_for_status(client, run["id"], "done")
     detail = (await client.get("/api/vault/caesar_cipher")).json()
     assert detail["args"] == "text: str, shift: int, mode: str"
-    assert detail["lines"] == 64  # the demo's 63 lines plus the trailing newline
+    assert detail["lines"] == 63  # the demo's 63 lines, as the reader counts them
     assert detail["uses"] == 1
 
 
