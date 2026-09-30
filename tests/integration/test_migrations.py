@@ -7,11 +7,12 @@ import asyncio
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
 
+from talos.persistence.checkpoint import close_postgres_saver, open_postgres_saver
 from talos.persistence.db import make_engine
 from talos.persistence.migrations import downgrade_base, upgrade_head
-from talos.persistence.models import Base, include_object
+from talos.persistence.models import LANGGRAPH_TABLES, Base, include_object
 
 pytestmark = pytest.mark.integration
 
@@ -57,15 +58,12 @@ def test_models_match_the_migration(migrated_url):
     assert asyncio.run(_diff(migrated_url)) == []
 
 
-async def test_downgrade_leaves_other_tables_alone(migrated_url):
-    engine = make_engine(migrated_url)
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE TABLE IF NOT EXISTS not_ours (v int)"))
+async def test_downgrade_leaves_langgraph_tables_alone(migrated_url):
+    saver = await open_postgres_saver(migrated_url)
+    await close_postgres_saver(saver)
+
+    await asyncio.to_thread(downgrade_base, migrated_url)
     try:
-        await asyncio.to_thread(downgrade_base, migrated_url)
-        assert "not_ours" in await _tables(migrated_url)
+        assert LANGGRAPH_TABLES <= await _tables(migrated_url)
     finally:
         await asyncio.to_thread(upgrade_head, migrated_url)
-        async with engine.begin() as conn:
-            await conn.execute(text("DROP TABLE IF EXISTS not_ours"))
-        await engine.dispose()
