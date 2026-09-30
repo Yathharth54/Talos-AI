@@ -30,7 +30,7 @@ Talos runs code written by an LLM on your machine.
 
 - **`python_exec` and `shell_exec` ask before running.** The REPL shows you the exact code or command and waits for `y`. Anything else declines. Set `TALOS_AUTO_APPROVE_EXEC=true` to skip the prompt (the unattended benchmark runners do this).
 - **Forged tools run in a subprocess with a time limit.** Every call to a vault tool (and the smoke test before a tool is saved) runs in its own Python process, killed after `TALOS_TOOL_TIMEOUT` seconds (default 30). Values come back as plain data, never as objects. The subprocess still has your user's permissions, your environment (API keys) and the network: it's a time limit and a crash boundary, not a jail.
-- **There is no container isolation.** Run Talos in a VM, container, or throwaway account if you plan to point it at anything you care about.
+- **The CLI and forged tools run without container isolation.** `uv run talos` and every forged-tool subprocess it starts run directly on your machine as your user. Run the CLI in a VM, container, or throwaway account if you plan to point it at anything you care about. The compose stack runs the server in a locked-down container (see [Web app](#web-app)).
 - **The web app has no login.** `talos-web` binds to `127.0.0.1` and anyone who can reach its port can run code through it. Keep it on localhost. Inside a container it has to bind `TALOS_WEB_HOST=0.0.0.0` to be reachable at all; then publish the port on the host's loopback only (`-p 127.0.0.1:8000:8000`), never as `-p 8000:8000`. Outside a container, don't set `0.0.0.0` on a shared network.
 - **The web app only answers local requests.** It rejects any `Host` header other than `127.0.0.1`, `localhost` and `[::1]` (plus `TALOS_WEB_ALLOWED_HOSTS`) with `400`, so a web page can't reach it through DNS rebinding, and it rejects `POST`/`PATCH`/`DELETE` requests whose `Origin` is another site with `403`, so a page you visit can't start runs or save keys.
 
@@ -70,6 +70,8 @@ Open http://127.0.0.1:8000. `docker compose ps` should show `db` and `app` as he
 - **Same vault as the CLI.** `talos/vault/` and `workspace/` are mounted into the container, so tools forged in the browser show up in `uv run talos` and the other way round.
 - **Keys.** `.env` is mounted read-write, so keys saved from the browser's API-key dialog persist, just like the CLI's Human check.
 - **Container limits.** The app runs as a non-root user on a read-only filesystem, with no Linux capabilities, 2 GB of memory and 256 processes. It keeps network access, because web tools need it. Forged tools run in a subprocess inside the container with a `TALOS_TOOL_TIMEOUT` limit (see [Safety](#safety-read-this-first)).
+- **Bind-mount ownership.** The container runs as uid 1000. On Linux, `talos/vault/`, `workspace/` and `.env` must be writable by that uid: `sudo chown -R 1000:1000 talos/vault workspace .env`, or run as your own uid if it is 1000. Docker Desktop on macOS maps ownership for you.
+- **Plain `docker run`.** Compose starts the app with `init: true`, so an init process reaps the forged-tool subprocesses. If you run the image without compose, pass `--init` as well (for example `docker run --init -p 127.0.0.1:8000:8000 …`).
 
 Developer commands (see the `Makefile`):
 
