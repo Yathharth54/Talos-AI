@@ -1,0 +1,82 @@
+import type { EventType, RunEvent } from "./types";
+
+/* A Record so the compiler rejects a missing or unknown event type. */
+const ALL: Record<EventType, true> = {
+  "run.started": true, "log.cmd": true, "plan.ready": true, "strip.set": true, "subtask.started": true,
+  "node.started": true, "node.finished": true, "link.flow": true, caption: true, "log.line": true, "log.pop": true,
+  "log.status": true, "talos.status": true, "forge.code": true, "forge.tests": true, "forge.attempt": true,
+  "forge.smoke": true, "vault.saved": true, "vault.failure": true, "call.args": true, "call.result": true,
+  "call.error": true, interrupt: true, "interrupt.resolved": true, "answer.delta": true, "answer.done": true,
+  "run.finished": true, error: true,
+};
+
+/** Every contract event type: EventSource only delivers named events to listeners for their name. */
+export const EVENT_TYPES = Object.keys(ALL) as EventType[];
+
+/** Parses a whole SSE body (a finished run's backlog). Comments (": keep-alive") are skipped. */
+export function parseSse(text: string): RunEvent[] {
+  const out: RunEvent[] = [];
+  for (const block of text.replace(/\r\n/g, "\n").split("\n\n")) {
+    const data = block
+      .split("\n")
+      .filter((l) => l.startsWith("data:"))
+      .map((l) => l.slice(5).replace(/^ /, ""))
+      .join("\n");
+    if (data) out.push(JSON.parse(data) as RunEvent);
+  }
+  return out;
+}
+
+export type EventSourceCtor = new (url: string) => {
+  addEventListener(type: string, fn: (m: MessageEvent<string>) => void): void;
+  close(): void;
+  onerror: ((this: unknown, ev: Event) => unknown) | null;
+};
+
+/**
+ * One EventSource per run. On an error it closes and reconnects itself with ?after=<last seq>
+ * (a new EventSource can't set Last-Event-ID, and stage 2 reads the header before ?after).
+ * Events at or below the last delivered seq are dropped. It closes for good on run.finished,
+ * because the browser would otherwise reconnect when the server ends the stream and replay it.
+ */
+export function openRunStream(o: {
+  runId: string;
+  after: number;
+  onEvent(e: RunEvent): void;
+  ES?: EventSourceCtor;
+  retryMs?: number;
+}): { close(): void } {
+  const ES = o.ES ?? (EventSource as unknown as EventSourceCtor);
+  let last = o.after;
+  let closed = false;
+  let es: InstanceType<EventSourceCtor> | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const close = () => {
+    closed = true;
+    if (timer) clearTimeout(timer);
+    timer = null;
+    es?.close();
+  };
+  const onMessage = (m: MessageEvent<string>) => {
+    if (closed) return;
+    const e = JSON.parse(m.data) as RunEvent;
+    if (e.seq <= last) return;
+    last = e.seq;
+    o.onEvent(e);
+    if (e.type === "run.finished") close();
+  };
+  const connect = () => {
+    timer = null;
+    if (closed) return;
+    const cur = new ES(`/api/runs/${encodeURIComponent(o.runId)}/events?after=${last}`);
+    es = cur;
+    for (const t of EVENT_TYPES) cur.addEventListener(t, onMessage);
+    cur.onerror = () => {
+      cur.close();
+      if (!closed && es === cur && timer === null) timer = setTimeout(connect, o.retryMs ?? 1000);
+    };
+  };
+  connect();
+  return { close };
+}

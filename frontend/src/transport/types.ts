@@ -169,3 +169,35 @@ export interface ApiSettings {
 export interface ApiError {
   error: { code: string; message: string; run_id?: string; session_id?: string };
 }
+
+/* Stage 2 response shapes that part A didn't need (plan 02 Task 3, schemas.py). */
+export interface ApiSessionSummary {
+  id: string;
+  name: string;
+  created_at: string;
+  run_count: number;
+  forged: string[];
+  used: string[];
+  runs: { n: number; query: string; mark: "forged" | "reused" | "failed" | null }[];
+}
+export interface ApiSessionDetail {
+  session: ApiSession;
+  messages: ApiMessage[];
+  runs: ApiRunSummary[];
+}
+export interface ApiRun extends ApiRunSummary {
+  pending:
+    | { kind: "confirm_exec"; payload: { tool: "python_exec" | "shell_exec"; preview: string } }
+    | { kind: "missing_api_key"; payload: { env_var: string; tool_name: string; service: string } }
+    | null;
+}
+export interface ApiVaultList {
+  count: number;
+  web_count: number;
+  failed_count: number;
+  tools: ApiVaultEntry[];
+}
+export interface ApiVaultDetail extends ApiVaultEntry {
+  source: string | null;
+  lines: number;
+}
