@@ -65,14 +65,17 @@ const textOf = (html: string): string => {
 };
 const wordCount = (html: string | null): number => (html == null ? 0 : wrapWordsHtml(html, 0).count);
 
+/** Stage 2's `call.error.when` codes (talos/agents/executor.py) that the reference shows as the failure's time. */
+const TIMED_CODES = new Set(["run", "dispatch", "arguments", "skipped"]);
+
 /**
- * `call.error.when` is a code from stage 2 ("run", "declined", ...). The reference shows the time of a
- * failed call (lines 1713, 1881) and "You chose Don't run" for a declined one (line 1813). Anything that
- * isn't a code is already display text and passes through.
+ * `call.error.when` is a code from stage 2. The reference shows the time of a failed call (lines 1713,
+ * 1881), taken from the event's `ts` so a replay shows when it happened, and "You chose Don't run" for a
+ * declined one (line 1813). Anything else is already display text and passes through.
  */
-export function whenText(when: string): string {
+export function whenText(when: string, ts: string): string {
   if (when === "declined") return COPY.call.declinedWhen;
-  return /^[a-z_]+$/.test(when) ? fmtTime(nowIso()) : when;
+  return TIMED_CODES.has(when) ? fmtTime(ts || nowIso()) : when;
 }
 
 export interface PlayerOptions {
@@ -253,7 +256,7 @@ export class Player {
       case "call.result":
         return this.callResult(e);
       case "call.error":
-        this.up((r) => R.patchCall(r, { error: e.data.error, when: whenText(e.data.when) }));
+        this.up((r) => R.patchCall(r, { error: e.data.error, when: whenText(e.data.when, e.ts) }));
         return;
       case "interrupt": {
         const d = e.data;

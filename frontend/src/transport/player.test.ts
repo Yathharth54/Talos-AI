@@ -154,14 +154,38 @@ test("node.finished accepts the stopped status", async () => {
 });
 
 test("call.error's when code maps to the reference's text", async () => {
-  expect(whenText("declined")).toBe("You chose Don't run");
-  expect(whenText("run")).toBe("30 Sep 2026, 12:00");
-  expect(whenText("30 Sep 2026, 11:58")).toBe("30 Sep 2026, 11:58");
+  const ts = "2026-09-30T09:15:00Z";
+  expect(whenText("declined", ts)).toBe("You chose Don't run");
+  for (const code of ["run", "dispatch", "arguments", "skipped"]) expect(whenText(code, ts)).toBe("30 Sep 2026, 09:15");
+  expect(whenText("run", "")).toBe("30 Sep 2026, 12:00"); // no event time: now
+  expect(whenText("30 Sep 2026, 11:58", ts)).toBe("30 Sep 2026, 11:58");
+  expect(whenText("later", ts)).toBe("later"); // not a stage 2 code: display text
   const s = stores();
   const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false });
   void p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
   await p.push(ev("call.error", { error: "declined by user", when: "declined" }));
   expect(run(s).call).toMatchObject({ error: "declined by user", when: "You chose Don't run" });
+});
+
+test("a replayed call error shows the event's time, not the replay clock", async () => {
+  vi.setSystemTime(new Date("2026-10-02T18:40:00Z"));
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false, replay: true });
+  void p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  await p.push({ ...ev("call.error", { error: "TypeError: boom", when: "run" }), ts: "2026-09-30T11:58:00Z" } as RunEvent);
+  expect(run(s).call).toMatchObject({ error: "TypeError: boom", when: "30 Sep 2026, 11:58" });
+});
+
+test("an answer that arrives after a stop shows every word but no note, chips or live text", async () => {
+  setReducedMotion(false);
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false });
+  void p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  await vi.advanceTimersByTimeAsync(0);
+  p.abort();
+  await p.push(ev("answer.done", { html: "one two three", note: "a note", chips: [{ kind: "forged", text: "t" }], suggest: true }));
+  expect(s.session.get().sessions[0]!.messages[1]).toMatchObject({ html: "one two three", wordsOn: 3, note: null, chips: [], suggest: false, status: null });
+  expect(s.ui.get().live).toBe("");
 });
 
 test("a log line stops being fresh once the log redraws for a command or the Log tab", async () => {
