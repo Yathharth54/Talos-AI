@@ -35,7 +35,7 @@ from talos.web.deps import (
     error_response,
     install_error_handlers,
 )
-from talos.web.routes import health
+from talos.web.routes import health, runs, sessions
 from talos.web.runner import RunManager
 from talos.web.security import install_log_redaction
 
@@ -154,7 +154,7 @@ def create_app(
         title="Talos", lifespan=lifespan, docs_url="/api/docs", openapi_url="/api/openapi.json"
     )
     install_error_handlers(app)
-    for router in (health.router,):
+    for router in (health.router, sessions.router, runs.router):
         app.include_router(router, prefix="/api")
     if settings.WEB_DEV if dev is None else dev:
         app.add_middleware(
