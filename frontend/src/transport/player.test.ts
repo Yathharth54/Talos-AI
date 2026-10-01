@@ -377,3 +377,18 @@ test("Stop mid-reveal on a run that ends stopped keeps the stopped say and the f
   const talos = s.session.get().sessions[0]!.messages[1]!;
   expect(talos).toMatchObject({ wordsOn: 4, note: null, chips: [], stopNote: COPY.convo.stopped });
 });
+
+test("a failing source fetch still shows the vault call: the Code tab just has no source", async () => {
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  const s = stores();
+  const source = vi.fn(async () => Promise.reject(new Error("500")));
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false, source });
+  void p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  void p.push(ev("strip.set", { variant: "vault", subtask: { index: 1, total: 1, label: "Decrypt" }, sig: { name: "slugify", args: "t", ret: "str" } }));
+  void p.push(ev("call.args", { tool: "slugify", args: [["t", "'x'", false]], caption: "c" }));
+  await p.push(ev("call.result", { repr: "'y'", type: "str", small: false }));
+  expect(run(s).tab).toBe("call");
+  expect(run(s).call).toMatchObject({ args: [["t", "'x'", false]], result: "'y'" });
+  expect(s.vault.get().sources.slugify).toBeUndefined(); // not cached: the next call tries again
+  err.mockRestore();
+});

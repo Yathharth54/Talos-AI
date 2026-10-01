@@ -112,3 +112,35 @@ test("a dropped connection (plain error Event) doesn't throw and reconnects", ()
   expect(FakeES.all[1]!.url).toBe("/api/runs/r/events?after=4");
   expect(got).toEqual([]);
 });
+
+test("reconnects back off, doubling from retryMs up to 30 s, and a delivered event resets them", () => {
+  openRunStream({ runId: "r", after: 0, onEvent: () => {}, ES: FakeES as never, retryMs: 1000 });
+  const delays: number[] = [];
+  for (let i = 0; i < 7; i++) {
+    const n = FakeES.all.length;
+    FakeES.all[n - 1]!.drop();
+    let waited = 0;
+    while (FakeES.all.length === n) {
+      vi.advanceTimersByTime(500);
+      waited += 500;
+    }
+    delays.push(waited);
+  }
+  expect(delays).toEqual([1000, 2000, 4000, 8000, 16000, 30000, 30000]);
+  FakeES.all.at(-1)!.emit(env(1, "log.cmd", { text: "q" }));
+  FakeES.all.at(-1)!.drop();
+  vi.advanceTimersByTime(1000);
+  expect(FakeES.all).toHaveLength(9);
+});
+
+test("an event that isn't JSON is skipped without breaking the stream", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const got: number[] = [];
+  openRunStream({ runId: "r", after: 0, onEvent: (e) => got.push(e.seq), ES: FakeES as never });
+  const es = FakeES.all[0]!;
+  expect(() => es.fire("caption", new MessageEvent("caption", { data: "{not json" }))).not.toThrow();
+  es.emit(env(1, "caption", { html: "x" }));
+  expect(got).toEqual([1]);
+  expect(warn).toHaveBeenCalledTimes(1);
+  warn.mockRestore();
+});

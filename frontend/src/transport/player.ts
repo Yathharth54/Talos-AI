@@ -473,7 +473,14 @@ export class Player {
   private async source(tool: string): Promise<string[] | null> {
     const cached = this.stores.vault.get().sources[tool];
     if (cached !== undefined) return cached;
-    const lines = (await this.opts.source?.(tool)) ?? null;
+    let lines: string[] | null;
+    try {
+      lines = (await this.opts.source?.(tool)) ?? null;
+    } catch (err) {
+      // The call still shows, with no source on its Code tab. Not cached, so a later call tries again.
+      console.error(err);
+      return null;
+    }
     this.stores.vault.update((v) => ({ ...v, sources: { ...v.sources, [tool]: lines } }));
     return lines;
   }

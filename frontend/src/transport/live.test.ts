@@ -60,6 +60,15 @@ test("startRun reads the new session name back on the first run", async () => {
   expect(getSession).toHaveBeenCalledWith("s1");
 });
 
+test("startRun still returns the run when reading the new session name back fails: the run has started", async () => {
+  const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+  const send = vi.fn(async () => ({ run: runSummary(1), message: {} as never }));
+  const getSession = vi.fn(async () => Promise.reject(new Error("down")));
+  const t = new LiveTransport(fakeApi({ send, getSession }));
+  expect(await t.startRun("s1", "hello")).toEqual({ runId: "run-1", n: 1, sessionName: null });
+  warn.mockRestore();
+});
+
 test("normalise sanitises caption, forge.code note and answer HTML", () => {
   const c = normalise(env(1, "caption", { html: 'A <span class="mono">x</span><img src=x onerror=alert(1)>' }));
   expect(c.data).toEqual({ html: 'A <span class="mono">x</span>' });
@@ -111,5 +120,32 @@ test("resume and stop call the API; a saved key's value goes only into the one r
     ["/api/runs/r1/stop", "POST"],
   ]);
   expect(bodies.filter((b) => b.includes("k-123"))).toEqual([JSON.stringify({ decision: "save", value: "k-123" })]);
-  expect(JSON.stringify(t)).not.toContain("k-123");
+  expect(reachableStrings(t)).not.toContainEqual(expect.stringContaining("k-123"));
+});
+
+/** Every string reachable from `root` through own properties (enumerable or not), arrays, Maps and Sets. */
+function reachableStrings(root: unknown): string[] {
+  const out: string[] = [];
+  const seen = new Set<unknown>();
+  const walk = (v: unknown): void => {
+    if (typeof v === "string") return void out.push(v);
+    if (v === null || (typeof v !== "object" && typeof v !== "function") || seen.has(v)) return;
+    seen.add(v);
+    if (v instanceof Map)
+      for (const [k, x] of v) {
+        walk(k);
+        walk(x);
+      }
+    else if (v instanceof Set) for (const x of v) walk(x);
+    if (typeof v === "object") for (const k of Object.getOwnPropertyNames(v)) walk((v as Record<string, unknown>)[k]);
+  };
+  walk(root);
+  return out;
+}
+
+test("the key check sees values a transport keeps in a Map or a non-enumerable field", () => {
+  const leaky = { cache: new Map([["r1", { value: "k-123" }]]) };
+  Object.defineProperty(leaky, "hidden", { value: "k-123", enumerable: false });
+  expect(JSON.stringify({ cache: leaky.cache })).not.toContain("k-123"); // why JSON.stringify couldn't fail
+  expect(reachableStrings(leaky).filter((s) => s.includes("k-123"))).toHaveLength(2);
 });

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from talos.config import settings
 from tests.web.conftest import wait_for_status
 
@@ -136,3 +138,16 @@ async def test_patch_ask_before_exec_applies_and_persists(client, services):
         assert settings.auto_approve_exec() is False
     finally:
         settings.set_auto_approve_override(None)  # never leak into other tests
+
+
+@pytest.mark.parametrize(
+    ("source", "lines"),
+    [("", 0), ("x = 1", 1), ("x = 1\n", 1), ("a\nb\n", 2), ("a\n\n", 2)],
+)
+async def test_vault_detail_lines_match_the_reader(client, services, source, lines):
+    """The reader shows `lines` too (frontend sourceLines): an empty file has none."""
+    services.vault.register(
+        {"name": "t", "function": "t", "signature": "t() -> None", "created_at": "2026-09-28"},
+        source,
+    )
+    assert (await client.get("/api/vault/t")).json()["lines"] == lines

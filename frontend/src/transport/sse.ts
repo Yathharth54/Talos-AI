@@ -43,7 +43,10 @@ export type EventSourceCtor = new (url: string) => {
  * (a new EventSource can't set Last-Event-ID, and stage 2 reads the header before ?after).
  * Events at or below the last delivered seq are dropped. It closes for good on run.finished,
  * because the browser would otherwise reconnect when the server ends the stream and replay it.
+ * Reconnects back off from `retryMs`, doubling up to RETRY_CAP_MS; a delivered event resets them.
  */
+export const RETRY_CAP_MS = 30_000;
+
 export function openRunStream(o: {
   runId: string;
   after: number;
@@ -56,6 +59,8 @@ export function openRunStream(o: {
   let closed = false;
   let es: InstanceType<EventSourceCtor> | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  const base = o.retryMs ?? 1000;
+  let delay = base;
 
   const close = () => {
     closed = true;
@@ -66,7 +71,14 @@ export function openRunStream(o: {
   const onMessage = (m: MessageEvent<string>) => {
     // A dropped connection also fires "error" (the contract's `error` type) with no data.
     if (closed || typeof m.data !== "string") return;
-    const e = JSON.parse(m.data) as RunEvent;
+    let e: RunEvent;
+    try {
+      e = JSON.parse(m.data) as RunEvent;
+    } catch (err) {
+      console.warn("Skipped an SSE event that isn't JSON", err);
+      return;
+    }
+    delay = base;
     if (e.seq <= last) return;
     last = e.seq;
     o.onEvent(e);
@@ -82,7 +94,10 @@ export function openRunStream(o: {
       // A server-sent `event: error` also reaches onerror; it's a contract event, not a failure.
       if ("data" in ev) return;
       cur.close();
-      if (!closed && es === cur && timer === null) timer = setTimeout(connect, o.retryMs ?? 1000);
+      if (!closed && es === cur && timer === null) {
+        timer = setTimeout(connect, delay);
+        delay = Math.min(delay * 2, RETRY_CAP_MS);
+      }
     };
   };
   connect();

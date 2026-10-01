@@ -30,8 +30,15 @@ export class LiveTransport implements Transport {
 
   async startRun(sessionId: string, text: string): Promise<StartedRun> {
     const { run } = await this.api.send(sessionId, text);
-    /* Stage 2 renames the session on its first run: read the new name back. */
-    const sessionName = run.n === 1 ? (await this.api.getSession(sessionId)).session.name : null;
+    /* Stage 2 renames the session on its first run: read the new name back. The run has started either way. */
+    let sessionName: string | null = null;
+    if (run.n === 1) {
+      try {
+        sessionName = (await this.api.getSession(sessionId)).session.name;
+      } catch (err) {
+        console.error(err);
+      }
+    }
     return { runId: run.id, n: run.n, sessionName };
   }
 

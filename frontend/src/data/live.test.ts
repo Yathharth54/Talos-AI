@@ -28,6 +28,9 @@ const msg = (id: string, role: ApiMessage["role"], runId: string | null, over: P
 });
 
 test("sourceLines drops one trailing newline", () => {
+  // An empty file has no lines, as GET /api/vault/{name} counts them.
+  expect(sourceLines("")).toEqual([]);
+  expect(sourceLines("\n")).toEqual([""]);
   expect(sourceLines("a\nb\n")).toEqual(["a", "b"]);
   expect(sourceLines("a\nb")).toEqual(["a", "b"]);
   expect(sourceLines("a\n\n")).toEqual(["a", ""]);
@@ -155,7 +158,7 @@ test("toMessages maps you and Talos messages and drops the active run's", () => 
   ]);
 });
 
-test("loadSessions reads each session, stubs its runs sorted by n, and finds the active run", async () => {
+test("loadSessions reads each session and stubs its runs sorted by n", async () => {
   const details: Record<string, ApiSessionDetail> = {
     s1: {
       session: { id: "s1", name: "One", number: 1, created_at: "2026-09-30T09:00:00Z", updated_at: "" },
@@ -176,8 +179,7 @@ test("loadSessions reads each session, stubs its runs sorted by n, and finds the
     messages: [{ kind: "you", key: "you-m1", text: "q1", past: false }],
   });
   expect(a!.runs.map((r) => r.n)).toEqual([1, 2]);
-  expect(a!.active).toBeNull();
-  expect(b!.active).toMatchObject({ id: "run-4", status: "running" });
+  expect(b!.runs.map((r) => [r.n, r.status])).toEqual([[3, "done"], [4, "running"]]);
   expect(b!.rec.messages).toEqual([]);
   expect(b!.rec.runIds).toEqual(["run-3", "run-4"]);
 });
@@ -188,4 +190,18 @@ test("runEvents normalises the backlog; getRun passes through", async () => {
   const ds = new LiveDataSource(fakeApi({ runEvents: async () => backlog, getRun }));
   expect((await ds.runEvents("r"))[0]!.data).toEqual({ html: "x" });
   expect(await ds.getRun("run-1")).toMatchObject({ id: "run-1", pending: null });
+});
+
+test("toMessages takes a stopped run from the run's status, not from the message's shape", () => {
+  const detail: ApiSessionDetail = {
+    session: { id: "s1", name: "S", number: 1, created_at: "2026-09-30T10:00:00Z", updated_at: "" },
+    runs: [run(1), run(2, { status: "stopped" })],
+    messages: [
+      msg("m1", "assistant", "run-1", { html: "", note: "A note for an empty answer" }),
+      msg("m2", "assistant", "run-2", { html: "", note: "Stopped. Ask again whenever you're ready." }),
+    ],
+  };
+  const [done, stopped] = toMessages(detail);
+  expect(done).toMatchObject({ html: "", note: "A note for an empty answer", stopNote: null });
+  expect(stopped).toMatchObject({ html: null, note: null, stopNote: "Stopped. Ask again whenever you're ready." });
 });

@@ -7,11 +7,10 @@ import { normalise } from "../transport/live";
 import type { ApiRun, ApiRunSummary, ApiSessionDetail, ApiSessionSummary, ApiSettings, RunEvent } from "../transport/types";
 import type { DataSource } from "./source";
 
-/** A past session as the stores hold it, plus its running or waiting run (Task 3 reattaches to it). */
+/** A past session as the stores hold it. */
 export interface LoadedSession {
   rec: SessionRec;
   runs: Run[];
-  active: ApiRunSummary | null;
 }
 
 const ACTIVE = new Set<ApiRunSummary["status"]>(["running", "waiting"]);
@@ -21,6 +20,7 @@ const ACTIVE = new Set<ApiRunSummary["status"]>(["running", "waiting"]);
  * reference's getSource() (a <script> body with no trailing newline) and the "N lines" counts agree.
  */
 export function sourceLines(source: string): string[] {
+  if (source === "") return []; // no lines, as GET /api/vault/{name} counts them
   return (source.endsWith("\n") ? source.slice(0, -1) : source).split("\n");
 }
 
@@ -65,7 +65,7 @@ export function toMessages(detail: ApiSessionDetail): Message[] {
       continue;
     }
     /* A stopped run's message is empty HTML with the stop note in `note` (plain text: rendered as text). */
-    const stopped = m.html === "" && m.note != null;
+    const stopped = r?.status === "stopped";
     out.push({
       kind: "talos",
       key: `talos-${m.id}`,
@@ -164,7 +164,7 @@ export class LiveDataSource implements DataSource {
     return this.api.listSessions();
   }
 
-  /** Reads each listed session: its record, its runs as stubs (sorted by n), and its active run if any. */
+  /** Reads each listed session: its record and its runs as stubs (sorted by n). */
   async loadSessions(list: ApiSessionSummary[]): Promise<LoadedSession[]> {
     const details = await Promise.all(list.map((s) => this.api.getSession(s.id)));
     return details.map((d) => {
@@ -177,7 +177,7 @@ export class LiveDataSource implements DataSource {
         runIds: sorted.map((r) => r.id),
         messages: toMessages(d),
       };
-      return { rec, runs: sorted.map((r) => stubRun(d.session.id, r)), active: sorted.find((r) => ACTIVE.has(r.status)) ?? null };
+      return { rec, runs: sorted.map((r) => stubRun(d.session.id, r)) };
     });
   }
 
