@@ -22,7 +22,7 @@ export function Composer({ value, disabled, hint, busy, onChange, onSubmit, inpu
         onSubmit();
       }}
     >
-      <label htmlFor="ask">{COPY.convo.askLabel}</label>
+      <label htmlFor="ask" className="sr">{COPY.convo.askLabel}</label>
       <textarea
         id="ask"
         rows={3}

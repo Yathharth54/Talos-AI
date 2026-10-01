@@ -60,6 +60,15 @@ def attempts_phrase(n: int) -> str:
     return "1 attempt" if n == 1 else f"{n} attempts"
 
 
+def _forged_sig(forged: Mapping[str, Any]) -> dict[str, str] | None:
+    """The bench signature for a forged tool, or None when the Forger gave none."""
+    name, signature = forged.get("name"), forged.get("signature")
+    if not name or not signature:
+        return None
+    args, ret = split_signature(str(signature))
+    return {"name": str(name), "args": args, "ret": ret}
+
+
 def _content_text(content: Any) -> str:
     if isinstance(content, str):
         return content
@@ -369,7 +378,8 @@ class EventTranslator:
                 pending = s.get("pending_code")
                 if pending is not None:
                     s["pending_code"] = None
-                    self._forge_code({**pending, "tests": s["tests_total"]})
+                    sig = _forged_sig(forged)
+                    self._forge_code({**pending, "tests": s["tests_total"], "sig": sig})
             elif node == "test":
                 self._tests_decided(update.get("test_result") or {})
             return

@@ -392,3 +392,24 @@ test("a failing source fetch still shows the vault call: the Code tab just has n
   expect(s.vault.get().sources.slugify).toBeUndefined(); // not cached: the next call tries again
   err.mockRestore();
 });
+
+test("a forge run whose plan names no tool shows the forged signature, never the no-tools title", async () => {
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false });
+  void p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  void p.push(ev("strip.set", { variant: "forge", subtask: { index: 1, total: 1, label: "Sub-task 1 of 1, needs a new tool" }, sig: null }));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(run(s).title).not.toBe(COPY.bench.noTools);
+  const sig = { name: "hypergeometric_probability", args: "total: int, defective: int, draws: int", ret: "dict" };
+  void p.push(ev("forge.code", { tool: sig.name, attempt: 1, file: "h.py", lines: ["x"], changed: null, note: null, tests: 6, sig }));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(run(s).sig).toEqual(sig);
+});
+
+test("a chat run with no signature still reads No tools needed", async () => {
+  const s = stores();
+  const p = new Player(s, { runId: "r", sessionId: "s1", momentDwell: false });
+  void p.push(ev("run.started", { session_id: "s1", query: "q", n: 6 }));
+  await p.push(ev("strip.set", { variant: "chat", subtask: { index: 0, total: 0, label: "Conversational" }, sig: null }));
+  expect(run(s).title).toBe(COPY.bench.noTools);
+});

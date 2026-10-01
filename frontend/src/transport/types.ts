@@ -61,6 +61,8 @@ export interface EventData {
     note: string | null;
     /** Ruling 1: how many tests the Forger wrote for this attempt (stage 2 sends it too). */
     tests?: number;
+    /** The forged tool's signature, once the Forger names it (the plan has none for a new tool). */
+    sig?: Sig | null;
   };
   "forge.tests": { tool: string; attempt: number; results: { name: string; passed: boolean; why: string | null }[] };
   "forge.attempt": { attempt: number; ok: boolean; detail: string };

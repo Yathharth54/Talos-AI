@@ -279,6 +279,15 @@ async def test_recorded_fixtures_match_a_live_capture(name):
     assert chunks.shape(live) == chunks.shape(chunks.load(name))
 
 
+def test_forge_code_carries_the_forged_signature_when_the_plan_names_no_tool():
+    # The Planner can't name a tool it hasn't forged yet (tool_hint is null), so
+    # strip.set has no signature. The Forger's signature fills the bench title.
+    _, events = run("forge_retry")
+    assert first(events, "strip.set")["sig"] is None
+    sig = {"name": "caesar_cipher", "args": "text: str, shift: int, mode: str", "ret": "str"}
+    assert [d["sig"] for t, d in events if t == "forge.code"] == [sig, sig]
+
+
 def test_forger_failure_and_smoke_without_a_call_are_tolerated():
     tr = EventTranslator()
     tr.feed(((), "updates", {"planner": {"plan": {"sub_tasks": [
@@ -290,6 +299,7 @@ def test_forger_failure_and_smoke_without_a_call_are_tolerated():
     events = tr.feed((ns, "updates", {"forge": {"forged_tool": {"name": "", "code": ""}}}))
     assert first(events, "forge.code")["tool"] == ""
     assert first(events, "forge.code")["tests"] == 0
+    assert first(events, "forge.code")["sig"] is None
     tr.feed((ns, "tasks", {"name": "test", "input": None}))
     tests = {"tool": "", "attempt": 1, "results": []}
     tr.feed((ns, "custom", {"type": "forge.tests", "data": tests}))

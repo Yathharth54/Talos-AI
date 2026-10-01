@@ -201,7 +201,11 @@ export class Player {
         this.up((r) => {
           let x = r.strip === d.variant ? r : R.initStrip(r, d.variant, true);
           x = R.setSig(R.setLabel(x, d.subtask.label), d.sig);
-          return d.sig ? x : R.setTitle(x, d.title ?? COPY.bench.noTools);
+          // Only a chat run has no tools. A forge sub-task's signature isn't known until the Forger names
+          // the tool (forge.code carries it), so its heading waits rather than claiming no tools.
+          if (d.sig) return x;
+          if (d.title != null) return R.setTitle(x, d.title);
+          return d.variant === "chat" ? R.setTitle(x, COPY.bench.noTools) : x;
         });
         return;
       }
@@ -352,6 +356,7 @@ export class Player {
     if (d.tests != null) this.testsCount = d.tests;
     const count = this.testsCount;
     const first = d.attempt === 1 || !this.run().code;
+    if (d.sig) this.up((r) => R.setSig(r, d.sig!));
     this.up((r) => {
       const attempts = [...(r.attempts ?? []), { n: d.attempt, ok: null, detail: "" }];
       const tabs: Tab[] = r.tabs.some((t) => t.id === "code")
