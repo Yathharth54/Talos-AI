@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { extractStyle, extractTextScript, extractVaultData, readRef, REF_ASSETS } from "../scripts/reference.mjs";
+import { extractStyle, extractTextScript, extractVaultData, readRef, REF_ASSETS, REF_INDEX } from "../scripts/reference.mjs";
 
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), "utf8").replace(/\r\n/g, "\n");
 
@@ -34,5 +34,11 @@ describe("verbatim copies of the reference", () => {
   test("index.html carries the reference's font links and title", () => {
     const html = read("index.html");
     for (const line of ref.split("\n").slice(0, 4)) expect(html).toContain(line);
+  });
+
+  test("the reference index.html is artifact-body.html in its browser wrapper, so fixtures and baselines follow the body", () => {
+    const index = readFileSync(REF_INDEX, "utf8").replace(/\r\n/g, "\n");
+    const head = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n</head>\n<body>\n';
+    expect(index).toBe(`${head}${ref}\n</body>\n</html>\n`);
   });
 });
