@@ -397,7 +397,7 @@ html { scroll-behavior: smooth; }
 
 
 /* busy ring around the mark */
-.disc-wrap { position: relative; width: 26px; height: 26px; display: block; }
+.disc-wrap { position: relative; top: 1px; width: 26px; height: 26px; display: block; }
 .disc-wrap .ring { position: absolute; inset: -5px; border-radius: 50%; opacity: 0; transition: opacity .4s;
   background: conic-gradient(from 0deg, transparent 0 62%, var(--gold) 100%);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px)); mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px)); }
@@ -448,12 +448,12 @@ html { scroll-behavior: smooth; }
 .nav .badge { animation: badge 1.8s ease-out infinite; }
 
 /* idle: orbit rings, scan line, pointer glow */
-.art-wrap { position: relative; width: min(600px, 100%, max(50vh, 320px)); aspect-ratio: 5 / 2; display: flex; align-items: center; justify-content: center; }
+.art-wrap { --aw: min(600px, 100%, max(44vh, 300px)); position: relative; width: var(--aw); margin-top: calc(var(--aw) * .18 + 8px); aspect-ratio: 5 / 2; display: flex; align-items: center; justify-content: center; }
 .art-wrap .art { position: absolute; inset: 0; width: 100%; height: 100%; }
 .art-wrap::before { content: ""; position: absolute; inset: -10% 15%; background: radial-gradient(closest-side, rgba(214, 178, 122, .09), transparent); z-index: -1; }
 .orbit { position: absolute; top: 50%; left: 50%; border-radius: 50%; border: 1px dashed rgba(236, 230, 218, .12); transform: translate(-50%, -50%); pointer-events: none; }
-.orbit.o1 { width: 118%; aspect-ratio: 1 / 1; max-height: 340%; width: min(118%, 700px); animation: orbit 60s linear infinite; }
-.orbit.o2 { width: min(86%, 520px); aspect-ratio: 1 / 1; border-style: solid; border-color: rgba(236, 230, 218, .06); animation: orbit-rev 90s linear infinite; }
+.orbit.o1 { height: 190%; aspect-ratio: 1 / 1; animation: orbit 60s linear infinite; }
+.orbit.o2 { height: 150%; aspect-ratio: 1 / 1; border-style: solid; border-color: rgba(236, 230, 218, .06); animation: orbit-rev 90s linear infinite; }
 .orbit.o1::after { content: ""; position: absolute; top: -3px; left: 50%; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px var(--gold); }
 .art-wrap .scan { position: absolute; left: 20%; right: 20%; top: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(236, 230, 218, .7) 50%, transparent); box-shadow: 0 0 18px 2px rgba(214, 178, 122, .35); opacity: 0; animation: scan 2.2s .3s var(--ease) both; }
 .idle { overflow: hidden; }
@@ -553,7 +553,6 @@ html { scroll-behavior: smooth; }
   .rail { margin: 0; }
   .sess { grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .sessions { padding: 24px 16px 48px; }
-  .orbit.o1 { width: 104%; }
 }
 
 /* ---------- responsive ---------- */
