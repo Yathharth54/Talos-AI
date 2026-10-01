@@ -31,6 +31,11 @@ export class LiveApp {
     return run;
   }
 
+  /** The run's status on the server. */
+  async status(run: RunInfo): Promise<string> {
+    return (await (await this.api.get(`/api/runs/${run.id}`)).json()).status as string;
+  }
+
   /** Wait until the run is finished on the server and its "View this run" link is on the page. */
   async finished(run: RunInfo): Promise<string> {
     await expect.poll(async () => (await (await this.api.get(`/api/runs/${run.id}`)).json()).status, { timeout: 60_000 })
@@ -47,14 +52,21 @@ export class LiveApp {
     await this.page.evaluate(() => {
       const w = window as unknown as { __nodes: Record<string, string[]> };
       w.__nodes = {};
-      const scan = () => {
-        for (const el of document.querySelectorAll("#b-strip [data-node]")) {
-          const k = el.getAttribute("data-node") ?? "";
-          const seen = (w.__nodes[k] ??= []);
-          if (seen[seen.length - 1] !== el.className) seen.push(el.className);
-        }
+      const push = (k: string, cls: string) => {
+        const seen = (w.__nodes[k] ??= []);
+        if (seen[seen.length - 1] !== cls) seen.push(cls);
       };
-      new MutationObserver(scan).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+      const scan = () => {
+        for (const el of document.querySelectorAll("#b-strip [data-node]")) push(el.getAttribute("data-node") ?? "", el.className);
+      };
+      // A class can change twice between two callbacks: each mutation's oldValue keeps the one in between.
+      new MutationObserver((ms) => {
+        for (const m of ms) {
+          const el = m.target as Element;
+          if (m.type === "attributes" && m.oldValue != null && el.matches?.("#b-strip [data-node]")) push(el.getAttribute("data-node") ?? "", m.oldValue);
+        }
+        scan();
+      }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
       scan();
     });
     return () => this.page.evaluate(() => (window as unknown as { __nodes: Record<string, string[]> }).__nodes);
@@ -63,18 +75,17 @@ export class LiveApp {
   /**
    * Record every caption `#b-cap` shows from now on. A caption is replaced by the next step's within a few
    * dwells, so one that isn't the run's last is asserted from this record. The caption already on the bench
-   * (the previous run's) isn't recorded, unless a new bench shows it again.
+   * (the previous run's) isn't recorded, also when the new run's bench shows it again before its first caption.
    */
   async trackCaptions(): Promise<() => Promise<string[]>> {
     await this.page.evaluate(() => {
       const w = window as unknown as { __caps: string[] };
       w.__caps = [];
-      const el0 = document.querySelector("#b-cap");
-      const t0 = el0?.textContent ?? "";
+      const t0 = document.querySelector("#b-cap")?.textContent ?? "";
       const scan = () => {
         const el = document.querySelector("#b-cap");
         const t = el?.textContent ?? "";
-        if (!t || (el === el0 && t === t0)) return;
+        if (!t || (t === t0 && w.__caps.length === 0)) return;
         if (w.__caps[w.__caps.length - 1] !== t) w.__caps.push(t);
       };
       new MutationObserver(scan).observe(document.body, { subtree: true, childList: true, characterData: true });
@@ -118,11 +129,16 @@ export class LiveApp {
     return readFileSync(DOTENV, "utf-8");
   }
 
-  /** Stop any run this test left going, so the next test isn't blocked by 409 run_active. */
+  /**
+   * Stop any run left going, so the next test isn't blocked by 409 run_active. Every session's runs are
+   * read from the API, so a run this test didn't start through ask() (a retry chip, a 409 re-attach) is
+   * stopped too.
+   */
   async cleanup(): Promise<void> {
-    for (const run of this.runs) {
-      const s = (await (await this.api.get(`/api/runs/${run.id}`)).json()).status as string;
-      if (s === "running" || s === "waiting") await this.api.post(`/api/runs/${run.id}/stop`);
+    const sessions = (await (await this.api.get("/api/sessions")).json()) as { id: string }[];
+    for (const s of sessions) {
+      const { runs } = (await (await this.api.get(`/api/sessions/${s.id}`)).json()) as { runs: { id: string; status: string }[] };
+      for (const r of runs) if (r.status === "running" || r.status === "waiting") await this.api.post(`/api/runs/${r.id}/stop`);
     }
     await this.setAskBeforeExec(true);
   }
