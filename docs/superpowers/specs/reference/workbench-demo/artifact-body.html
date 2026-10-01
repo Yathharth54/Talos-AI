@@ -211,8 +211,8 @@ button, input, textarea { font: inherit; color: inherit; }
 .attempts .a-r { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .attempts .a-r span:last-child { font: 12px/1.6 var(--mono); color: var(--stone); overflow-wrap: anywhere; }
 
-.args { margin: 0; padding: 16px 18px 18px; display: grid; grid-template-columns: 7ch minmax(0, 1fr); row-gap: 10px; font: 14px var(--mono); }
-.args dt { color: var(--stone); }
+.args { margin: 0; padding: 16px 18px 18px; display: grid; grid-template-columns: minmax(7ch, max-content) minmax(0, 1fr); column-gap: 16px; row-gap: 10px; font: 14px var(--mono); }
+.args dt { max-width: 20ch; overflow-wrap: anywhere; color: var(--stone); }
 .args dd { margin: 0; overflow-wrap: anywhere; animation: rise .3s var(--ease) both; }
 .args .bad { padding: 1px 6px; margin-left: -6px; border: 1px solid var(--bone); border-radius: 4px; }
 .result { padding: 20px 18px 22px; font: 26px/1.3 var(--mono); overflow-wrap: anywhere; animation: rise .35s var(--ease) both; }

@@ -311,6 +311,7 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-04-frontend-design.md`. Plans
 
 **Owner-requested design changes (after the stage 04 merge)**, applied to the reference `artifact-body.html` and our code alike, with the parity fixtures regenerated from the reference:
 - Bench title bug (live): a forge run whose plan names no tool sent `strip.set` with `sig: null`, and the player turned every sig-less strip into `No tools needed`. The translator now adds the forged tool's `sig` to `forge.code`, and the player keeps `No tools needed` for the `chat` variant only.
+- Call panel Arguments: the name column was a fixed `7ch`, so longer names (`defective`) ran into the value. It now fits the longest name (`minmax(7ch, max-content)`, 16px column gap), and a name over 20ch wraps instead of overlapping.
 
 **Notes**:
 - Live e2e has `retries: 0`: the fake graph keeps a saved key in memory, so a retry after "Save key" can't recover. `09-keys` must stay the last live spec.
