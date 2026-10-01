@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from talos.config import settings
 from talos.vault.manager import SkillManager
 from talos.web import fake_graph
+from talos.web.board import Board
 from talos.web.fake_graph import FakeDriver, make_fake_vault, parse_caesar, run_python
 from talos.web.runner import Pause, Resume
 from talos.web.translator import EventTranslator
@@ -309,32 +311,92 @@ async def test_no_delay_by_default(driver, monkeypatch):
     assert sleeps == []
 
 
-async def test_a_delay_paces_each_event_and_the_state_follows_what_was_sent(tmp_path, monkeypatch):
-    """The e2e suite paces the fake so a run is really still going on the server when the page acts.
+async def paced_run(tmp_path, monkeypatch, query, state=None, resume=None, driver=None):
+    """Run a paced fake (25 ms) with no real sleeps, and record what Stop could read.
 
-    The board state (what Stop reads) matches the last event sent, not the end of the flow.
+    Returns the driver, the state and a timeline of ("sleep", state copy) and
+    ("event", type, state copy) entries: a Stop can land in a sleep, or while the
+    runner stores the event just yielded.
     """
-    paced = FakeDriver(SkillManager(vault_dir=tmp_path / "vault"), event_delay_ms=25)
-    sleeps = []
+    paced = driver or FakeDriver(SkillManager(vault_dir=tmp_path / "vault"), event_delay_ms=25)
+    state = state if state is not None else paced.initial_state()
+    timeline = []
 
     async def fake_sleep(s):
-        sleeps.append(s)
+        assert s == 0.025
+        timeline.append(("sleep", copy.deepcopy(state)))
 
     monkeypatch.setattr(fake_graph.asyncio, "sleep", fake_sleep)
-    state = paced.initial_state()
-    seen = []
-    async for item in paced.run(state, query=CAESAR_Q, thread_id="t", resume=None):
-        type_, data_ = item
-        if type_ == "node.started" and data_["step"] == "forger" and not seen:
-            seen.append((state["steps"]["forger"]["state"], list(state["forged"])))
-    assert seen == [("active", [])]
-    assert state["forged"] == ["caesar_cipher"]  # the end of the flow, once every event is sent
-    assert sleeps and set(sleeps) == {0.025}
+    async for item in paced.run(state, query=query, thread_id="t", resume=resume):
+        if not isinstance(item, Pause):
+            timeline.append(("event", item[0], copy.deepcopy(state)))
+    return paced, state, timeline
 
-    # The same events as an unpaced run.
+
+def stops_a_step(state) -> bool:
+    b = Board(copy.deepcopy(state))
+    b.stop()
+    return any(t == "node.finished" and d["status"] == "stopped" for t, d in b.drain())
+
+
+async def test_a_delay_paces_the_run_and_the_state_follows_what_was_sent(tmp_path, monkeypatch):
+    """The e2e suite paces the fake so a run is really still going on the server when the page acts.
+
+    The board state (what Stop reads) is the last event sent that left a step working, not the
+    end of the flow.
+    """
+    _, state, timeline = await paced_run(tmp_path, monkeypatch, CAESAR_Q)
+    forger = next(
+        e[2]
+        for e in timeline
+        if e[0] == "event" and e[1] == "node.started" and "forger" in e[2]["steps"]
+    )
+    assert forger["steps"]["forger"]["state"] == "active"
+    assert forger["forged"] == []
+    assert state["forged"] == ["caesar_cipher"]  # the end of the flow, once every event is sent
+
+    # The same events as an unpaced run, with rests in between.
     plain = FakeDriver(SkillManager(vault_dir=tmp_path / "vault2"))
     _, events, _ = await drive(plain, CAESAR_Q)
-    assert len(sleeps) == len(events)
+    assert [e[1] for e in timeline if e[0] == "event"] == [t for t, _ in events]
+    sleeps = [e for e in timeline if e[0] == "sleep"]
+    assert 0 < len(sleeps) < len(events)
+
+
+async def test_a_paced_run_only_rests_where_a_step_is_working(tmp_path, monkeypatch):
+    """In the demo a hand-over between steps is synchronous; the paced fake never rests half-way."""
+    _, _, timeline = await paced_run(tmp_path, monkeypatch, CAESAR_Q)
+    assert all(stops_a_step(e[1]) for e in timeline if e[0] == "sleep")
+
+
+async def test_a_stop_anywhere_in_a_paced_forge_marks_a_stopped_step(tmp_path, monkeypatch):
+    """Wherever a Stop lands from the planner's start to the run's last event, a step is stopped.
+
+    CI run 36821538409 stopped between the Forger and the Tester, and marked none.
+    """
+    _, _, timeline = await paced_run(tmp_path, monkeypatch, CAESAR_Q)
+    start = next(i for i, e in enumerate(timeline) if e[0] == "event" and e[1] == "node.started")
+    tail = enumerate(timeline[start:-1], start=start)
+    assert [i for i, e in tail if not stops_a_step(e[-1])] == []
+
+
+async def test_a_paced_run_shows_nothing_planned_before_it_is_sent(tmp_path, monkeypatch):
+    """The flow is planned up front: Stop must never read the planned end state early."""
+    _, state, timeline = await paced_run(tmp_path, monkeypatch, CAESAR_Q)
+    saved = next(i for i, e in enumerate(timeline) if e[0] == "event" and e[1] == "vault.saved")
+    assert all(e[-1]["forged"] == [] for e in timeline[:saved])
+    assert timeline[0][-1]["steps"] == {"planner": {"state": "active", "label": "planner"}}
+    assert state["forged"] == ["caesar_cipher"]
+
+
+async def test_a_paced_resume_shows_the_paused_state_before_its_first_event(tmp_path, monkeypatch):
+    paced, state, _ = await paced_run(tmp_path, monkeypatch, PYTHON_Q)
+    paused = copy.deepcopy(state)
+    approve = Resume("confirm_exec", "approve", {"approved": True})
+    _, state, timeline = await paced_run(tmp_path, monkeypatch, PYTHON_Q, state, approve, paced)
+    assert timeline[0] == ("sleep", paused)
+    assert stops_a_step(paused)
+    assert state["steps"]["answer"]["state"] == "answer"
 
 
 def test_the_delay_setting_defaults_to_zero(monkeypatch):

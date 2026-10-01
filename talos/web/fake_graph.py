@@ -210,6 +210,12 @@ def _plain(html_text: str) -> str:
 # ---- the driver -------------------------------------------------------------------------
 
 
+def _working(state: dict[str, Any]) -> bool:
+    """Whether a step is active, or the run is being handed to one (`Board.stop()` marks it)."""
+    steps = state["steps"].values()
+    return state.get("next") is not None or any(e["state"] == "active" for e in steps)
+
+
 class _PacedBoard(Board):
     """A Board that keeps a copy of the state as it was after each event."""
 
@@ -228,9 +234,12 @@ class FakeDriver:
     Args:
         vault: The vault the fake forges into (use `make_fake_vault()`).
         event_delay_ms: E2E only (`TALOS_FAKE_EVENT_DELAY_MS`): wait this long
-            before each event, and keep the board state at the last event
-            sent, so Stop and a reload meet a run that is still going. The
-            vault writes still happen when the flow is planned, up front.
+            before each event that follows a working step, and keep the
+            board state at the last event sent that left a step working
+            (before the first one, at the state the run started or resumed
+            with), so Stop and a reload meet a run that is still going, and
+            Stop always finds a step to mark. The vault writes still happen
+            when the flow is planned, up front.
     """
 
     def __init__(self, vault: SkillManager, *, event_delay_ms: int = 0) -> None:
@@ -246,6 +255,8 @@ class FakeDriver:
     ) -> AsyncIterator[Emitted | Pause]:
         paced = self.event_delay_s > 0
         b = _PacedBoard(state) if paced else Board(state)
+        # The flow is planned up front, which changes `state` before any event is sent.
+        sent = _copy.deepcopy(state) if paced else None
         if resume is None:
             kind = classify(query)
             state["flow"] = kind if kind in ("caesar", "python", "weather", "chat") else "unknown"
@@ -259,10 +270,20 @@ class FakeDriver:
         else:
             end = _copy.deepcopy(state)
             snapshots = b.snapshots  # type: ignore[attr-defined]
-            for event, snapshot in zip(events, snapshots, strict=True):
-                await asyncio.sleep(self.event_delay_s)
-                state.clear()
-                state.update(snapshot)
+            # Until the first event is sent, Stop must read the state as it was before planning.
+            state.clear()
+            state.update(sent or {})
+            last = len(events) - 1
+            for i, (event, snapshot) in enumerate(zip(events, snapshots, strict=True)):
+                # The run rests only where a step is working. In the demo, the moves from one
+                # step to the next are synchronous, so its Stop never lands half-way through one.
+                if _working(snapshots[i - 1] if i else state):
+                    await asyncio.sleep(self.event_delay_s)
+                # Stop reads the state of the last step that was working: if it lands while the
+                # runner stores an in-between event, that step is the one it marks stopped.
+                if i == last or _working(snapshot):
+                    state.clear()
+                    state.update(snapshot)
                 yield event
             state.clear()
             state.update(end)
