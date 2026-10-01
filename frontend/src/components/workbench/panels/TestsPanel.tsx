@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useRef } from "react";
 import { COPY, fill } from "../../../lib/copy";
 import type { Attempt, Smoke, TestsState } from "../../../store/types";
 import { TickIcon, XIcon } from "../../icons";
@@ -8,6 +8,12 @@ import { bareZeros } from "../../../lib/style";
    Keyed by run id, attempt and test name. */
 const drawnSet = new Set<string>();
 const flashedSet = new Set<string>();
+/** The oldest marks go past this many, so the sets can't grow without bound (a forgotten mark only re-animates). */
+const MAX_MARKS = 2000;
+const mark = (set: Set<string>, k: string) => {
+  set.add(k);
+  if (set.size > MAX_MARKS) set.delete(set.values().next().value!);
+};
 
 /** Forgets every draw mark. The demo reset calls it, because the run counter (and so the run ids) restart there. */
 export function clearTestMarks(): void {
@@ -22,15 +28,18 @@ export function TestsPanel({ runId, tests, smoke, attempts }: TestsPanelProps) {
   // The reference redraws this panel only when it calls renderPanel(): for this tab, when the tests or
   // the smoke test change, or when the panel is drawn afresh (a mount here). A React re-render for
   // anything else (a caption, a node, a dialog) must show what the last redraw showed, so the marks
-  // are read once per redraw rather than on every render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const marks = useMemo(() => ({ drawn: new Set(drawnSet), flashed: new Set(flashedSet) }), [runId, tests, smoke]);
+  // are read once per redraw rather than on every render. A ref, not useMemo: React may drop a memo.
+  const snap = useRef<{ runId: string; tests: typeof tests; smoke: typeof smoke; marks: { drawn: Set<string>; flashed: Set<string> } } | null>(null);
+  if (!snap.current || snap.current.runId !== runId || snap.current.tests !== tests || snap.current.smoke !== smoke) {
+    snap.current = { runId, tests, smoke, marks: { drawn: new Set(drawnSet), flashed: new Set(flashedSet) } };
+  }
+  const marks = snap.current.marks;
   useEffect(() => {
     if (!tests) return;
     for (const x of tests.list) {
       const k = `${runId}:${tests.attempt}:${x.name}`;
-      if (x.state === "passed") drawnSet.add(k);
-      if (x.state === "failed") flashedSet.add(k);
+      if (x.state === "passed") mark(drawnSet, k);
+      if (x.state === "failed") mark(flashedSet, k);
     }
   });
   if (!tests) return <p className="muted">{COPY.tests.none}</p>;
