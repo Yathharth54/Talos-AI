@@ -313,6 +313,7 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-04-frontend-design.md`. Plans
 - Bench title bug (live): a forge run whose plan names no tool sent `strip.set` with `sig: null`, and the player turned every sig-less strip into `No tools needed`. The translator now adds the forged tool's `sig` to `forge.code`, and the player keeps `No tools needed` for the `chat` variant only.
 - Call panel Arguments: the name column was a fixed `7ch`, so longer names (`defective`) ran into the value. It now fits the longest name (`minmax(7ch, max-content)`, 16px column gap), and a name over 20ch wraps instead of overlapping.
 - Call panel Result: `.result` drops from 26px/1.3 to a medium 18px/1.45 (padding 18px 18px 20px), so a dict result no longer wraps into five giant lines. `.result.small` (15px) is unchanged.
+- Composer: the visible `Ask Talos` label is now visually hidden with the reference's `.sr` class (kept for screen readers, as the Vault search label already was), the unused `.composer label` rule is gone, and the composer reads as one unit (padding 20px 36px 24px, 12px gap). The Vault search box already used `.sr` and had no divider, so it is unchanged.
 
 **Notes**:
 - Live e2e has `retries: 0`: the fake graph keeps a saved key in memory, so a retry after "Save key" can't recover. `09-keys` must stay the last live spec.
