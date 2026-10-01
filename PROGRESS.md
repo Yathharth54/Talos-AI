@@ -294,10 +294,10 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-04-frontend-design.md`. Plans
 **Part B (live mode)**:
 - [x] `LiveTransport` (REST + SSE, reconnect with `?after=<last seq>`, stream closed on `run.finished`), `LiveDataSource`, `createServices("live")`; reattach after a reload (backlog applied instantly, the approval dialog from `GET /api/runs/{id}` `pending`)
 - [x] Playwright visual parity: `ref-*` projects render baselines from the reference, `demo-*` compare at 0.1% (39 shot names at 1440x900 and 390x844; 24 tests per side)
-- [x] Live e2e on an isolated fake-graph server (port 8765, `talos_e2e`): boot, Caesar flows, sessions, vault, approval, stop, reload, axe, keyboard-only, keys (54 tests, desktop and mobile)
+- [x] Live e2e on an isolated fake-graph server (port 8765, `talos_e2e`): boot, Caesar flows, sessions, vault, approval, stop, reload, axe, keyboard-only, keys (55 tests, desktop and mobile)
 - [x] CI `frontend` job: lint, typecheck, Vitest, build, visual, live
 - [x] Backend fixes found by the e2e: vault API `lines` no longer counts a trailing newline; part of the cross-stage event-order and `small` fixes
-- Counts at the last run: Vitest 285 tests in 37 files; visual 24 ref + 24 demo; live 54; pytest 746 passed, 44 skipped.
+- Counts at the last run: Vitest 307 tests in 38 files; visual 24 ref + 24 demo; live 55; pytest 771 passed, 44 skipped.
 
 **Known differences from the reference and open owner decisions**:
 1. Visual shot `21-stopped`: the reference's `stopRun()` clears the paused timer, so the run never finishes and the page hangs on "Working". Our app finishes the stopped run. The demo shot is marked `test.fail()`.
@@ -311,7 +311,7 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-04-frontend-design.md`. Plans
 
 **Notes**:
 - Live e2e has `retries: 0`: the fake graph keeps a saved key in memory, so a retry after "Save key" can't recover. `09-keys` must stay the last live spec.
-- The fake graph is unpaced, so the Stop and mid-run reload e2e cases use the weather run or a replay.
+- The fake graph has an e2e-only per-event delay (`TALOS_FAKE_EVENT_DELAY_MS`, default 0; the e2e harness sets 25), so the Stop and mid-run reload e2e cases cover a run still going on the server.
 - Visual baselines are never committed. The visual suite needs Google Fonts to be reachable.
 
 ## Session log
