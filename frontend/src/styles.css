@@ -42,18 +42,18 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ---------- shell ---------- */
 .app { height: 100%; display: flex; flex-direction: column; }
-.top { height: 60px; flex: none; padding: 0 24px; display: flex; align-items: center; gap: 32px; border-bottom: 1px solid var(--line); position: relative; z-index: 5; background: var(--ink); }
-.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
-.brand .disc { width: 30px; height: 30px; border-radius: 50%; overflow: hidden; display: block; }
-.brand .disc img { width: 36px; height: 36px; margin: -3px; display: block; max-width: none; }
-.brand .word { font: 13px var(--display); letter-spacing: .45em; }
+.top { height: 54px; flex: none; padding: 0 22px; display: flex; align-items: center; gap: 28px; border-bottom: 1px solid var(--line); position: relative; z-index: 5; background: var(--ink); }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.brand .disc { width: 26px; height: 26px; border-radius: 50%; overflow: hidden; display: block; }
+.brand .disc img { width: 32px; height: 32px; margin: -3px; display: block; max-width: none; }
+.brand .word { font: 12px var(--display); letter-spacing: .45em; }
 .nav { display: flex; align-self: stretch; }
-.nav a { position: relative; padding: 0 14px; display: flex; align-items: center; font-size: 15px; text-decoration: none; color: var(--stone); transition: color .2s; }
+.nav a { position: relative; padding: 0 13px; display: flex; align-items: center; font-size: 14px; text-decoration: none; color: var(--stone); transition: color .2s; }
 .nav a:hover { color: var(--bone); }
 .nav a[aria-current="page"] { color: var(--bone); box-shadow: inset 0 -2px 0 var(--bone); }
-.nav .badge { position: absolute; top: 16px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px var(--gold); }
+.nav .badge { position: absolute; top: 14px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 10px var(--gold); }
 .top-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
-.model { font-size: 13px; color: var(--stone); }
+.model { font-size: 12px; color: var(--stone); }
 
 .pill { min-height: 44px; padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; font-size: 15px; font-weight: 500; text-decoration: none; cursor: pointer; white-space: nowrap; transition: background .2s, color .2s, border-color .2s, opacity .2s; }
 .pill.solid { background: var(--bone); color: var(--ink); border: 1px solid var(--bone); font-weight: 600; }
@@ -61,6 +61,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .pill.ghost { background: transparent; color: var(--bone); border: 1px solid var(--line-2); }
 .pill.ghost:hover { border-color: var(--bone); color: var(--bone); }
 .pill.sm { min-height: 40px; padding: 0 16px; font-size: 14px; }
+.top-right .pill { min-height: 36px; padding: 0 15px; font-size: 13px; }
 .pill.lg { min-height: 48px; padding: 0 26px; }
 .pill[disabled] { opacity: .45; cursor: not-allowed; }
 .pill[aria-pressed="true"] { background: var(--bone); color: var(--ink); border-color: var(--bone); font-weight: 600; }
@@ -391,7 +392,7 @@ html { scroll-behavior: smooth; }
 
 
 /* busy ring around the mark */
-.disc-wrap { position: relative; width: 30px; height: 30px; display: block; }
+.disc-wrap { position: relative; width: 26px; height: 26px; display: block; }
 .disc-wrap .ring { position: absolute; inset: -5px; border-radius: 50%; opacity: 0; transition: opacity .4s;
   background: conic-gradient(from 0deg, transparent 0 62%, var(--gold) 100%);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px)); mask: radial-gradient(farthest-side, transparent calc(100% - 1.5px), #000 calc(100% - 1px)); }
@@ -561,7 +562,7 @@ html { scroll-behavior: smooth; }
   .brand .word { display: none; }
   .nav a { padding: 0 10px; }
   .top-right .gh-label { display: none; }
-  .top-right .pill { padding: 0 14px; }
+  .top-right .pill { min-height: 40px; padding: 0 14px; }
   .wb { display: flex; flex-direction: column; }
   .convo { border-right: 0; border-bottom: 1px solid var(--line); max-height: none; position: static; }
   .msgs { max-height: 46vh; padding: 20px 16px; gap: 22px; }
@@ -583,5 +584,5 @@ html { scroll-behavior: smooth; }
   .idle h1 { font-size: 21px; }
   .dialog .d-top, .dialog .field, .dialog .d-act { padding-left: 20px; padding-right: 20px; }
   .dialog pre { margin-left: 20px; margin-right: 20px; }
-  .popover { position: fixed; top: 68px; left: 16px; right: 16px; width: auto; }
+  .popover { position: fixed; top: 62px; left: 16px; right: 16px; width: auto; }
 }
