@@ -311,7 +311,7 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-04-frontend-design.md`. Plans
 
 **Notes**:
 - Live e2e has `retries: 0`: the fake graph keeps a saved key in memory, so a retry after "Save key" can't recover. `09-keys` must stay the last live spec.
-- The fake graph has an e2e-only per-event delay (`TALOS_FAKE_EVENT_DELAY_MS`, default 0; the e2e harness sets 25), so the Stop and mid-run reload e2e cases cover a run still going on the server.
+- The fake graph has an e2e-only per-event delay (`TALOS_FAKE_EVENT_DELAY_MS`, default 0; the e2e harness sets 60, and the fake only rests where a step is working), so the Stop and mid-run reload e2e cases cover a run still going on the server.
 - Visual baselines are never committed. The visual suite serves pinned local copies of the Google Fonts (`e2e/support/fonts`, OFL), because Google occasionally serves a different font build; the live suite still loads them from Google.
 
 ## Session log

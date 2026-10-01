@@ -11,7 +11,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
 
 logger = logging.getLogger("talos.e2e")
 
@@ -19,14 +19,16 @@ ROOT = Path(__file__).resolve().parents[2]
 TMP = ROOT / "frontend" / ".e2e-tmp"
 DEFAULT_DB = "postgresql+psycopg://talos:talos@localhost:55432/talos_e2e"
 PORT = "8765"
-# The fake graph waits this long before each event (TALOS_FAKE_EVENT_DELAY_MS), so
-# 05-stop and 06-reload act on a run that is still going on the server. A Caesar
-# forge (70 events) then takes about 1.8 s on the server.
-EVENT_DELAY_MS = "25"
+# The fake graph rests this long before each event that follows a working step
+# (TALOS_FAKE_EVENT_DELAY_MS), so 05-stop and 06-reload act on a run that is still
+# going on the server. A Caesar forge (70 events, 50 rests) then takes about 3 s on
+# the server, and the page shows its Forger at about 1.5 s.
+EVENT_DELAY_MS = "60"
 # Every TALOS_* knob is the harness's own: none passes through from the shell.
 _DROP_PREFIXES = ("LANGSMITH_", "TALOS_")
 _DROP_NAMES = {"DATABASE_URL"}
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+_HOST_PARAMS = {"host", "hostaddr"}
 
 
 def split_db_url(url: str) -> tuple[str, str]:
@@ -47,6 +49,12 @@ def split_db_url(url: str) -> tuple[str, str]:
         raise SystemExit(f"E2E_DATABASE_URL must name a *_e2e database, got {name!r}")
     if parts.hostname not in _LOCAL_HOSTS:
         raise SystemExit(f"E2E_DATABASE_URL must be on localhost, got {parts.hostname!r}")
+    # libpq lets ?host= or ?hostaddr= override the host above.
+    overrides = sorted(
+        {k.lower() for k, _ in parse_qsl(parts.query, keep_blank_values=True)} & _HOST_PARAMS
+    )
+    if overrides:
+        raise SystemExit(f"E2E_DATABASE_URL must be on localhost, got a {overrides[0]!r} parameter")
     return name, parts._replace(path="/postgres").geturl()
 
 

@@ -147,3 +147,29 @@ def test_recreate_database_drops_and_creates_through_the_admin_database(monkeypa
         ("execute", 'CREATE DATABASE "talos_e2e"'),
         ("closed", None),
     ]
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "?host=db.example.com",
+        "?hostaddr=10.0.0.5",
+        "?sslmode=disable&host=db.example.com",
+        "?HOST=db.example.com",
+        "?host=",
+    ],
+)
+def test_refuses_a_host_override_in_the_query(query: str) -> None:
+    """libpq lets ?host= and ?hostaddr= override the URL's host, so the guard refuses them."""
+    mod = _load()
+    with pytest.raises(SystemExit, match="localhost"):
+        mod.split_db_url(f"postgresql+psycopg://talos:talos@localhost:55432/talos_e2e{query}")
+
+
+def test_accepts_other_query_parameters() -> None:
+    mod = _load()
+    url = "postgresql+psycopg://talos:talos@localhost:55432/talos_e2e?sslmode=disable"
+    assert mod.split_db_url(url) == (
+        "talos_e2e",
+        "postgresql://talos:talos@localhost:55432/postgres?sslmode=disable",
+    )

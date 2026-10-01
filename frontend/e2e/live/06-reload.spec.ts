@@ -112,8 +112,9 @@ test.describe.serial("Reload during a run", () => {
     const [you, talosMsgs] = [await page.locator(".msg.you").count(), await page.locator(".msg.talos").count()];
     const run = await app.ask(Q.forge);
     await expect(page.locator('.node.active[data-node="forger"]')).toBeVisible();
-    // serve_backend.py paces the fake graph, so the run is still going on the server: the reload
-    // re-attaches to its live stream (an EventSource), rather than replaying a finished log (a fetch).
+    // serve_backend.py paces the fake graph, so the run is still going on the server: the page shows
+    // the Forger at about 1.4 s, and the server finishes at about 3 s. The reload re-attaches to its
+    // live stream (an EventSource), rather than replaying a finished log (a fetch).
     expect(await app.status(run)).toBe("running");
     const attached = page.waitForRequest((r) => r.url().includes(`/api/runs/${run.id}/events`) && r.resourceType() === "eventsource");
 

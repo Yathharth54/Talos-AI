@@ -4,7 +4,8 @@ import { Q } from "../support/queries";
 test.describe.serial("Stop", () => {
   test("stop a run that is still going on the server", async ({ app, page }) => {
     // serve_backend.py paces the fake graph (TALOS_FAKE_EVENT_DELAY_MS), so a Caesar forge is still
-    // running on the server while the page shows the Forger working.
+    // running on the server while the page shows the Forger working: the page shows it at about
+    // 1.4 s, and the server finishes at about 3 s.
     await app.dropTool("caesar_cipher");
     const run = await app.ask(Q.forge);
     await expect(page.locator('.node.active[data-node="forger"]')).toBeVisible();
@@ -13,7 +14,10 @@ test.describe.serial("Stop", () => {
     // "stopped", not "done": the Stop landed while the run was going.
     expect(await app.finished(run)).toBe("stopped");
 
-    await expect(page.locator(".node.stopped")).not.toHaveCount(0);
+    // Wherever the server was, one step is stopped: the active one, or the one it was being handed
+    // to (Board.stop). The page, which lags the server, is left with nothing active.
+    await expect(page.locator(".node.stopped")).toHaveCount(1);
+    await expect(page.locator(".node.active")).toHaveCount(0);
     await expect(page.locator("#b-cap")).toHaveText("You stopped this run. Nothing was saved to the vault.");
     const talos = page.locator(".msg.talos").last();
     await expect(talos.locator(".note").last()).toHaveText("Stopped. Ask again whenever you're ready.");
@@ -24,11 +28,14 @@ test.describe.serial("Stop", () => {
   });
 
   test("stop during a run paused on the server", async ({ app, page }) => {
-    // The weather forge pauses on the server for its key right after the forge.
+    // The weather forge pauses on the server for its key right after the forge, at about 1.6 s. The
+    // page, which lags the server, opens the key dialog at about 2.6 s. Stop goes in between.
     await app.dropTool("get_current_temperature");
     const caps = await app.trackCaptions();
     const run = await app.ask(Q.weather);
     await expect(page.locator('.node.active[data-node="forger"]')).toBeVisible();
+    await expect.poll(() => app.status(run), { intervals: [25] }).toBe("waiting");
+    await expect(page.locator(".dialog")).toHaveCount(0);
     const stopped = page.waitForRequest((r) => r.url().endsWith(`/api/runs/${run.id}/stop`) && r.method() === "POST");
     await page.getByRole("button", { name: "Stop run" }).click();
     await stopped;
