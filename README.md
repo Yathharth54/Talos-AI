@@ -86,6 +86,41 @@ Developer commands (see the `Makefile`):
 | `make test-int` | Unit and integration suites in Docker against a throwaway Postgres |
 | `make fe` | Frontend dev server (from stage 04) |
 
+### Frontend
+
+The UI lives in `frontend/` (React, TypeScript, Vite). It has two modes.
+
+- **Live.** `http://127.0.0.1:8000` talks to the API and streams real runs over SSE.
+- **Demo.** `/?demo` (or a build with `VITE_DEMO=1`) is the scripted demo. It needs no backend and shows the Demo controls.
+
+Develop it with the fake graph, so no model key is needed:
+
+```bash
+make db     # Postgres (or the talos-pg-test container)
+make fake   # TALOS_FAKE_GRAPH=1 uv run talos-web
+make fe     # cd frontend && npm run dev; Vite proxies /api to 127.0.0.1:8000
+```
+
+Checks, from `frontend/`:
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+Playwright needs `npx playwright install chromium` once.
+
+```bash
+npm run e2e:visual   # /?demo against the reference file, 1440x900 and 390x844
+npm run e2e:live     # the live app against an isolated fake-graph server
+```
+
+Both scripts build `dist/` first. `e2e:visual` deletes any old baselines and renders them again from the reference in the same run. They are never committed.
+
+`e2e:live` starts its own fake-graph server on port 8765. It uses the `talos_e2e` database on `E2E_DATABASE_URL` (default `postgresql+psycopg://talos:talos@localhost:55432/talos_e2e`), and a throwaway vault, workspace and `.env` in `frontend/.e2e-tmp/`. **Warning:** the harness drops and recreates that database. It refuses any name that does not end in `_e2e`, and any host other than localhost. The harness sets every `TALOS_*` variable itself, so nothing in your shell changes how the server behaves. It paces the fake graph by 60 ms per event that follows a working step (`TALOS_FAKE_EVENT_DELAY_MS`), so the Stop and reload specs act on a run that is still going on the server.
+
 ## Architecture
 
 ```
@@ -279,6 +314,7 @@ All via `.env` (see `.env.example`):
 | `TALOS_WEB_PORT` | no | Web app port. Default `8000` |
 | `TALOS_WEB_ALLOWED_HOSTS` | no | Comma-separated extra `Host` names the web app answers, besides `127.0.0.1`, `localhost` and `[::1]`. Default empty. Writes from those hosts' pages are allowed too |
 | `TALOS_FAKE_GRAPH` | no | `1` runs the web app with the demo's scripted runs: no model calls, no keys, a temporary vault copy |
+| `TALOS_FAKE_EVENT_DELAY_MS` | no | E2E only. With `TALOS_FAKE_GRAPH=1`, wait this many ms before each scripted event that follows a working step, so a run is still going on the server while the page stops or reloads it. Default `0` (no pacing) |
 | `TALOS_WEB_DEV` | no | `1` allows CORS from Vite's dev server at `http://127.0.0.1:5173` |
 
 ## Tests

@@ -48,7 +48,16 @@ STRIPS: dict[str, list[tuple[str, str]]] = {
 
 def new_state() -> dict[str, Any]:
     """The empty board state for a new run."""
-    return {"variant": None, "steps": {}, "forged": [], "used": [], "failed": False}
+    return {
+        "variant": None,
+        "steps": {},
+        "forged": [],
+        "used": [],
+        "failed": False,
+        # The target of the last `link.flow` until a step starts or the target finishes:
+        # the step being handed the run. It may have run before (a retry's Tester).
+        "next": None,
+    }
 
 
 class Board:
@@ -88,6 +97,7 @@ class Board:
     ) -> None:
         """Reset the strip to `variant` (`strip.set`). `skip` starts as `skip`."""
         self.state["variant"] = variant
+        self.state["next"] = None
         self.state["steps"] = {
             key: {"state": "skip" if key == "skip" else "pending", "label": name}
             for key, name in STRIPS[variant]
@@ -102,15 +112,19 @@ class Board:
     def start(self, step: str, label: str | None = None) -> None:
         """`node.started`: the step becomes active."""
         self._set(step, "active", label)
+        self.state["next"] = None
         self.emit("node.started", step=step, **({"label": label} if label else {}))
 
     def finish(self, step: str, status: str, label: str | None = None) -> None:
         """`node.finished` with status done, forge, skip, fail, answer or stopped."""
         self._set(step, status, label)
+        if self.state.get("next") == step:  # finished without starting (a skipped check)
+            self.state["next"] = None
         self.emit("node.finished", step=step, status=status, **({"label": label} if label else {}))
 
     def flow(self, source: str, target: str) -> None:
         """`link.flow`: a gold packet travels from one step to the next."""
+        self.state["next"] = target
         self.emit("link.flow", **{"from": source, "to": target})
 
     def _set(self, step: str, state: str, label: str | None) -> None:
@@ -185,11 +199,21 @@ class Board:
         self.state["failed"] = True
 
     def stop(self) -> None:
-        """What Stop does to the board (spec 02 §6): active steps → stopped, log, caption."""
-        for step, entry in self.state["steps"].items():
-            if entry["state"] == "active":
-                base = re.sub(r", .*$", "", entry["label"])
-                self.finish(step, "stopped", base + copy.LABEL_STOPPED_SUFFIX)
+        """What Stop does to the board (spec 02 §6): active steps → stopped, log, caption.
+
+        Between two steps (`node.finished`, `link.flow`, then `node.started`) no step is
+        active. Stop then marks the step the run was being handed to, the target of that
+        `link.flow`, as stopped: in the demo that hand-over is one synchronous move, so
+        its Stop finds the next step already active.
+        """
+        steps = self.state["steps"]
+        stopping = [step for step, entry in steps.items() if entry["state"] == "active"]
+        nxt = self.state.get("next")
+        if not stopping and nxt in steps:
+            stopping = [nxt]
+        for step in stopping:
+            base = re.sub(r", .*$", "", steps[step]["label"])
+            self.finish(step, "stopped", base + copy.LABEL_STOPPED_SUFFIX)
         self.log(copy.LOG_STOP, "w")
         self.status(copy.STATUS_STOPPED)
         self.caption(copy.CAPTION_STOPPED)

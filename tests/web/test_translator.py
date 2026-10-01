@@ -465,3 +465,12 @@ def test_smoke_failure_detail_uses_the_error():
     data = {"call": "f(1)", "result": None, "passed": False, "error": "load error: SyntaxError"}
     events = tr.feed((("forge_subgraph:a",), "custom", {"type": "forge.smoke", "data": data}))
     assert first(events, "forge.attempt")["detail"] == "Smoke test failed: load error: SyntaxError"
+
+
+@pytest.mark.parametrize("name", ["vault", "forge_retry", "exec_approve"])
+def test_real_results_are_never_small(name):
+    """`small` is the reference's placeholder style: a real result never has it."""
+    names = ("exec_pause", "exec_approve") if name == "exec_approve" else (name,)
+    _, events = run(*names, resume=("confirm_exec", "approve"))
+    results = [d for t, d in events if t == "call.result"]
+    assert results and all(d["small"] is False for d in results)

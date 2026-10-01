@@ -1,0 +1,121 @@
+import { useEffect, useRef } from "react";
+import { COPY, fill } from "../../../lib/copy";
+import type { Attempt, Smoke, TestsState } from "../../../store/types";
+import { TickIcon, XIcon } from "../../icons";
+import { bareZeros } from "../../../lib/style";
+
+/* What earlier renders drew: the reference's `x.drawn = true` / `x.flashed = true` (lines 1188–1191), kept out of the store.
+   Keyed by run id, attempt and test name. */
+const drawnSet = new Set<string>();
+const flashedSet = new Set<string>();
+/** The oldest marks go past this many, so the sets can't grow without bound (a forgotten mark only re-animates). */
+const MAX_MARKS = 2000;
+const mark = (set: Set<string>, k: string) => {
+  set.add(k);
+  if (set.size > MAX_MARKS) set.delete(set.values().next().value!);
+};
+
+/** Forgets every draw mark. The demo reset calls it, because the run counter (and so the run ids) restart there. */
+export function clearTestMarks(): void {
+  drawnSet.clear();
+  flashedSet.clear();
+}
+
+type TestsPanelProps = { runId: string; tests: TestsState | undefined; smoke: Smoke | null | undefined; attempts: Attempt[] | undefined };
+
+/** The tests panel (testsHtml, lines 1181–1200). */
+export function TestsPanel({ runId, tests, smoke, attempts }: TestsPanelProps) {
+  // The reference redraws this panel only when it calls renderPanel(): for this tab, when the tests or
+  // the smoke test change, or when the panel is drawn afresh (a mount here). A React re-render for
+  // anything else (a caption, a node, a dialog) must show what the last redraw showed, so the marks
+  // are read once per redraw rather than on every render. A ref, not useMemo: React may drop a memo.
+  const snap = useRef<{ runId: string; tests: typeof tests; smoke: typeof smoke; marks: { drawn: Set<string>; flashed: Set<string> } } | null>(null);
+  if (!snap.current || snap.current.runId !== runId || snap.current.tests !== tests || snap.current.smoke !== smoke) {
+    snap.current = { runId, tests, smoke, marks: { drawn: new Set(drawnSet), flashed: new Set(flashedSet) } };
+  }
+  const marks = snap.current.marks;
+  useEffect(() => {
+    if (!tests) return;
+    for (const x of tests.list) {
+      const k = `${runId}:${tests.attempt}:${x.name}`;
+      if (x.state === "passed") mark(drawnSet, k);
+      if (x.state === "failed") mark(flashedSet, k);
+    }
+  });
+  if (!tests) return <p className="muted">{COPY.tests.none}</p>;
+  const passed = tests.list.filter((x) => x.state === "passed").length;
+  const done = tests.list.every((x) => x.state === "passed" || x.state === "failed");
+  const right = done ? fill(COPY.tests.passedOf, { p: passed, k: tests.list.length }) : fill(COPY.tests.running, { n: tests.attempt });
+  const failedAttempt = attempts && attempts.length > 1 ? attempts.find((a) => !a.ok) : undefined;
+  return (
+    <div className="grid2">
+      <figure className="fig">
+        <figcaption className="fig-cap">
+          <span>{COPY.tests.unit}</span>
+          <span className="r">{right}</span>
+        </figcaption>
+        <ul className="tests">
+          {tests.list.map((x) => {
+            const k = `${runId}:${tests.attempt}:${x.name}`;
+            const flash = x.state === "failed" && !(x.flashed || marks.flashed.has(k)) ? " just-failed" : "";
+            return (
+              <li key={x.name} className={`${x.state}${flash}`}>
+                <span>{x.name}</span>
+                <span className="st">
+                  {x.state === "passed" ? (
+                    <>
+                      <TickIcon done={!!x.drawn || marks.drawn.has(k)} />
+                      {COPY.tests.passed}
+                    </>
+                  ) : x.state === "failed" ? (
+                    <>
+                      <XIcon />
+                      {COPY.tests.failed}
+                    </>
+                  ) : (
+                    x.state
+                  )}
+                </span>
+                {x.why ? <span className="why">{x.why}</span> : null}
+              </li>
+            );
+          })}
+        </ul>
+      </figure>
+      <div className="stack">
+        {smoke ? (
+          <figure className="fig">
+            <figcaption className="fig-cap">
+              <span>{COPY.tests.smoke}</span>
+              <span className="r">{COPY.tests.smokeCap}</span>
+            </figcaption>
+            <div className="smoke-body">
+              <div className="muted">{smoke.call}</div>
+              <div>
+                {smoke.result ? (
+                  smoke.result
+                ) : (
+                  <span className="gold">
+                    {COPY.tests.smokeRunning}
+                    <span className="caret" aria-hidden="true"></span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </figure>
+        ) : null}
+        {failedAttempt ? (
+          <div className="stack" style={{ gap: "6px", padding: "0 4px" }} ref={bareZeros}>
+            <p style={{ margin: "0", fontSize: "14px" }} ref={bareZeros}>{fill(COPY.tests.prevFailed, { n: failedAttempt.n })}</p>
+            <p className="mono muted" style={{ margin: "0", fontSize: "12px", lineHeight: "1.6", overflowWrap: "anywhere" }} ref={bareZeros}>
+              {failedAttempt.detail}
+            </p>
+          </div>
+        ) : null}
+        <p className="muted" style={{ margin: "0", fontSize: "13px", lineHeight: "1.55", padding: "0 4px" }} ref={bareZeros}>
+          {fill(COPY.tests.note, { s: 10 })}
+        </p>
+      </div>
+    </div>
+  );
+}

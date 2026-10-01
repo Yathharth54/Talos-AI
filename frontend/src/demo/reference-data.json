@@ -1,0 +1,826 @@
+{
+ "vaultData": [
+  [
+   "nth_fibonacci",
+   "n: int",
+   "int",
+   "Returns the Nth Fibonacci number using an iterative O(n) computation.",
+   [
+    "fibonacci",
+    "sequence",
+    "math",
+    "integer",
+    "recursion"
+   ],
+   3,
+   0,
+   0,
+   "2026-09-28T14:20",
+   "2026-09-28T14:32",
+   ""
+  ],
+  [
+   "alternating_case",
+   "text: str",
+   "str",
+   "Convert a string to alternating case where letters alternate lower/upper while non-letters pass through unchanged.",
+   [
+    "string",
+    "case",
+    "alternating",
+    "text",
+    "transform",
+    "format"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:21",
+   "2026-09-28T14:21",
+   ""
+  ],
+  [
+   "prime_factorization",
+   "n: int",
+   "list",
+   "Return the prime factors of a positive integer in ascending order, with multiplicity.",
+   [
+    "prime",
+    "factorization",
+    "factors",
+    "math",
+    "number",
+    "integer"
+   ],
+   2,
+   1,
+   0,
+   "2026-09-28T14:22",
+   "2026-09-28T14:44",
+   "TypeError: n must be an int"
+  ],
+  [
+   "string_frequencies",
+   "strings: list[str]",
+   "dict",
+   "Counts how often each string appears in a list and returns the counts sorted by frequency descending with ties broken by first appearance.",
+   [
+    "frequency",
+    "count",
+    "strings",
+    "tally",
+    "histogram",
+    "sort"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:22",
+   "2026-09-28T14:22",
+   ""
+  ],
+  [
+   "levenshtein_distance",
+   "s1: str, s2: str",
+   "int",
+   "Computes the Levenshtein edit distance between two strings.",
+   [
+    "levenshtein",
+    "edit distance",
+    "string",
+    "diff",
+    "similarity"
+   ],
+   3,
+   0,
+   0,
+   "2026-09-28T14:23",
+   "2026-09-28T14:44",
+   ""
+  ],
+  [
+   "hamming_distance",
+   "a: str, b: str",
+   "int",
+   "Compute the Hamming distance between two strings, counting positions where characters differ.",
+   [
+    "hamming",
+    "distance",
+    "string",
+    "compare",
+    "difference",
+    "mismatch"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:25",
+   "2026-09-28T14:25",
+   ""
+  ],
+  [
+   "hex_to_rgb",
+   "hex_code: str",
+   "tuple[int, int, int]",
+   "Convert a HEX color code (with or without a leading '#') into an (R, G, B) tuple of integers.",
+   [
+    "hex",
+    "color",
+    "rgb",
+    "convert",
+    "css",
+    "colour"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:27",
+   "2026-09-28T14:27",
+   ""
+  ],
+  [
+   "unix_to_utc_string",
+   "timestamp: int",
+   "str",
+   "Converts a Unix timestamp (integer seconds since epoch) into a human-readable UTC datetime string formatted as 'YYYY-MM-DD HH:MM:SS'.",
+   [
+    "unix",
+    "timestamp",
+    "datetime",
+    "utc",
+    "epoch",
+    "convert",
+    "time"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:28",
+   "2026-09-28T14:28",
+   ""
+  ],
+  [
+   "haversine_distance",
+   "lat1: float, lon1: float, lat2: float, lon2: float",
+   "float",
+   "Computes the great-circle distance in kilometers between two latitude/longitude points using the Haversine formula.",
+   [
+    "haversine",
+    "distance",
+    "great-circle",
+    "coordinates",
+    "geography",
+    "kilometers",
+    "latitude"
+   ],
+   2,
+   0,
+   0,
+   "2026-09-28T14:28",
+   "2026-09-28T14:32",
+   ""
+  ],
+  [
+   "base64_codec",
+   "text: str, mode: str",
+   "str",
+   "Encode a UTF-8 string to Base64 or decode Base64 back to the original UTF-8 string.",
+   [
+    "base64",
+    "encode",
+    "decode",
+    "codec",
+    "roundtrip",
+    "encoding"
+   ],
+   2,
+   0,
+   0,
+   "2026-09-28T14:29",
+   "2026-09-28T14:44",
+   ""
+  ],
+  [
+   "population_std_dev",
+   "numbers: list",
+   "float",
+   "Computes the population standard deviation of a list of numbers using only the standard library.",
+   [
+    "statistics",
+    "standard deviation",
+    "population",
+    "math",
+    "list",
+    "no-numpy"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:29",
+   "2026-09-28T14:29",
+   ""
+  ],
+  [
+   "fetch_latest_stable_release_version",
+   "",
+   "str",
+   "Fetch the latest stable Python release version number from a public release API and return it as a plain version string.",
+   [
+    "python",
+    "version",
+    "release",
+    "latest",
+    "stable",
+    "endoflife",
+    "web"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:30",
+   "2026-09-28T14:30",
+   ""
+  ],
+  [
+   "to_uppercase",
+   "text: str",
+   "str",
+   "Convert a string's contents to uppercase.",
+   [
+    "uppercase",
+    "string",
+    "text",
+    "convert",
+    "case",
+    "transform"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:30",
+   "2026-09-28T14:30",
+   ""
+  ],
+  [
+   "fetch_btc_price_usd",
+   "",
+   "float",
+   "Fetch the current Bitcoin (BTC) price in USD from a public keyless price source and return it as a float.",
+   [
+    "bitcoin",
+    "btc",
+    "price",
+    "crypto",
+    "usd",
+    "coingecko",
+    "spot"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:31",
+   "2026-09-28T14:31",
+   ""
+  ],
+  [
+   "convert_usd_to_inr",
+   "amount_usd: float",
+   "float",
+   "Convert a USD amount to INR using a fixed exchange rate of 83.5.",
+   [
+    "currency",
+    "usd",
+    "inr",
+    "convert",
+    "exchange",
+    "rate",
+    "forex"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:31",
+   "2026-09-28T14:31",
+   ""
+  ],
+  [
+   "generate_password",
+   "length: int",
+   "str",
+   "Generates a cryptographically-random password of a given length using letters, digits, and symbols.",
+   [
+    "password",
+    "random",
+    "generator",
+    "security",
+    "string",
+    "symbols",
+    "digits"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:32",
+   "2026-09-28T14:32",
+   ""
+  ],
+  [
+   "score_password_strength",
+   "password: str",
+   "str",
+   "Scores a password's strength as 'weak', 'medium', or 'strong' from its length and character-class diversity.",
+   [
+    "password",
+    "strength",
+    "security",
+    "scoring",
+    "validation",
+    "entropy",
+    "characters"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:32",
+   "2026-09-28T14:32",
+   ""
+  ],
+  [
+   "extract_top_programming_languages",
+   "search_results: list[dict]",
+   "list[str]",
+   "Extract a ranked list of the top 5 programming language names mentioned across raw search-result dicts.",
+   [
+    "programming",
+    "languages",
+    "extract",
+    "search",
+    "ranking",
+    "parse",
+    "text"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:39",
+   "2026-09-28T14:39",
+   ""
+  ],
+  [
+   "format_ranked_markdown_list",
+   "items: list[str]",
+   "str",
+   "Formats a ranked list of strings into a numbered markdown list.",
+   [
+    "markdown",
+    "format",
+    "list",
+    "ranked",
+    "numbered",
+    "render"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:39",
+   "2026-09-28T14:39",
+   ""
+  ],
+  [
+   "validate_email",
+   "email: str",
+   "bool",
+   "Validate an email address against a strict regex enforcing a single '@', a non-empty local part with allowed characters, a dotted domain, and a 2+ letter TLD.",
+   [
+    "email",
+    "validate",
+    "regex",
+    "string",
+    "validation",
+    "format"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:40",
+   "2026-09-28T14:40",
+   ""
+  ],
+  [
+   "sieve_primes",
+   "n: int",
+   "list[int]",
+   "Return all prime numbers up to and including N using the Sieve of Eratosthenes.",
+   [
+    "primes",
+    "sieve",
+    "eratosthenes",
+    "math",
+    "numbers",
+    "primality"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:40",
+   "2026-09-28T14:40",
+   ""
+  ],
+  [
+   "integer_power",
+   "base: int, exponent: int",
+   "int",
+   "Computes base raised to an integer exponent and returns the exact integer result.",
+   [
+    "power",
+    "exponent",
+    "exponentiation",
+    "integer",
+    "math",
+    "arithmetic"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:43",
+   "2026-09-28T14:43",
+   ""
+  ],
+  [
+   "generate_uuid4",
+   "",
+   "str",
+   "Generate a random UUID version 4 string in canonical 8-4-4-4-12 hex format.",
+   [
+    "uuid",
+    "uuid4",
+    "random",
+    "identifier",
+    "hex",
+    "generate"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:43",
+   "2026-09-28T14:43",
+   ""
+  ],
+  [
+   "fetch_github_star_counts",
+   "repos: list[str]",
+   "dict",
+   "Fetch GitHub star counts for a list of repository slugs from the keyless ungh.cc endpoint, returning a mapping of slug to integer star count.",
+   [
+    "github",
+    "stars",
+    "repository",
+    "repo",
+    "ungh",
+    "stars-count"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:48",
+   "2026-09-28T14:48",
+   ""
+  ],
+  [
+   "percentage_difference",
+   "a: float, b: float",
+   "float",
+   "Compute the symmetric percentage difference between two numbers as |a-b| / ((a+b)/2) * 100.",
+   [
+    "percentage",
+    "difference",
+    "math",
+    "statistics",
+    "compare",
+    "numbers",
+    "ratio"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:49",
+   "2026-09-28T14:49",
+   ""
+  ],
+  [
+   "format_repo_comparison",
+   "label_a: str, label_b: str, stars_a: int, stars_b: int, pct_diff: float",
+   "str",
+   "Format a single-line summary comparing two repositories with their star counts and percentage difference.",
+   [
+    "format",
+    "repository",
+    "stars",
+    "comparison",
+    "summary",
+    "github"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:49",
+   "2026-09-28T14:49",
+   ""
+  ],
+  [
+   "normalize_date_strings",
+   "dates: list[str]",
+   "list[str]",
+   "Normalize a list of date strings in mixed formats into ISO 'YYYY-MM-DD' strings, preserving order.",
+   [
+    "date",
+    "normalize",
+    "parse",
+    "iso",
+    "format",
+    "strptime",
+    "convert"
+   ],
+   1,
+   1,
+   1,
+   "2026-09-28T14:50",
+   "2026-09-28T14:50",
+   "ValueError: dates[1]='2025/04/01' does not match any supported date format"
+  ],
+  [
+   "compute_revenue_csv",
+   "input_path: str",
+   "str",
+   "Read a product CSV file, append a computed 'revenue' column (price × quantity), and return the whole result as a CSV text string.",
+   [
+    "csv",
+    "revenue",
+    "price",
+    "quantity",
+    "file",
+    "transform",
+    "report"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:51",
+   "2026-09-28T14:51",
+   ""
+  ],
+  [
+   "count_http_status_codes",
+   "log_text: str",
+   "list[dict]",
+   "Parse nginx-style log lines and count requests per HTTP status code, sorted by frequency descending with ties broken by ascending numeric status.",
+   [
+    "nginx",
+    "log",
+    "http",
+    "status",
+    "parse",
+    "count",
+    "frequency"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:52",
+   "2026-09-28T14:52",
+   ""
+  ],
+  [
+   "flatten_json",
+   "data: dict",
+   "dict",
+   "Flatten a nested dictionary into a single-level dict using dot-notation keys, leaving lists and other non-dict values as leaves.",
+   [
+    "flatten",
+    "json",
+    "dict",
+    "nested",
+    "dot-notation",
+    "recursive",
+    "transform"
+   ],
+   2,
+   1,
+   0,
+   "2026-09-28T14:53",
+   "2026-09-28T15:16",
+   "TypeError: data must be a dict, got str"
+  ],
+  [
+   "analyze_text_file",
+   "file_path: str",
+   "dict",
+   "Reads a plain-text file and returns word statistics: total words, unique words, average word length, and the top 10 most frequent words.",
+   [
+    "text",
+    "file",
+    "word count",
+    "frequency",
+    "analysis",
+    "statistics",
+    "nlp"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:55",
+   "2026-09-28T14:55",
+   ""
+  ],
+  [
+   "parse_json_to_json_and_yaml",
+   "json_str: str",
+   "dict",
+   "Parse a JSON string and return a dict with a pretty-printed JSON rendering and an equivalent YAML rendering of the parsed object.",
+   [
+    "json",
+    "yaml",
+    "parse",
+    "convert",
+    "serialize",
+    "format",
+    "config"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:57",
+   "2026-09-28T14:57",
+   ""
+  ],
+  [
+   "slugify",
+   "title: str",
+   "str",
+   "Convert a title string into a clean lowercase hyphenated URL slug.",
+   [
+    "slug",
+    "url",
+    "string",
+    "normalize",
+    "text",
+    "hyphen"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:58",
+   "2026-09-28T14:58",
+   ""
+  ],
+  [
+   "rename_files_in_directory",
+   "directory: str",
+   "list[dict]",
+   "Renames every file in a directory by lowercasing its name and replacing spaces with underscores, returning old→new name mappings.",
+   [
+    "rename",
+    "files",
+    "directory",
+    "normalize",
+    "filename",
+    "underscore",
+    "lowercase"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T14:59",
+   "2026-09-28T14:59",
+   ""
+  ],
+  [
+   "format_markdown_table",
+   "headers: list[str], rows: list[list[str]]",
+   "str",
+   "Format headers and rows into a clean GitHub-flavored markdown table string.",
+   [
+    "markdown",
+    "table",
+    "gfm",
+    "format",
+    "headers",
+    "rows",
+    "string"
+   ],
+   1,
+   1,
+   1,
+   "2026-09-28T15:00",
+   "2026-09-28T15:00",
+   "TypeError: rows must be a list of lists of strings"
+  ],
+  [
+   "convert_units",
+   "conversions: list[dict]",
+   "list[dict]",
+   "Convert a list of values between supported units (km/miles, kg/pounds, liters/gallons, celsius/fahrenheit) and return per-conversion result dicts.",
+   [
+    "unit",
+    "convert",
+    "conversion",
+    "km",
+    "miles",
+    "celsius",
+    "fahrenheit"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T15:01",
+   "2026-09-28T15:01",
+   ""
+  ],
+  [
+   "regex_analyze",
+   "pattern: str, test_string: str",
+   "dict",
+   "Analyze a regex pattern against a test string, returning match presence, all match groups, and match positions.",
+   [
+    "regex",
+    "pattern",
+    "match",
+    "groups",
+    "positions"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T15:01",
+   "2026-09-28T15:01",
+   ""
+  ],
+  [
+   "fetch_space_station_mass",
+   "",
+   "float",
+   "Fetch the current published mass of the International Space Station in kilograms from its Wikipedia infobox via the MediaWiki action API.",
+   [
+    "iss",
+    "space station",
+    "mass",
+    "kilograms",
+    "wikipedia",
+    "wikitext",
+    "nasa"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T15:13",
+   "2026-09-28T15:13",
+   ""
+  ],
+  [
+   "convert_mass_from_kg",
+   "mass_kg: float",
+   "dict",
+   "Convert a mass in kilograms into pounds, ounces, grams, and metric tons.",
+   [
+    "mass",
+    "conversion",
+    "kilograms",
+    "pounds",
+    "ounces",
+    "grams",
+    "metric tons"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T15:13",
+   "2026-09-28T15:13",
+   ""
+  ],
+  [
+   "format_conversions_table",
+   "conversions: dict",
+   "str",
+   "Format a unit-conversion mapping into a GitHub-flavored markdown table with 'Unit' and 'Value' columns.",
+   [
+    "markdown",
+    "table",
+    "unit",
+    "conversion",
+    "format",
+    "github",
+    "gfm"
+   ],
+   1,
+   0,
+   0,
+   "2026-09-28T15:14",
+   "2026-09-28T15:14",
+   ""
+  ]
+ ],
+ "sources": {
+  "src-caesar": "\"\"\"Caesar cipher tool: shift-based encryption/decryption of text.\"\"\"\n\nimport string\n\n\ndef caesar_cipher(text: str, shift: int, mode: str) -> str:\n    \"\"\"Encrypt or decrypt text with a Caesar cipher using the given shift.\n\n    Each ASCII letter is rotated by ``shift`` positions within the alphabet\n    (A-Z / a-z), preserving letter case. Non-alphabetic characters (spaces,\n    digits, punctuation) are passed through unchanged. In ``\"encrypt\"`` mode\n    letters move forward by ``shift``; in ``\"decrypt\"`` mode they move\n    backward by the same amount. Shifts larger than 26 or negative are\n    normalised modulo 26.\n\n    Args:\n        text: The input string to transform. Must be a ``str``.\n        shift: The integer number of alphabet positions to rotate. May be\n            negative or greater than 25; it is normalised modulo 26.\n        mode: Either ``\"encrypt\"`` or ``\"decrypt\"`` (case-insensitive,\n            surrounding whitespace ignored).\n\n    Returns:\n        The transformed string with the same length as ``text``.\n\n    Raises:\n        TypeError: If ``text`` or ``mode`` is not a ``str``, or ``shift`` is\n            not an ``int`` (booleans are rejected).\n        ValueError: If ``mode`` is not ``\"encrypt\"`` or ``\"decrypt\"``.\n\n    Example:\n        >>> caesar_cipher(text=\"TALOS AGENT\", shift=7, mode=\"encrypt\")\n        'AHSVZ HNLUA'\n    \"\"\"\n    if not isinstance(text, str):\n        raise TypeError(f\"text must be a str, got {type(text).__name__}\")\n    if isinstance(shift, bool) or not isinstance(shift, int):\n        raise TypeError(f\"shift must be an int, got {type(shift).__name__}\")\n    if not isinstance(mode, str):\n        raise TypeError(f\"mode must be a str, got {type(mode).__name__}\")\n\n    normalized_mode = mode.strip().lower()\n    if normalized_mode not in (\"encrypt\", \"decrypt\"):\n        raise ValueError(\n            f\"mode must be 'encrypt' or 'decrypt', got {mode!r}\"\n        )\n\n    effective_shift = shift if normalized_mode == \"encrypt\" else -shift\n    effective_shift %= 26\n\n    result_chars = []\n    for char in text:\n        if char in string.ascii_uppercase:\n            base = ord(\"A\")\n        elif char in string.ascii_lowercase:\n            base = ord(\"a\")\n        else:\n            result_chars.append(char)\n            continue\n        rotated = (ord(char) - base + effective_shift) % 26 + base\n        result_chars.append(chr(rotated))\n\n    return \"\".join(result_chars)",
+  "src-weather": "\"\"\"Current temperature for a city from OpenWeatherMap.\"\"\"\n\nimport os\n\nimport requests\n\n\ndef get_current_temperature(city: str) -> float:\n    \"\"\"Return the current temperature in Celsius for ``city``.\n\n    Reads the API key from the OPENWEATHERMAP_API_KEY environment variable.\n\n    Args:\n        city: City name, for example \"Mumbai\".\n\n    Returns:\n        The current temperature in degrees Celsius.\n\n    Raises:\n        RuntimeError: If the API key is not set.\n        ValueError: If the city is empty or not found.\n    \"\"\"\n    key = os.environ.get(\"OPENWEATHERMAP_API_KEY\")\n    if not key:\n        raise RuntimeError(\"OPENWEATHERMAP_API_KEY is not set\")\n    if not city.strip():\n        raise ValueError(\"city must not be empty\")\n    resp = requests.get(\n        \"https://api.openweathermap.org/data/2.5/weather\",\n        params={\"q\": city, \"appid\": key, \"units\": \"metric\"},\n        timeout=10,\n    )\n    if resp.status_code == 404:\n        raise ValueError(f\"city not found: {city!r}\")\n    resp.raise_for_status()\n    return float(resp.json()[\"main\"][\"temp\"])"
+ }
+}

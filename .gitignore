@@ -47,3 +47,12 @@ workspace/*
 /test_*.md
 /test_*.txt
 /https:/
+
+# Frontend (frontend/)
+frontend/node_modules/
+frontend/dist/
+frontend/.e2e-tmp/
+frontend/test-results/
+frontend/e2e-logs/
+frontend/playwright-report/
+frontend/e2e/visual/__screenshots__/

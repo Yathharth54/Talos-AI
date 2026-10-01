@@ -21,6 +21,8 @@ Vault list questions fall through to the "not in this demo" flow.
 from __future__ import annotations
 
 import ast
+import asyncio
+import copy as _copy
 import html
 import json
 import operator
@@ -208,16 +210,42 @@ def _plain(html_text: str) -> str:
 # ---- the driver -------------------------------------------------------------------------
 
 
+def _working(state: dict[str, Any]) -> bool:
+    """Whether a step is active, or the run is being handed to one (`Board.stop()` marks it)."""
+    steps = state["steps"].values()
+    return state.get("next") is not None or any(e["state"] == "active" for e in steps)
+
+
+class _PacedBoard(Board):
+    """A Board that keeps a copy of the state as it was after each event."""
+
+    def __init__(self, state: dict[str, Any]) -> None:
+        super().__init__(state)
+        self.snapshots: list[dict[str, Any]] = []
+
+    def emit(self, type_: str, **data: Any) -> None:
+        super().emit(type_, **data)
+        self.snapshots.append(_copy.deepcopy(self.state))
+
+
 class FakeDriver:
     """Scripted runs (see module doc).
 
     Args:
         vault: The vault the fake forges into (use `make_fake_vault()`).
+        event_delay_ms: E2E only (`TALOS_FAKE_EVENT_DELAY_MS`): wait this long
+            before each event that follows a working step, and keep the
+            board state at the last event sent that left a step working
+            (before the first one, at the state the run started or resumed
+            with), so Stop and a reload meet a run that is still going, and
+            Stop always finds a step to mark. The vault writes still happen
+            when the flow is planned, up front.
     """
 
-    def __init__(self, vault: SkillManager) -> None:
+    def __init__(self, vault: SkillManager, *, event_delay_ms: int = 0) -> None:
         self.vault = vault
         self.saved_keys: set[str] = set()
+        self.event_delay_s = max(0, event_delay_ms) / 1000
 
     def initial_state(self) -> dict[str, Any]:
         return {**new_state(), "flow": None, "phase": None, "p": {}, "attempts": 0}
@@ -225,15 +253,40 @@ class FakeDriver:
     async def run(
         self, state: dict[str, Any], *, query: str, thread_id: str, resume: Resume | None
     ) -> AsyncIterator[Emitted | Pause]:
-        b = Board(state)
+        paced = self.event_delay_s > 0
+        b = _PacedBoard(state) if paced else Board(state)
+        # The flow is planned up front, which changes `state` before any event is sent.
+        sent = _copy.deepcopy(state) if paced else None
         if resume is None:
             kind = classify(query)
             state["flow"] = kind if kind in ("caesar", "python", "weather", "chat") else "unknown"
             pause = getattr(self, f"_flow_{state['flow']}")(b, query)
         else:
             pause = self._resume(b, resume)
-        for event in b.drain():
-            yield event
+        events = b.drain()
+        if not paced:
+            for event in events:
+                yield event
+        else:
+            end = _copy.deepcopy(state)
+            snapshots = b.snapshots  # type: ignore[attr-defined]
+            # Until the first event is sent, Stop must read the state as it was before planning.
+            state.clear()
+            state.update(sent or {})
+            last = len(events) - 1
+            for i, (event, snapshot) in enumerate(zip(events, snapshots, strict=True)):
+                # The run rests only where a step is working. In the demo, the moves from one
+                # step to the next are synchronous, so its Stop never lands half-way through one.
+                if _working(snapshots[i - 1] if i else state):
+                    await asyncio.sleep(self.event_delay_s)
+                # Stop reads the state of the last step that was working: if it lands while the
+                # runner stores an in-between event, that step is the one it marks stopped.
+                if i == last or _working(snapshot):
+                    state.clear()
+                    state.update(snapshot)
+                yield event
+            state.clear()
+            state.update(end)
         if pause is not None:
             yield pause
 
@@ -559,7 +612,7 @@ class FakeDriver:
             return
         out = caesar(p["text"], p["shift"], p["mode"])
         self.vault.record_usage(tool)
-        b.emit("call.result", repr=py_str(out), type="str", small=True)
+        b.emit("call.result", repr=py_str(out), type="str", small=False)
         b.finish("executor", "done", "Executor")
         b.log(copy.LOG_EXEC_DONE, "w")
         b.flow("executor", "answer")
@@ -648,7 +701,7 @@ class FakeDriver:
         if out is None:
             b.emit("call.result", repr=copy.RESULT_PYTHON_UNSUPPORTED, type="", small=True)
         else:
-            b.emit("call.result", repr=out, type="stdout", small=True)
+            b.emit("call.result", repr=out, type="stdout", small=False)
         b.finish("executor", "done", "Executor")
         b.log(copy.LOG_EXEC_DONE, "w")
         b.flow("executor", "answer")

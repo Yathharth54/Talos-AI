@@ -46,7 +46,9 @@ async def get_tool(name: str, vault: SkillManager = Depends(get_vault)) -> Vault
         raise not_found("Tool")
     source = _source(vault, entry)
     base = vault_entry(entry, source).model_dump()
-    return VaultDetail(**base, source=source, lines=len(source.split("\n")) if source else 0)
+    # A trailing newline ends the last line, not a new one; the reader counts the same way.
+    lines = len(source.removesuffix("\n").split("\n")) if source else 0
+    return VaultDetail(**base, source=source, lines=lines)
 
 
 @router.delete("/vault/{name}", status_code=204)

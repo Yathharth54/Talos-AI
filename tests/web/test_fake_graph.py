@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from talos.config import settings
 from talos.vault.manager import SkillManager
 from talos.web import fake_graph
+from talos.web.board import Board
 from talos.web.fake_graph import FakeDriver, make_fake_vault, parse_caesar, run_python
 from talos.web.runner import Pause, Resume
 from talos.web.translator import EventTranslator
@@ -73,6 +75,8 @@ async def test_caesar_forge_then_reuse(driver):
     ]
     assert data(events, "vault.saved")[0]["sub"] == fake_graph.CAESAR_SAVED_SUB
     assert driver.vault.get("caesar_cipher") is not None
+    # `small` means placeholder text (the reference's smallResult), never a short real result.
+    assert data(events, "call.result") == [{"repr": "'AHSVZ HNLUA'", "type": "str", "small": False}]
     assert data(events, "answer.done")[0] == {
         "html": (
             '"TALOS AGENT" encrypted with a shift of 7 is <span class="mono">AHSVZ HNLUA</span>.'
@@ -93,6 +97,7 @@ async def test_caesar_forge_then_reuse(driver):
 
     _, events, _ = await drive(driver, DECRYPT_Q)
     assert data(events, "strip.set")[0]["variant"] == "vault"
+    assert data(events, "call.result") == [{"repr": "'TALOS AGENT'", "type": "str", "small": False}]
     assert data(events, "answer.done")[0]["html"] == (
         'It decrypts to <span class="mono">TALOS AGENT</span>.'
     )
@@ -134,7 +139,7 @@ async def test_python_pauses_for_approval_then_runs(driver):
     approve = Resume("confirm_exec", "approve", {"approved": True})
     _, events, pause = await drive(driver, PYTHON_Q, state, approve)
     assert pause is None
-    assert data(events, "call.result")[0] == {"repr": "5050", "type": "stdout", "small": True}
+    assert data(events, "call.result")[0] == {"repr": "5050", "type": "stdout", "small": False}
     assert data(events, "answer.done")[0]["html"] == (
         'The code prints <span class="mono">5050</span>.'
     )
@@ -166,7 +171,11 @@ async def test_weather_key_save_then_reuse(driver):
     assert pause.value["env_var"] == "OPENWEATHERMAP_API_KEY"
     save = Resume("missing_api_key", "save", None)  # the fake never sees the value
     _, events, _ = await drive(driver, WEATHER_Q, state, save)
-    assert data(events, "call.result")[0]["repr"] == "Not called in this demo"
+    assert data(events, "call.result")[0] == {
+        "repr": "Not called in this demo",
+        "type": "",
+        "small": True,
+    }
     assert events[-1][1]["summary"] == "1 tool forged, key saved"
     assert driver.saved_keys == {"OPENWEATHERMAP_API_KEY"}
 
@@ -286,3 +295,117 @@ def test_fake_vault_is_a_copy_without_the_demo_tools(tmp_path: Path):
     assert (root / "tools" / "caesar_cipher.py").exists()  # files stay, like remove()
     vault.remove("slugify")
     assert source.get("slugify") is not None  # the real vault is untouched
+
+
+# ---- e2e-only pacing (TALOS_FAKE_EVENT_DELAY_MS) --------------------------------------
+
+
+async def test_no_delay_by_default(driver, monkeypatch):
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+
+    monkeypatch.setattr(fake_graph.asyncio, "sleep", fake_sleep)
+    await drive(driver, CAESAR_Q)
+    assert sleeps == []
+
+
+async def paced_run(tmp_path, monkeypatch, query, state=None, resume=None, driver=None):
+    """Run a paced fake (25 ms) with no real sleeps, and record what Stop could read.
+
+    Returns the driver, the state and a timeline of ("sleep", state copy) and
+    ("event", type, state copy) entries: a Stop can land in a sleep, or while the
+    runner stores the event just yielded.
+    """
+    paced = driver or FakeDriver(SkillManager(vault_dir=tmp_path / "vault"), event_delay_ms=25)
+    state = state if state is not None else paced.initial_state()
+    timeline = []
+
+    async def fake_sleep(s):
+        assert s == 0.025
+        timeline.append(("sleep", copy.deepcopy(state)))
+
+    monkeypatch.setattr(fake_graph.asyncio, "sleep", fake_sleep)
+    async for item in paced.run(state, query=query, thread_id="t", resume=resume):
+        if not isinstance(item, Pause):
+            timeline.append(("event", item[0], copy.deepcopy(state)))
+    return paced, state, timeline
+
+
+def stops_a_step(state) -> bool:
+    b = Board(copy.deepcopy(state))
+    b.stop()
+    return any(t == "node.finished" and d["status"] == "stopped" for t, d in b.drain())
+
+
+async def test_a_delay_paces_the_run_and_the_state_follows_what_was_sent(tmp_path, monkeypatch):
+    """The e2e suite paces the fake so a run is really still going on the server when the page acts.
+
+    The board state (what Stop reads) is the last event sent that left a step working, not the
+    end of the flow.
+    """
+    _, state, timeline = await paced_run(tmp_path, monkeypatch, CAESAR_Q)
+    forger = next(
+        e[2]
+        for e in timeline
+        if e[0] == "event" and e[1] == "node.started" and "forger" in e[2]["steps"]
+    )
+    assert forger["steps"]["forger"]["state"] == "active"
+    assert forger["forged"] == []
+    assert state["forged"] == ["caesar_cipher"]  # the end of the flow, once every event is sent
+
+    # The same events as an unpaced run, with rests in between.
+    plain = FakeDriver(SkillManager(vault_dir=tmp_path / "vault2"))
+    _, events, _ = await drive(plain, CAESAR_Q)
+    assert [e[1] for e in timeline if e[0] == "event"] == [t for t, _ in events]
+    sleeps = [e for e in timeline if e[0] == "sleep"]
+    assert 0 < len(sleeps) < len(events)
+
+
+async def test_a_paced_run_only_rests_where_a_step_is_working(tmp_path, monkeypatch):
+    """In the demo a hand-over between steps is synchronous; the paced fake never rests half-way."""
+    _, _, timeline = await paced_run(tmp_path, monkeypatch, CAESAR_Q)
+    assert all(stops_a_step(e[1]) for e in timeline if e[0] == "sleep")
+
+
+async def test_a_stop_anywhere_in_a_paced_forge_marks_a_stopped_step(tmp_path, monkeypatch):
+    """Wherever a Stop lands from the planner's start to the run's last event, a step is stopped.
+
+    CI run 36821538409 stopped between the Forger and the Tester, and marked none.
+    """
+    _, _, timeline = await paced_run(tmp_path, monkeypatch, CAESAR_Q)
+    start = next(i for i, e in enumerate(timeline) if e[0] == "event" and e[1] == "node.started")
+    tail = enumerate(timeline[start:-1], start=start)
+    assert [i for i, e in tail if not stops_a_step(e[-1])] == []
+
+
+async def test_a_paced_run_shows_nothing_planned_before_it_is_sent(tmp_path, monkeypatch):
+    """The flow is planned up front: Stop must never read the planned end state early."""
+    _, state, timeline = await paced_run(tmp_path, monkeypatch, CAESAR_Q)
+    saved = next(i for i, e in enumerate(timeline) if e[0] == "event" and e[1] == "vault.saved")
+    assert all(e[-1]["forged"] == [] for e in timeline[:saved])
+    assert timeline[0][-1]["steps"] == {"planner": {"state": "active", "label": "planner"}}
+    assert state["forged"] == ["caesar_cipher"]
+
+
+async def test_a_paced_resume_shows_the_paused_state_before_its_first_event(tmp_path, monkeypatch):
+    paced, state, _ = await paced_run(tmp_path, monkeypatch, PYTHON_Q)
+    paused = copy.deepcopy(state)
+    approve = Resume("confirm_exec", "approve", {"approved": True})
+    _, state, timeline = await paced_run(tmp_path, monkeypatch, PYTHON_Q, state, approve, paced)
+    assert timeline[0] == ("sleep", paused)
+    assert stops_a_step(paused)
+    assert state["steps"]["answer"]["state"] == "answer"
+
+
+def test_the_delay_setting_defaults_to_zero(monkeypatch):
+    import importlib
+
+    monkeypatch.delenv("TALOS_FAKE_EVENT_DELAY_MS", raising=False)
+    fresh = importlib.reload(settings)
+    assert fresh.FAKE_EVENT_DELAY_MS == 0
+    monkeypatch.setenv("TALOS_FAKE_EVENT_DELAY_MS", "30")
+    assert importlib.reload(settings).FAKE_EVENT_DELAY_MS == 30
+    monkeypatch.delenv("TALOS_FAKE_EVENT_DELAY_MS")
+    importlib.reload(settings)

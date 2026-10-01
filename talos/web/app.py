@@ -140,7 +140,7 @@ async def open_services() -> Services:
 
         return Services(
             store=store,
-            driver=FakeDriver(fake_vault),
+            driver=FakeDriver(fake_vault, event_delay_ms=settings.FAKE_EVENT_DELAY_MS),
             vault=fake_vault,
             fake_graph=True,
             aclose=close_fake,

@@ -68,6 +68,99 @@ def test_stop_marks_active_steps_and_says_so():
     ]
 
 
+def test_stop_between_two_steps_marks_the_step_being_handed_the_run():
+    """Between `node.finished` and `node.started` no step is active: Stop marks the flow target."""
+    b = Board()
+    b.strip("forge", index=1, total=1, label="x", sig=None)
+    b.start("forger")
+    b.finish("forger", "forge")
+    b.flow("forger", "tester")
+    b.drain()
+    b.stop()
+    assert b.drain()[0] == (
+        "node.finished",
+        {"step": "tester", "status": "stopped", "label": "Tester, stopped"},
+    )
+    assert b.state["steps"]["forger"]["state"] == "forge"
+    assert b.state["steps"]["tester"]["state"] == "stopped"
+
+
+def test_stop_right_after_a_step_finished_and_before_the_hand_over_marks_nothing():
+    b = Board()
+    b.strip("forge", index=1, total=1, label="x", sig=None)
+    b.start("forger")
+    b.finish("forger", "forge")  # no link.flow yet: nothing is being handed the run
+    b.drain()
+    b.stop()
+    assert [t for t, _ in b.drain()] == ["log.line", "log.status", "caption"]
+
+
+def test_stop_during_a_retry_hand_over_marks_the_tester_that_ran_before():
+    """CI run 36821538409: attempt 2's Forger handed over to the Tester that ran attempt 1."""
+    b = Board()
+    b.strip("forge", index=1, total=1, label="x", sig=None)
+    b.flow("forger", "tester")
+    b.start("tester")
+    b.finish("tester", "forge")
+    b.start("forger")
+    b.finish("forger", "forge")
+    b.flow("forger", "tester")
+    b.drain()
+    b.stop()
+    assert b.drain()[0] == (
+        "node.finished",
+        {"step": "tester", "status": "stopped", "label": "Tester, stopped"},
+    )
+
+
+def test_stop_never_marks_a_flow_target_that_already_took_the_run():
+    b = Board()
+    b.strip("forge", index=1, total=1, label="x", sig=None)
+    b.flow("forger", "tester")
+    b.start("tester")
+    b.finish("tester", "forge")  # the target started (which ends the hand-over) and finished
+    b.drain()
+    b.stop()
+    assert [t for t, _ in b.drain()] == ["log.line", "log.status", "caption"]
+
+    b = Board()
+    b.strip("forge", index=1, total=1, label="x", sig=None)
+    b.flow("tester", "human")
+    b.finish("human", "skip")  # finished without starting: the hand-over is over too
+    b.drain()
+    b.stop()
+    assert [t for t, _ in b.drain()] == ["log.line", "log.status", "caption"]
+
+    b = Board()
+    b.strip("forge", index=1, total=1, label="x", sig=None)
+    b.flow("planner", "forger")
+    b.start("forger")
+    b.drain()
+    b.stop()
+    stopped = [d["step"] for t, d in b.drain() if t == "node.finished"]
+    assert stopped == ["forger"]  # the active step only, once
+
+
+def test_a_new_strip_forgets_the_hand_over():
+    b = Board()
+    b.strip("forge", index=1, total=2, label="x", sig=None)
+    b.flow("executor", "answer")
+    b.strip("chat", index=2, total=2, label="y", sig=None)
+    b.drain()
+    b.stop()
+    assert [t for t, _ in b.drain()] == ["log.line", "log.status", "caption"]
+
+
+def test_stop_reads_a_saved_state_without_the_hand_over_key():
+    """A `translator_state` saved before `next` existed still stops its active step."""
+    state = new_state()
+    del state["next"]
+    state["steps"] = {"planner": {"state": "active", "label": "Planner"}}
+    b = Board(state)
+    b.stop()
+    assert b.drain()[0][1]["step"] == "planner"
+
+
 def test_finished_reports_tools_and_state_stays_json():
     state = new_state()
     b = Board(state)

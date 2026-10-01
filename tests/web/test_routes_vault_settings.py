@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from talos.config import settings
 from tests.web.conftest import wait_for_status
 
@@ -50,7 +52,7 @@ async def test_vault_detail_has_the_source_and_404s(client, services):
     seed(services.vault)
     detail = (await client.get("/api/vault/slugify")).json()
     assert detail["source"].startswith("def slugify")
-    assert detail["lines"] == 3
+    assert detail["lines"] == 2  # two lines of code; the trailing newline ends the last one
     assert detail["file"] == "tools/slugify.py"
     response = await client.get("/api/vault/nope")
     assert response.status_code == 404 and response.json()["error"]["code"] == "not_found"
@@ -73,7 +75,7 @@ async def test_fake_forge_shows_up_in_the_vault(client):
     await wait_for_status(client, run["id"], "done")
     detail = (await client.get("/api/vault/caesar_cipher")).json()
     assert detail["args"] == "text: str, shift: int, mode: str"
-    assert detail["lines"] == 64  # the demo's 63 lines plus the trailing newline
+    assert detail["lines"] == 63  # the demo's 63 lines, as the reader counts them
     assert detail["uses"] == 1
 
 
@@ -136,3 +138,16 @@ async def test_patch_ask_before_exec_applies_and_persists(client, services):
         assert settings.auto_approve_exec() is False
     finally:
         settings.set_auto_approve_override(None)  # never leak into other tests
+
+
+@pytest.mark.parametrize(
+    ("source", "lines"),
+    [("", 0), ("x = 1", 1), ("x = 1\n", 1), ("a\nb\n", 2), ("a\n\n", 2)],
+)
+async def test_vault_detail_lines_match_the_reader(client, services, source, lines):
+    """The reader shows `lines` too (frontend sourceLines): an empty file has none."""
+    services.vault.register(
+        {"name": "t", "function": "t", "signature": "t() -> None", "created_at": "2026-09-28"},
+        source,
+    )
+    assert (await client.get("/api/vault/t")).json()["lines"] == lines

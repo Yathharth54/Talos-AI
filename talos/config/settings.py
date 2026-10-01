@@ -87,6 +87,9 @@ if CHECKPOINTER not in CHECKPOINTER_KINDS:
 WEB_HOST = os.environ.get("TALOS_WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
 WEB_PORT = int(os.environ.get("TALOS_WEB_PORT", "").strip() or "8000")
 FAKE_GRAPH = os.environ.get("TALOS_FAKE_GRAPH", "").strip().lower() in {"1", "true", "yes"}
+# E2E only: the fake graph waits this long before each event, so a run is still
+# going on the server while the page acts on it (Stop, reload). 0 = no pacing.
+FAKE_EVENT_DELAY_MS = int(os.environ.get("TALOS_FAKE_EVENT_DELAY_MS", "").strip() or "0")
 WEB_DEV = os.environ.get("TALOS_WEB_DEV", "").strip().lower() in {"1", "true", "yes"}
 # Host headers the web app answers besides 127.0.0.1, localhost and [::1]
 # (DNS-rebinding guard). Comma-separated, e.g. "talos.lan,box.local".
