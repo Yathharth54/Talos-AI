@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "e2e/live",
+  outputDir: "test-results/live", // apart from the visual suite's, which empties its own on start
   fullyParallel: false,
   workers: 1, // one active run at a time across the app (stage 2 §4); state carries between files
   // No retries, in CI or locally. The fake graph keeps a saved key in memory for the server's lifetime, and 09-keys

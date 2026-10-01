@@ -115,13 +115,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e:visual
       # The live suite runs even when the visual one fails, so one can't mask the other.
-      # The server's log goes to test-results/ with the report.
+      # Each suite keeps its raw results in its own test-results/ folder, which Playwright
+      # empties when that suite starts. The server's log goes to e2e-logs/, outside both.
       - name: npm run e2e:live
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
-          mkdir -p test-results
+          mkdir -p e2e-logs
           set -o pipefail
-          npm run e2e:live 2>&1 | tee test-results/e2e-live.log
+          npm run e2e:live 2>&1 | tee e2e-logs/e2e-live.log
       - uses: actions/upload-artifact@v4
         if: ${{ failure() || cancelled() }}
         with:
@@ -129,4 +130,5 @@ jobs:
           path: |
             frontend/playwright-report
             frontend/test-results
+            frontend/e2e-logs
           retention-days: 7

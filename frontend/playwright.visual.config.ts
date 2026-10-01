@@ -13,6 +13,7 @@ const DEMO = "http://127.0.0.1:4173/?demo";
 
 export default defineConfig({
   testDir: "e2e/visual",
+  outputDir: "test-results/visual", // apart from the live suite's, which empties its own on start
   snapshotPathTemplate: "{testDir}/__screenshots__/{arg}{ext}",
   fullyParallel: false,
   workers: 1,
