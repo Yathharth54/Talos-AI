@@ -293,3 +293,57 @@ def test_fake_vault_is_a_copy_without_the_demo_tools(tmp_path: Path):
     assert (root / "tools" / "caesar_cipher.py").exists()  # files stay, like remove()
     vault.remove("slugify")
     assert source.get("slugify") is not None  # the real vault is untouched
+
+
+# ---- e2e-only pacing (TALOS_FAKE_EVENT_DELAY_MS) --------------------------------------
+
+
+async def test_no_delay_by_default(driver, monkeypatch):
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+
+    monkeypatch.setattr(fake_graph.asyncio, "sleep", fake_sleep)
+    await drive(driver, CAESAR_Q)
+    assert sleeps == []
+
+
+async def test_a_delay_paces_each_event_and_the_state_follows_what_was_sent(tmp_path, monkeypatch):
+    """The e2e suite paces the fake so a run is really still going on the server when the page acts.
+
+    The board state (what Stop reads) matches the last event sent, not the end of the flow.
+    """
+    paced = FakeDriver(SkillManager(vault_dir=tmp_path / "vault"), event_delay_ms=25)
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+
+    monkeypatch.setattr(fake_graph.asyncio, "sleep", fake_sleep)
+    state = paced.initial_state()
+    seen = []
+    async for item in paced.run(state, query=CAESAR_Q, thread_id="t", resume=None):
+        type_, data_ = item
+        if type_ == "node.started" and data_["step"] == "forger" and not seen:
+            seen.append((state["steps"]["forger"]["state"], list(state["forged"])))
+    assert seen == [("active", [])]
+    assert state["forged"] == ["caesar_cipher"]  # the end of the flow, once every event is sent
+    assert sleeps and set(sleeps) == {0.025}
+
+    # The same events as an unpaced run.
+    plain = FakeDriver(SkillManager(vault_dir=tmp_path / "vault2"))
+    _, events, _ = await drive(plain, CAESAR_Q)
+    assert len(sleeps) == len(events)
+
+
+def test_the_delay_setting_defaults_to_zero(monkeypatch):
+    import importlib
+
+    monkeypatch.delenv("TALOS_FAKE_EVENT_DELAY_MS", raising=False)
+    fresh = importlib.reload(settings)
+    assert fresh.FAKE_EVENT_DELAY_MS == 0
+    monkeypatch.setenv("TALOS_FAKE_EVENT_DELAY_MS", "30")
+    assert importlib.reload(settings).FAKE_EVENT_DELAY_MS == 30
+    monkeypatch.delenv("TALOS_FAKE_EVENT_DELAY_MS")
+    importlib.reload(settings)

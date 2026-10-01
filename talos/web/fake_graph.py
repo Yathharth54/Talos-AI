@@ -21,6 +21,8 @@ Vault list questions fall through to the "not in this demo" flow.
 from __future__ import annotations
 
 import ast
+import asyncio
+import copy as _copy
 import html
 import json
 import operator
@@ -208,16 +210,33 @@ def _plain(html_text: str) -> str:
 # ---- the driver -------------------------------------------------------------------------
 
 
+class _PacedBoard(Board):
+    """A Board that keeps a copy of the state as it was after each event."""
+
+    def __init__(self, state: dict[str, Any]) -> None:
+        super().__init__(state)
+        self.snapshots: list[dict[str, Any]] = []
+
+    def emit(self, type_: str, **data: Any) -> None:
+        super().emit(type_, **data)
+        self.snapshots.append(_copy.deepcopy(self.state))
+
+
 class FakeDriver:
     """Scripted runs (see module doc).
 
     Args:
         vault: The vault the fake forges into (use `make_fake_vault()`).
+        event_delay_ms: E2E only (`TALOS_FAKE_EVENT_DELAY_MS`): wait this long
+            before each event, and keep the board state at the last event
+            sent, so Stop and a reload meet a run that is still going. The
+            vault writes still happen when the flow is planned, up front.
     """
 
-    def __init__(self, vault: SkillManager) -> None:
+    def __init__(self, vault: SkillManager, *, event_delay_ms: int = 0) -> None:
         self.vault = vault
         self.saved_keys: set[str] = set()
+        self.event_delay_s = max(0, event_delay_ms) / 1000
 
     def initial_state(self) -> dict[str, Any]:
         return {**new_state(), "flow": None, "phase": None, "p": {}, "attempts": 0}
@@ -225,15 +244,28 @@ class FakeDriver:
     async def run(
         self, state: dict[str, Any], *, query: str, thread_id: str, resume: Resume | None
     ) -> AsyncIterator[Emitted | Pause]:
-        b = Board(state)
+        paced = self.event_delay_s > 0
+        b = _PacedBoard(state) if paced else Board(state)
         if resume is None:
             kind = classify(query)
             state["flow"] = kind if kind in ("caesar", "python", "weather", "chat") else "unknown"
             pause = getattr(self, f"_flow_{state['flow']}")(b, query)
         else:
             pause = self._resume(b, resume)
-        for event in b.drain():
-            yield event
+        events = b.drain()
+        if not paced:
+            for event in events:
+                yield event
+        else:
+            end = _copy.deepcopy(state)
+            snapshots = b.snapshots  # type: ignore[attr-defined]
+            for event, snapshot in zip(events, snapshots, strict=True):
+                await asyncio.sleep(self.event_delay_s)
+                state.clear()
+                state.update(snapshot)
+                yield event
+            state.clear()
+            state.update(end)
         if pause is not None:
             yield pause
 

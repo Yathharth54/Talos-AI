@@ -19,15 +19,21 @@ ROOT = Path(__file__).resolve().parents[2]
 TMP = ROOT / "frontend" / ".e2e-tmp"
 DEFAULT_DB = "postgresql+psycopg://talos:talos@localhost:55432/talos_e2e"
 PORT = "8765"
-_DROP_PREFIXES = ("LANGSMITH_",)
-_DROP_NAMES = {"TALOS_AUTO_APPROVE_EXEC", "DATABASE_URL"}
+# The fake graph waits this long before each event (TALOS_FAKE_EVENT_DELAY_MS), so
+# 05-stop and 06-reload act on a run that is still going on the server. A Caesar
+# forge (70 events) then takes about 1.8 s on the server.
+EVENT_DELAY_MS = "25"
+# Every TALOS_* knob is the harness's own: none passes through from the shell.
+_DROP_PREFIXES = ("LANGSMITH_", "TALOS_")
+_DROP_NAMES = {"DATABASE_URL"}
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 def split_db_url(url: str) -> tuple[str, str]:
     """Split a database URL into the database name and an admin URL.
 
-    Refuses any database whose name doesn't end in ``_e2e``, because the
-    harness drops it.
+    Refuses any database whose name doesn't end in ``_e2e``, or that isn't on
+    this machine, because the harness drops it.
 
     Args:
         url: SQLAlchemy-style Postgres URL of the e2e database.
@@ -39,6 +45,8 @@ def split_db_url(url: str) -> tuple[str, str]:
     name = parts.path.lstrip("/")
     if not name.endswith("_e2e"):
         raise SystemExit(f"E2E_DATABASE_URL must name a *_e2e database, got {name!r}")
+    if parts.hostname not in _LOCAL_HOSTS:
+        raise SystemExit(f"E2E_DATABASE_URL must be on localhost, got {parts.hostname!r}")
     return name, parts._replace(path="/postgres").geturl()
 
 
@@ -91,6 +99,7 @@ def child_env(base: dict[str, str], root: Path, db_url: str) -> dict[str, str]:
     env.update(
         DATABASE_URL=db_url,
         TALOS_FAKE_GRAPH="1",
+        TALOS_FAKE_EVENT_DELAY_MS=EVENT_DELAY_MS,
         TALOS_VAULT_DIR=str(root / "vault"),
         TALOS_WORKSPACE_DIR=str(root / "workspace"),
         TALOS_DOTENV_PATH=str(root / ".env"),
