@@ -16,10 +16,23 @@ import type { RunEvent } from "../transport/types";
 const VIEWS: View[] = ["workbench", "vault", "sessions", "settings"];
 /** Re-attach: a waiting run's dialog opens from GET /api/runs/{id}.pending once its backlog has been quiet this long (ruling 3). */
 const BACKLOG_QUIET_MS = 150;
+/** Re-attach: a failed GET /api/runs/{id} is retried after this, doubling up to the cap. */
+const PENDING_RETRY_MS = 1000;
+const PENDING_RETRY_CAP_MS = 30_000;
+
+type Pending = NonNullable<Awaited<ReturnType<LiveDataSource["getRun"]>>["pending"]>;
+/** The dialog for a paused run's pending interrupt. */
+const pendingDialog = (runId: string, p: Pending): UiState["dialog"] =>
+  p.kind === "confirm_exec"
+    ? { kind: "approval", runId, tool: p.payload.tool, code: p.payload.preview }
+    : { kind: "key", runId, toolName: p.payload.tool_name, envVar: p.payload.env_var, service: p.payload.service };
+const logError = (err: unknown) => console.error(err);
 
 /** Every user action, with the reference's guards. Components call these; nothing else writes stores. */
 export class Workbench {
   private players = new Map<string, Player>();
+  /** Live: each followed run's stream, closed and dropped with its player once the run has finished. */
+  private streams = new Map<string, () => void>();
   /** Live: runs whose full state is in the store (replayed, re-attached or played live), not just a stub. */
   private hydrated = new Set<string>();
   private hydrating = new Map<string, Promise<void>>();
@@ -81,7 +94,8 @@ export class Workbench {
       this.players.set(started.runId, player);
       this.hydrated.add(started.runId);
       this.ui({ benchKey: this.stores.ui.get().benchKey + 1 });
-      this.services.transport.subscribe(started.runId, this.live ? this.liveSink(player) : player.push);
+      const off = this.services.transport.subscribe(started.runId, this.live ? this.liveSink(started.runId, player) : player.push);
+      if (this.live) this.streams.set(started.runId, off);
     } catch (e) {
       // submit()'s catch and finally (lines 1476-1479): the run couldn't start, so the app isn't busy.
       this.ui({ busy: false });
@@ -157,8 +171,14 @@ export class Workbench {
     let open: number | null = null;
     let shown: number | null = null;
     let quiet: ReturnType<typeof setTimeout> | null = null;
+    let retry = PENDING_RETRY_MS;
+    // The source reader is only a view: the paused run's dialog replaces it.
+    const blocking = () => {
+      const d = this.stores.ui.get().dialog;
+      return !!d && d.kind !== "reader";
+    };
     const unanswered = (want: number) =>
-      open === want && shown !== want && !player.stopped && !this.stores.ui.get().dialog && this.stores.runs.get().byId[runId]?.status === "waiting";
+      open === want && shown !== want && !player.stopped && !blocking() && this.stores.runs.get().byId[runId]?.status === "waiting";
     const openPending = async () => {
       quiet = null;
       const want = open;
@@ -168,20 +188,21 @@ export class Workbench {
         info = await live.getRun(runId);
       } catch (err) {
         console.error(err);
+        // Tried again with backoff while the interrupt is still unanswered; a new stream event re-arms it too.
+        if (open === want && quiet === null) {
+          quiet = setTimeout(() => void openPending(), retry);
+          retry = Math.min(retry * 2, PENDING_RETRY_CAP_MS);
+        }
         return;
       }
+      retry = PENDING_RETRY_MS;
       const p = info.pending;
       if (info.status !== "waiting" || !p || !unanswered(want)) return;
       shown = want;
-      this.ui({
-        dialog:
-          p.kind === "confirm_exec"
-            ? { kind: "approval", runId, tool: p.payload.tool, code: p.payload.preview }
-            : { kind: "key", runId, toolName: p.payload.tool_name, envVar: p.payload.env_var, service: p.payload.service },
-      });
+      this.ui({ dialog: pendingDialog(runId, p) });
     };
-    const sink = this.liveSink(player);
-    this.services.transport.subscribe(runId, async (e) => {
+    const sink = this.liveSink(runId, player);
+    const off = this.services.transport.subscribe(runId, async (e) => {
       // Tracked on arrival, in stream order. A later interrupt's dialog is the player's own.
       if (e.type === "interrupt") {
         open = e.seq;
@@ -191,14 +212,49 @@ export class Workbench {
       if (quiet) clearTimeout(quiet);
       quiet = open === null || shown === open ? null : setTimeout(() => void openPending(), BACKLOG_QUIET_MS);
     });
+    this.streams.set(runId, off);
   }
 
-  /** Wraps a live player's sink: after run.finished the vault store is reloaded (the API owns counts and freshness). */
-  private liveSink(player: Player): (e: RunEvent) => Promise<void> {
+  /**
+   * Wraps a live player's sink: after run.finished the vault store is reloaded (the API owns counts and
+   * freshness), and the run's stream and player are let go.
+   */
+  private liveSink(runId: string, player: Player): (e: RunEvent) => Promise<void> {
     return async (e) => {
       await player.push(e);
-      if (e.type === "run.finished") await this.refreshVault().catch((err: unknown) => console.error(err));
+      if (e.type !== "run.finished") return;
+      this.streams.get(runId)?.();
+      this.streams.delete(runId);
+      if (this.players.get(runId) === player) this.players.delete(runId);
+      await this.refreshVault().catch(logError);
     };
+  }
+
+  /** Live: after a failed /resume the run is still paused, so its dialog comes back from GET /api/runs/{id}.pending. */
+  private async reopenPending(runId: string): Promise<void> {
+    const live = this.live;
+    if (!live) return;
+    try {
+      const info = await live.getRun(runId);
+      const ui = this.stores.ui.get();
+      if (info.status !== "waiting" || !info.pending || ui.dialog || ui.currentRunId !== runId || this.players.get(runId)?.stopped) return;
+      this.ui({ dialog: pendingDialog(runId, info.pending) });
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  private resume(runId: string, decision: Parameters<Services["transport"]["resume"]>[1]): void {
+    this.services.transport.resume(runId, decision).catch((err: unknown) => {
+      console.error(err);
+      void this.reopenPending(runId);
+    });
+  }
+
+  /** Live: GET /api/settings. */
+  private async refreshSettings(): Promise<void> {
+    const live = this.live;
+    if (live) this.stores.settings.set(await live.settings());
   }
 
   /** Live: GET /api/vault. Sources are kept, except those of tools that are gone. */
@@ -229,15 +285,17 @@ export class Workbench {
   }
 
   /** Live: the store a view shows is refreshed from the API before the view renders. */
-  private async refreshView(live: LiveDataSource, v: View): Promise<void> {
+  private async refreshView(v: View): Promise<void> {
     if (v === "vault") {
-      await this.refreshVault();
+      // During a run the player keeps the counts (it adds this run's use or failure when it shows it), and
+      // the refresh after run.finished reconciles them. A refresh now would count the run's call twice.
+      if (!this.stores.ui.get().busy) await this.refreshVault();
       const { filter, query, selected } = this.stores.ui.get();
       const tools = this.stores.vault.get().tools;
       const first = effectiveSelected(tools, vaultRows(tools, filter, query), selected);
       if (first && first !== selected) await this.loadSource(first);
     } else if (v === "sessions") await this.refreshSessions();
-    else if (v === "settings") this.stores.settings.set(await live.settings());
+    else if (v === "settings") await this.refreshSettings();
   }
 
   /**
@@ -249,7 +307,9 @@ export class Workbench {
     if (!id || !busy) return Promise.resolve();
     this.players.get(id)?.abort();
     this.ui({ dialog: null });
-    return this.services.transport.stop(id);
+    const stopping = this.services.transport.stop(id);
+    // Ruling 10: a failed /stop is logged; there's no copy for it. (The demo's rejects only on Reset.)
+    return this.live ? stopping.catch(logError) : stopping;
   }
 
   answerApproval(action: "yes" | "no" | "cancel"): void {
@@ -260,7 +320,7 @@ export class Workbench {
       void this.stop();
       return;
     }
-    void this.services.transport.resume(d.runId, { decision: action === "yes" ? "approve" : "decline" });
+    this.resume(d.runId, { decision: action === "yes" ? "approve" : "decline" });
   }
 
   answerKey(r: { action: "save"; value: string } | { action: "skip" } | { action: "cancel" }): void {
@@ -271,7 +331,7 @@ export class Workbench {
       void this.stop();
       return;
     }
-    void this.services.transport.resume(d.runId, r.action === "save" ? { decision: "save", value: r.value } : { decision: "skip" });
+    this.resume(d.runId, r.action === "save" ? { decision: "save", value: r.value } : { decision: "skip" });
   }
 
   closeReader(): void {
@@ -380,7 +440,7 @@ export class Workbench {
     const live = this.live;
     const prep =
       live && v !== "workbench" && this.stores.ui.get().view !== v
-        ? () => this.refreshView(live, v).catch((err: unknown) => console.error(err))
+        ? () => this.refreshView(v).catch((err: unknown) => console.error(err))
         : null;
     return this.thenShow(prep, () => {
       if (seq !== this.viewSeq) return;
@@ -458,14 +518,21 @@ export class Workbench {
       return;
     }
     this.stores.vault.update((v) => ({ ...v, tools: dropTool(v.tools, name) }));
-    void this.services.data.removeTool(name);
+    // Optimistic: if the server says no, the vault comes back from the API.
+    this.services.data.removeTool(name).catch((err: unknown) => {
+      console.error(err);
+      void this.refreshVault().then(() => this.rerenderVault(false), logError);
+    });
     this.rerenderVault(false, { selected: null });
   }
 
   toggleAskExec(): void {
     const on = !this.stores.settings.get().askExec;
     this.stores.settings.set({ askExec: on });
-    void this.services.data.setAskBeforeExec(on);
+    this.services.data.setAskBeforeExec(on).catch((err: unknown) => {
+      console.error(err);
+      void this.refreshSettings().catch(logError);
+    });
   }
 
   togglePop(open?: boolean): void {

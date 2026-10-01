@@ -25,7 +25,7 @@ import { Workbench } from "./workbench";
 class FakeES {
   static all: FakeES[] = [];
   listeners = new Map<string, (m: MessageEvent<string>) => void>();
-  onerror: (() => void) | null = null;
+  onerror: ((ev: Event) => void) | null = null;
   closed = false;
   constructor(readonly url: string) {
     FakeES.all.push(this);
@@ -37,7 +37,14 @@ class FakeES {
     this.closed = true;
   }
   emit(e: RunEvent) {
+    if (this.closed) return;
     this.listeners.get(e.type)?.({ data: JSON.stringify(e) } as MessageEvent<string>);
+  }
+  /** Like a browser on a dropped connection: a plain Event (no data) to the "error" listener and to onerror. */
+  drop() {
+    const ev = new Event("error");
+    this.listeners.get("error")?.(ev as MessageEvent<string>);
+    this.onerror?.(ev);
   }
 }
 
@@ -590,4 +597,160 @@ test("a live run in a new session doesn't rewrite a past session's run with the 
   await vi.advanceTimersByTimeAsync(100);
   const past = stores.session.get().sessions.find((x) => x.id === "A")!.messages.find((m) => m.kind === "talos");
   expect(past).toMatchObject({ html: "Answer 1", stopNote: null, status: null });
+});
+
+/* Final wave minors: API failures (M2), the re-attach fallback (M3), mid-run vault counts (M7), and the guards (M12). */
+
+test("a failed /resume re-opens the pending dialog from GET /runs/{id}", async () => {
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  const resume = vi.fn(async () => Promise.reject(new ApiError(409, "not_waiting", "busy")));
+  const { api, stores, wb } = await start(waitingWorld("waiting"), { resume });
+  const es = streamOf("a1")!;
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  es.emit(ev("a1", "interrupt", confirmOld));
+  await vi.advanceTimersByTimeAsync(150);
+  expect(stores.ui.get().dialog).toMatchObject({ kind: "approval" });
+  const reads = api.getRun.mock.calls.length;
+  wb.answerApproval("yes");
+  await flush();
+  expect(resume).toHaveBeenCalledTimes(1);
+  expect(api.getRun.mock.calls.length).toBe(reads + 1);
+  expect(stores.ui.get().dialog).toEqual({ kind: "approval", runId: "a1", tool: "python_exec", code: "print('now')" });
+  expect(err).toHaveBeenCalled();
+});
+
+test("a failed /stop, remove or ask-before-exec toggle is logged, and remove and toggle reload from the API", async () => {
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  const unhandled = vi.fn();
+  process.on("unhandledRejection", unhandled);
+  const boom = () => Promise.reject(new ApiError(500, "http_500", "boom"));
+  const a1 = summary("a1", 1, "running", "Write a thing");
+  const w: World = { sessions: [detail("A", "Thing", [a1])], runs: { a1: { ...a1, pending: null } }, events: {}, tools: ["alpha", "beta"] };
+  const { api, stores, wb } = await start(w, { stop: vi.fn(boom), removeTool: vi.fn(boom), setAskBeforeExec: vi.fn(boom) });
+  await expect(wb.stop()).resolves.toBeUndefined();
+  expect(api.stop).toHaveBeenCalledWith("a1");
+
+  wb.removeTool("alpha");
+  wb.removeTool("alpha");
+  expect(stores.vault.get().tools.map((t) => t.name)).toEqual(["beta"]);
+  await flush();
+  expect(stores.vault.get().tools.map((t) => t.name)).toEqual(["alpha", "beta"]);
+
+  expect(stores.settings.get().askExec).toBe(true);
+  wb.toggleAskExec();
+  expect(stores.settings.get().askExec).toBe(false);
+  await flush();
+  expect(stores.settings.get().askExec).toBe(true);
+  expect(err).toHaveBeenCalledTimes(3);
+  await flush();
+  process.off("unhandledRejection", unhandled);
+  expect(unhandled).not.toHaveBeenCalled();
+});
+
+test("the re-attach fallback opens the pending dialog over the source reader, and retries a failed GET /runs/{id}", async () => {
+  const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  const w = waitingWorld("waiting");
+  let fails = 2;
+  const getRun = vi.fn(async () => (fails-- > 0 ? Promise.reject(new Error("down")) : w.runs.a1!));
+  const { stores } = await start(w, { getRun });
+  const es = streamOf("a1")!;
+  stores.ui.set({ dialog: { kind: "reader", name: "t", lines: ["x"] } });
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  es.emit(ev("a1", "interrupt", confirmOld));
+  await vi.advanceTimersByTimeAsync(150);
+  expect(getRun).toHaveBeenCalledTimes(1);
+  expect(stores.ui.get().dialog).toMatchObject({ kind: "reader" });
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(getRun).toHaveBeenCalledTimes(3);
+  expect(stores.ui.get().dialog).toEqual({ kind: "approval", runId: "a1", tool: "python_exec", code: "print('now')" });
+  expect(err).toHaveBeenCalledTimes(2);
+});
+
+test("the pending dialog isn't opened when Stop lands while GET /runs/{id} is in flight", async () => {
+  const w = waitingWorld("waiting");
+  let release: () => void = () => {};
+  const getRun = vi.fn(() => new Promise<ApiRun>((res) => (release = () => res(w.runs.a1!))));
+  const { stores, wb } = await start(w, { getRun });
+  const es = streamOf("a1")!;
+  es.emit(ev("a1", "run.started", { session_id: "A", query: "Run some python", n: 1 }));
+  es.emit(ev("a1", "interrupt", confirmOld));
+  await vi.advanceTimersByTimeAsync(150);
+  expect(getRun).toHaveBeenCalledTimes(1);
+  await wb.stop();
+  release();
+  await flush();
+  expect(stores.ui.get().dialog).toBeNull();
+});
+
+test("a second 409 for the run already being followed opens no second stream", async () => {
+  const w: World = { sessions: [], runs: { other: { ...summary("other", 3, "running"), pending: null } }, events: {}, tools: [] };
+  const send = vi.fn(async () => Promise.reject(new ApiError(409, "run_active", "busy", "other", "s-new")));
+  const { stores, wb } = await start(w, { send });
+  await wb.submit("hello");
+  expect(FakeES.all.filter((e) => e.url.startsWith("/api/runs/other/"))).toHaveLength(1);
+  stores.ui.set({ busy: false });
+  await wb.submit("hello");
+  expect(FakeES.all.filter((e) => e.url.startsWith("/api/runs/other/"))).toHaveLength(1);
+});
+
+test("boot's replay doesn't take the bench back from a later navigation", async () => {
+  const a1 = summary("a1", 1, "done");
+  const b1 = summary("b1", 1, "done");
+  const w: World = { sessions: [detail("A", "Now", [a1]), detail("B", "Older", [b1])], runs: {}, events: { a1: finishedEvents(a1), b1: finishedEvents(b1) }, tools: [] };
+  const api = fakeApi(w);
+  let release: () => void = () => {};
+  api.runEvents.mockImplementationOnce(() => new Promise<RunEvent[]>((res) => (release = () => res(w.events.a1!))));
+  const { stores, services } = await createLiveServices(api, FakeES);
+  const wb = new Workbench(stores, services);
+  const booting = wb.boot();
+  await wb.openSession("B");
+  expect(stores.ui.get().viewingRunId).toBe("b1");
+  release();
+  await booting;
+  expect(stores.ui.get().viewingRunId).toBe("b1");
+  expect(stores.session.get().viewId).toBe("B");
+});
+
+test("a dropped stream (the browser's native error) reconnects after the last seq and the run carries on", async () => {
+  const w: World = { sessions: [], runs: {}, events: {}, tools: [] };
+  const { stores, wb } = await start(w, {
+    getSession: vi.fn(async () => ({ session: { id: "s-new", name: "Hello", number: 1, created_at: NOW, updated_at: NOW }, messages: [], runs: [] })),
+  });
+  await wb.submit("hello");
+  const a = streamOf("r-sent")!;
+  const later = "2026-09-30T12:00:01.000Z";
+  a.emit(ev("r-sent", "run.started", { session_id: "s-new", query: "hello", n: 1 }, later));
+  const last = seq;
+  a.drop();
+  expect(a.closed).toBe(true);
+  await vi.advanceTimersByTimeAsync(1000);
+  const b = streamOf("r-sent")!;
+  expect(b).not.toBe(a);
+  expect(b.url).toBe(`/api/runs/r-sent/events?after=${last}`);
+  b.emit(ev("r-sent", "answer.done", { html: "Back again", note: null, chips: [] }, later));
+  b.emit(ev("r-sent", "run.finished", { status: "done", summary: "ok", summary_gold: false, forged: [], used: [] }, later));
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(talosHtml(stores, "s-new")).toEqual(["Back again"]);
+  expect(stores.ui.get().busy).toBe(false);
+});
+
+test("opening the Vault during a live run doesn't count the run's use twice", async () => {
+  const w: World = { sessions: [], runs: {}, events: {}, tools: ["caesar_cipher"] };
+  const { api, stores, wb } = await start(w, {
+    getSession: vi.fn(async () => ({ session: { id: "s-new", name: "Hello", number: 1, created_at: NOW, updated_at: NOW }, messages: [], runs: [] })),
+  });
+  await wb.submit("Decrypt it with caesar_cipher");
+  const es = streamOf("r-sent")!;
+  const later = "2026-09-30T12:00:01.000Z";
+  es.emit(ev("r-sent", "run.started", { session_id: "s-new", query: "Decrypt it with caesar_cipher", n: 1 }, later));
+  es.emit(ev("r-sent", "strip.set", { variant: "vault", subtask: { index: 1, total: 1, label: "Decrypt" }, sig: { name: "caesar_cipher", args: "text", ret: "str" } }, later));
+  await vi.advanceTimersByTimeAsync(100);
+  // The server has already counted this run's use when the Vault is opened.
+  api.vault.mockImplementation(async () => ({ ...vaultList(["caesar_cipher"]), tools: [{ ...entry("caesar_cipher"), uses: 2 }] }));
+  await wb.showView("vault");
+  es.emit(ev("r-sent", "call.args", { tool: "caesar_cipher", args: [["text", "'x'", false]], caption: null }, later));
+  es.emit(ev("r-sent", "call.result", { repr: "'y'", type: "str", small: false }, later));
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(stores.vault.get().tools.find((t) => t.name === "caesar_cipher")!.uses).toBe(2);
+  expect(stores.runs.get().byId["r-sent"]!.call!.record).toMatchObject({ uses: "2, including this one" });
 });
