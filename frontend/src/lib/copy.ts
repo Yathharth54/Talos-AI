@@ -1,3 +1,4 @@
+import { esc } from "./format";
 import { PRUNE_AT } from "./routing";
 
 /** Every user-facing string the frontend owns, verbatim from the reference. `{name}` marks a value. */
@@ -286,12 +287,12 @@ export function fill(template: string, vars: Record<string, string | number>): s
 type Keyed = { pruned: string; streak: string };
 const keyed = (table: Record<string, Keyed>, tool: string): Keyed => table[tool] ?? (table.generic as Keyed);
 
-/** The health panel's paragraph after a vault/forged tool failed (lines 1728–1730, 1884). Ruling 9. */
+/** The health panel's paragraph after a vault/forged tool failed (lines 1728–1730, 1884). Ruling 9. HTML, so the name is escaped. */
 export function healthText(tool: string, pruned: boolean): string {
   const t = keyed(COPY.health as unknown as Record<string, Keyed>, tool);
-  return fill(pruned ? t.pruned : t.streak, { p: PRUNE_AT, tool });
+  return fill(pruned ? t.pruned : t.streak, { p: PRUNE_AT, tool: esc(tool) });
 }
-/** The removed banner's second line (lines 1722, 1883). */
+/** The removed banner's second line (lines 1722, 1883). Text: the Banner renders it as a React child. */
 export function removedSub(tool: string): string {
   const table = COPY.removedSub as unknown as Record<string, string>;
   return fill(table[tool] ?? COPY.removedSub.generic, { p: PRUNE_AT, tool });

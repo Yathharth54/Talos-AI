@@ -61,3 +61,11 @@ test("fill and the failure copy", () => {
   expect(removedSub("get_current_temperature")).toBe("It failed 2 times in a row. The next weather request forges a fresh one.");
   expect(retryLabel("shift", 7)).toBe("Ask again with shift 7");
 });
+
+test("healthText escapes the tool name: it is HTML, and the name comes from the server", () => {
+  const html = healthText('<img src=x onerror="alert(1)">', false);
+  expect(html).not.toContain("<img");
+  expect(html).toContain('<span class="mono">&lt;img src=x onerror=&quot;alert(1)&quot;&gt;</span>');
+  // removedSub is text (Banner renders it as a React child), so it isn't escaped twice.
+  expect(removedSub("a<b")).toContain("next a<b request");
+});
