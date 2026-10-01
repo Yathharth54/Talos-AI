@@ -309,6 +309,9 @@ Spec: `docs/superpowers/specs/2026-09-30-talos-web-04-frontend-design.md`. Plans
 7. Part A's ruling 1 (`forge.code.tests`) and this stage's `call.error.when` mapping (`"run"`, `"declined"` etc.) are for stage 2 to confirm.
 8. The owner's side-by-side sign-off on live mode (spec 04 §10).
 
+**Owner-requested design changes (after the stage 04 merge)**, applied to the reference `artifact-body.html` and our code alike, with the parity fixtures regenerated from the reference:
+- Bench title bug (live): a forge run whose plan names no tool sent `strip.set` with `sig: null`, and the player turned every sig-less strip into `No tools needed`. The translator now adds the forged tool's `sig` to `forge.code`, and the player keeps `No tools needed` for the `chat` variant only.
+
 **Notes**:
 - Live e2e has `retries: 0`: the fake graph keeps a saved key in memory, so a retry after "Save key" can't recover. `09-keys` must stay the last live spec.
 - The fake graph has an e2e-only per-event delay (`TALOS_FAKE_EVENT_DELAY_MS`, default 0; the e2e harness sets 60, and the fake only rests where a step is working), so the Stop and mid-run reload e2e cases cover a run still going on the server.

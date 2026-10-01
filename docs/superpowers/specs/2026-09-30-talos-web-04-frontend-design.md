@@ -187,7 +187,7 @@ The session with the newest `updated_at` opens on load, or a new one is created 
 |---|---|
 | `run.started` | new run object, `addYou`, `addTalos`, `initStrip` with the provisional variant, `renderBench` |
 | `log.cmd` | `typeCmd` |
-| `strip.set` | `initStrip(variant)`, `renderBench`, `setLabel`, `setSig` |
+| `strip.set` | `initStrip(variant)`, `renderBench`, `setLabel`, `setSig`; with no `sig`, the `No tools needed` heading only for the `chat` variant |
 | `node.started` / `node.finished` | `setNode(step, state, label)` |
 | `link.flow` | `flow(from, to)`; for forger→tester during a retry, also `retrying(true/false)` |
 | `caption` | `setCaption` |

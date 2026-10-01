@@ -142,7 +142,7 @@ Graph node to UI step mapping, done by `EventTranslator`:
 | `log.pop` | `{}` | remove the last log line (replaces a transient "running" line) |
 | `log.status` | `{text, gold: bool, tone: ""\|"warm"\|"alert"}` | run-log caption and frame tone |
 | `talos.status` | `{text}` | the "working on it" status next to the orbit spinner |
-| `forge.code` | `{tool, attempt, file, lines: [str], changed: int \| null, note: str \| null, tests?: int}` | forger produced code for an attempt. `changed` = the first line that differs from the previous attempt. `tests` = how many tests that attempt wrote (the `def test_` count in its `test_code`); the translator sends the event once the forge node's update carries it |
+| `forge.code` | `{tool, attempt, file, lines: [str], changed: int \| null, note: str \| null, tests?: int, sig?: {name, args, ret} \| null}` | forger produced code for an attempt. `changed` = the first line that differs from the previous attempt. `tests` = how many tests that attempt wrote (the `def test_` count in its `test_code`); the translator sends the event once the forge node's update carries it. `sig` = the forged tool's signature (from `forged_tool.signature`), which the bench heading shows, because a forge sub-task's `strip.set.sig` is null when the plan names no tool |
 | `forge.tests` | `{tool, attempt, results: [{name, passed, why: str \| null}]}` | tester finished an attempt |
 | `forge.attempt` | `{attempt, ok, detail}` | an attempt is decided |
 | `forge.smoke` | `{call, result \| null, passed}` | smoke gate ran |
