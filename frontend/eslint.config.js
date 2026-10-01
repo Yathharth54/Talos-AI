@@ -29,6 +29,9 @@ export default tseslint.config(
   {
     files: ["e2e/**/*.ts", "playwright.*.config.ts"],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
+  {
+    files: ["e2e/live/fixtures.ts"],
     // Playwright fixtures call `use(...)`, which the React hooks rule mistakes for React's `use`.
     rules: { "react-hooks/rules-of-hooks": "off" },
   },

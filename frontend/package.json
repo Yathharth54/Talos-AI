@@ -7,13 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
     "extract": "node scripts/extract-reference.mjs",
     "fixtures": "node scripts/gen-parity-fixtures.mjs",
-    "e2e:visual": "playwright test -c playwright.visual.config.ts --project=ref-desktop --project=ref-mobile --update-snapshots=all && playwright test -c playwright.visual.config.ts --project=demo-desktop --project=demo-mobile",
-    "e2e:live": "playwright test -c playwright.live.config.ts",
-    "e2e": "npm run build && npm run e2e:visual && npm run e2e:live"
+    "e2e:visual": "npm run build && node -e \"require('fs').rmSync('e2e/visual/__screenshots__',{recursive:true,force:true})\" && playwright test -c playwright.visual.config.ts --project=ref-desktop --project=ref-mobile --update-snapshots=all && playwright test -c playwright.visual.config.ts --project=demo-desktop --project=demo-mobile",
+    "e2e:live": "npm run build && playwright test -c playwright.live.config.ts",
+    "e2e": "npm run e2e:visual && npm run e2e:live"
   },
   "dependencies": {
     "react": "18.3.1",
